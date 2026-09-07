@@ -30,11 +30,13 @@ function isWithinHours(rules: BotRules, now: Date): boolean {
 }
 
 function personalize(text: string, name: string, includeName: boolean): string {
-  if (!includeName || !name.trim()) return text;
-  if (/^hi\b|^hello\b|^hey\b/i.test(text)) {
-    return text.replace(/^(hi|hello|hey)\b/i, `$1 ${name.split(" ")[0]}`);
-  }
-  return `${name.split(" ")[0]}, ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+  const first = name.trim().split(/\s+/)[0];
+  if (!includeName || !first) return text;
+  return `${first} — ${text}`;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function decideReply(
@@ -63,11 +65,17 @@ export function decideReply(
   const lower = body.toLowerCase();
   const words = lower.split(/\s+/);
 
-  const keywordHit = rules.keywordRules.find((rule) => {
-    if (!rule.enabled || !rule.keyword.trim()) return false;
-    const needle = rule.keyword.trim().toLowerCase();
-    return lower.includes(needle);
-  });
+  const keywordHit = rules.keywordRules
+    .filter((rule) => {
+      if (!rule.enabled || !rule.keyword.trim()) return false;
+      const needle = rule.keyword.trim().toLowerCase();
+      const pattern = new RegExp(
+        `(^|[^a-z0-9])${escapeRegExp(needle)}([^a-z0-9]|$)`,
+        "i",
+      );
+      return pattern.test(lower);
+    })
+    .sort((a, b) => b.keyword.trim().length - a.keyword.trim().length)[0];
 
   if (keywordHit) {
     return {

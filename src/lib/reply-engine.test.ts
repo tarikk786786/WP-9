@@ -9,6 +9,22 @@ describe("decideReply", () => {
     assert.equal(decision.action, "skip");
   });
 
+  it("prefers the longer keyword when both hi and hours match", () => {
+    const decision = decideReply("Hi, what are your hours?", "Sam", defaultRules);
+    assert.equal(decision.action, "reply");
+    if (decision.action === "reply") {
+      assert.equal(decision.matchedRule, "hours");
+    }
+  });
+
+  it("does not treat hi as a match inside hours", () => {
+    const decision = decideReply("What are your hours?", "Sam", defaultRules);
+    assert.equal(decision.action, "reply");
+    if (decision.action === "reply") {
+      assert.equal(decision.matchedRule, "hours");
+    }
+  });
+
   it("matches a keyword before the default reply", () => {
     const decision = decideReply("What is the price?", "Sam", defaultRules);
     assert.equal(decision.action, "reply");

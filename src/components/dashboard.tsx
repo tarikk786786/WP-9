@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,8 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type { BotRules, ConnectionStatus, InboxMessage, KeywordRule } from "@/lib/types";
+import type { DeskData } from "@/lib/load-desk";
+import type { BotRules, InboxMessage, KeywordRule } from "@/lib/types";
 
 function emptyRule(): KeywordRule {
   return {
@@ -37,10 +38,10 @@ function formatTime(iso: string) {
   });
 }
 
-export function Dashboard() {
-  const [rules, setRules] = useState<BotRules | null>(null);
-  const [status, setStatus] = useState<ConnectionStatus | null>(null);
-  const [inbox, setInbox] = useState<InboxMessage[]>([]);
+export function Dashboard({ initial }: { initial: DeskData }) {
+  const [rules, setRules] = useState<BotRules>(initial.rules);
+  const [status] = useState(initial.status);
+  const [inbox, setInbox] = useState<InboxMessage[]>(initial.inbox);
   const [fromName, setFromName] = useState("Amina");
   const [simText, setSimText] = useState("Hi, what are your hours?");
   const [busy, setBusy] = useState(false);
@@ -48,28 +49,12 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  async function refresh() {
-    const [rulesRes, statusRes, inboxRes] = await Promise.all([
-      fetch("/api/rules"),
-      fetch("/api/status"),
-      fetch("/api/inbox"),
-    ]);
-    if (!rulesRes.ok || !statusRes.ok || !inboxRes.ok) {
-      throw new Error("Could not load the control desk.");
-    }
-    const rulesJson = (await rulesRes.json()) as { rules: BotRules };
-    const statusJson = (await statusRes.json()) as ConnectionStatus;
+  async function refreshInbox() {
+    const inboxRes = await fetch("/api/inbox");
+    if (!inboxRes.ok) throw new Error("Could not refresh the inbox.");
     const inboxJson = (await inboxRes.json()) as { messages: InboxMessage[] };
-    setRules(rulesJson.rules);
-    setStatus(statusJson);
     setInbox(inboxJson.messages);
   }
-
-  useEffect(() => {
-    refresh().catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : "Failed to load.");
-    });
-  }, []);
 
   const webhookUrl = useMemo(() => {
     if (typeof window === "undefined") return "/api/whatsapp/webhook";
@@ -110,7 +95,7 @@ export function Dashboard() {
       });
       const json = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(json.error ?? "Simulation failed.");
-      await refresh();
+      await refreshInbox();
       setNotice("Simulator replied using the current rules. No WhatsApp message was sent.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Simulation failed.");
@@ -124,16 +109,6 @@ export function Dashboard() {
     await navigator.clipboard.writeText(JSON.stringify(rules));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }
-
-  if (!rules || !status) {
-    return (
-      <div className="flex min-h-screen items-center justify-center px-6">
-        <p className="text-sm text-muted-foreground">
-          {error ?? "Loading the reply desk…"}
-        </p>
-      </div>
-    );
   }
 
   return (
