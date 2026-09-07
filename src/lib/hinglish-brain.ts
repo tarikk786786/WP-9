@@ -137,7 +137,22 @@ export function isCannedScript(text: string) {
 }
 
 export function isOwnerFactQuestion(text: string) {
-  return /\b(who are you|your name|aap kaun|tum kaun|hire|hiring|website|portfolio|dezo|resume|cv)\b/i.test(text);
+  return /\b(who are you|your name|aap kaun|tum kaun|hire|hiring|website|portfolio|dezo|resume|cv|project|kaam)\b/i.test(
+    text,
+  );
+}
+
+function isRepetitive(text: string) {
+  const words = text.toLowerCase().split(/\s+/);
+  if (words.length < 10) return false;
+  const seen = new Map<string, number>();
+  for (let i = 0; i <= words.length - 5; i++) {
+    const gram = words.slice(i, i + 5).join(" ");
+    const count = (seen.get(gram) ?? 0) + 1;
+    seen.set(gram, count);
+    if (count >= 2) return true;
+  }
+  return false;
 }
 
 export function isLowQualityReply(text: string) {
@@ -148,6 +163,7 @@ export function isLowQualityReply(text: string) {
   if (/hey, kaise ho/i.test(text) && /dekh liya|pahunch|public/i.test(text)) return true;
   const helloHits = (text.match(/\bhello\b/gi) ?? []).length;
   if (helloHits >= 3) return true;
+  if (isRepetitive(text)) return true;
   if (text.length > 240) return true;
   const unique = new Set(words.map((word) => word.toLowerCase().replace(/[^a-z]/g, "")));
   if (words.length > 8 && unique.size <= 3) return true;

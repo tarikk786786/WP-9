@@ -212,8 +212,7 @@ export async function generateLocalReply(
         return { text, engine: `${endpoint.name} · ${model}` };
       }
       if (endpoint.kind === "transformers") {
-        const text = await generateTransformers(incoming, system);
-        return { text, engine: "On-device Flan-T5" };
+        continue;
       }
     } catch (error) {
       errors.push(`${endpoint.name}: ${error instanceof Error ? error.message : "failed"}`);

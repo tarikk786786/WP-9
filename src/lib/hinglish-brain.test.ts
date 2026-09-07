@@ -15,6 +15,10 @@ describe("writeHinglishReply", () => {
   it("rejects hello loops and canned dumps", () => {
     assert.equal(isLowQualityReply("Hello, Hello! Hello, Hello! Hello, Hello!"), true);
     assert.equal(
+      isLowQualityReply("Can we do a forensics project? Can we do a forensics project? Can we do a forensics project?"),
+      true,
+    );
+    assert.equal(
       isCannedScript(
         "Message Tarik tak pahunch gaya. Extra detail ho to likh dena — public facts tarikislam.in pe hain, baaki main personally, calmly wapas aaunga. Hey, kaise ho? Main Tarik hoon — forensics, AI, security.",
       ),
