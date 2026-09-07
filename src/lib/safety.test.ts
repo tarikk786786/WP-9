@@ -22,6 +22,6 @@ describe("sanitizeOutgoing", () => {
   it("strips AI disclaimers and trims length", () => {
     const clean = sanitizeOutgoing(`As an AI, ${"hello ".repeat(80)}`);
     assert.ok(!clean.toLowerCase().startsWith("as an ai"));
-    assert.ok(clean.length <= 420);
+    assert.ok(clean.length <= 220);
   });
 });

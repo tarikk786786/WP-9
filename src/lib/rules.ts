@@ -2,7 +2,11 @@ import { defaultRules } from "./default-rules.ts";
 import type { BotRules, KeywordRule } from "./types.ts";
 
 function asTarik(text: string, fallback: string) {
-  if (/on behalf|Tarik yahan hai|Tarik yahin hai|assistant/i.test(text)) {
+  if (
+    /on behalf|Tarik yahan hai|Tarik yahin hai|assistant|Tarik tak pahunch|public facts|calmly wapas|Extra detail ho to|forensics, AI, security|Message mil gaya/i.test(
+      text,
+    )
+  ) {
     return fallback;
   }
   return text;

@@ -19,7 +19,7 @@ export function inspectIncoming(text: string): SafetyVerdict {
   if (JAILBREAK.test(body)) {
     return {
       action: "safe-reply",
-      text: "Bas normal chat karte hain. Main Tarik hoon — bolo, kya help chahiye?",
+      text: "normal baat karte hain. kya kaam hai",
       reason: "Blocked a prompt-injection attempt.",
     };
   }
@@ -32,14 +32,14 @@ export function inspectIncoming(text: string): SafetyVerdict {
   if (MONEY_HINT.test(body)) {
     return {
       action: "safe-reply",
-      text: "Yeh payment ya transfer chat pe nahi hota. Agar asli baat hai to main khud follow up karunga.",
+      text: "yeh yahan nahi hota. asli baat ho to seedha likh",
       reason: "Blocked a money-transfer request.",
     };
   }
   if (SECRET_HINT.test(body)) {
     return {
       action: "safe-reply",
-      text: "Password ya recovery yahan mat bhejo. Main alag se baat karunga.",
+      text: "password yahan mat bhej. call pe baat karte hain",
       reason: "Blocked a secrets request.",
     };
   }
@@ -53,8 +53,9 @@ export function sanitizeOutgoing(text: string): string {
   let clean = text.replace(/\s+/g, " ").trim();
   clean = clean.replace(/^(as an ai|as a language model|i am an ai)[, ]*/i, "");
   clean = clean.replace(/<\/?[a-z][^>]*>/gi, "");
-  if (clean.length > 420) {
-    clean = `${clean.slice(0, 417).trim()}…`;
+  clean = clean.replace(/Message Tarik tak pahunch gaya\.?\s*/gi, "");
+  if (clean.length > 220) {
+    clean = `${clean.slice(0, 217).trim()}…`;
   }
   return clean;
 }

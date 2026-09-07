@@ -62,19 +62,13 @@ function isWithinHours(rules: BotRules, now: Date): boolean {
   return hour >= rules.openHour || hour < rules.closeHour;
 }
 
-function personalize(text: string, name: string, includeName: boolean): string {
-  const first = name.trim().split(/\s+/)[0];
-  if (!includeName || !first) return text;
-  return `${first} — ${text}`;
-}
-
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function decideReply(
   incoming: string,
-  fromName: string,
+  _fromName: string,
   rules: BotRules,
   now = new Date(),
 ): ReplyDecision {
@@ -100,7 +94,7 @@ export function decideReply(
   if (isGreetingMessage(body)) {
     return {
       action: "reply",
-      text: personalize(rules.greetingReply, fromName, rules.includeName),
+      text: rules.greetingReply,
       matchedRule: "greeting",
     };
   }
@@ -120,14 +114,14 @@ export function decideReply(
   if (keywordHit) {
     return {
       action: "reply",
-      text: personalize(keywordHit.reply, fromName, rules.includeName),
+      text: keywordHit.reply,
       matchedRule: keywordHit.keyword,
     };
   }
 
   return {
     action: "reply",
-    text: personalize(rules.defaultReply, fromName, rules.includeName),
+    text: rules.defaultReply,
     matchedRule: "default",
   };
 }

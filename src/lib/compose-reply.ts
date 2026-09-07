@@ -64,39 +64,38 @@ export async function composeReply(options: {
     }
   }
 
+  function finish(raw: string, matched: string, engine: string): ComposedReply {
+    const clean = sanitizeOutgoing(applyVoice(raw, rules));
+    if (!clean || isLowQualityReply(clean)) {
+      return {
+        action: "reply",
+        text: sanitizeOutgoing(
+          applyVoice(writeHinglishReply(text, fromName, rules, matched), rules),
+        ),
+        matchedRule: matched,
+        engine: "tarik-live",
+      };
+    }
+    return { action: "reply", text: clean, matchedRule: matched, engine };
+  }
+
   if (greeting || hint === "after-hours" || isOwnerFactQuestion(text)) {
-    return {
-      action: "reply",
-      text: sanitizeOutgoing(
-        applyVoice(writeHinglishReply(text, fromName, rules, greeting ? "greeting" : hint), rules),
-      ),
-      matchedRule: greeting ? "greeting" : hint,
-      engine: "tarik-live",
-    };
+    return finish(
+      writeHinglishReply(text, fromName, rules, greeting ? "greeting" : hint),
+      greeting ? "greeting" : hint,
+      "tarik-live",
+    );
   }
 
   if (rules.useLocalLlm !== false) {
     try {
       const generated = await generateLocalReply(text, fromName, rules);
-      const polished = polishToHinglish(generated.text, fromName, rules.includeName);
-      const clean = sanitizeOutgoing(applyVoice(polished, rules));
-      if (clean && !isLowQualityReply(clean)) {
-        return {
-          action: "reply",
-          text: clean,
-          matchedRule: hint,
-          engine: `${generated.engine} · hinglish`,
-        };
-      }
+      const polished = polishToHinglish(generated.text);
+      return finish(polished, hint, `${generated.engine} · hinglish`);
     } catch {
-      // Always-live Hinglish voice still answers.
+      // Human voice still answers.
     }
   }
 
-  return {
-    action: "reply",
-    text: sanitizeOutgoing(applyVoice(writeHinglishReply(text, fromName, rules, hint), rules)),
-    matchedRule: hint,
-    engine: "tarik-live",
-  };
+  return finish(writeHinglishReply(text, fromName, rules, hint), hint, "tarik-live");
 }

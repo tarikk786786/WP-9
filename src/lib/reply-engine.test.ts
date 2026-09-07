@@ -12,7 +12,7 @@ describe("parseRules", () => {
     });
     assert.ok(parsed);
     assert.equal(parsed?.greetingReply, defaultRules.greetingReply);
-    assert.match(parsed?.greetingReply ?? "", /Main Tarik hoon/);
+    assert.match(parsed?.greetingReply ?? "", /kya ho raha|bolo|hey/);
   });
 });
 
@@ -43,7 +43,7 @@ describe("decideReply", () => {
     assert.equal(decision.action, "reply");
     if (decision.action === "reply") {
       assert.equal(decision.matchedRule, "greeting");
-      assert.match(decision.text, /Main Tarik hoon/);
+      assert.match(decision.text.toLowerCase(), /hey|haan|bolo|ho raha/);
     }
   });
 
