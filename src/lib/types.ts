@@ -5,6 +5,10 @@ export type KeywordRule = {
   enabled: boolean;
 };
 
+export type VoiceLanguage = "hinglish" | "english" | "hindi";
+export type VoiceTone = "soft" | "warm" | "sharp";
+export type ReplyMode = "all" | "keywords" | "greetings";
+
 export type BotRules = {
   enabled: boolean;
   botName: string;
@@ -13,6 +17,15 @@ export type BotRules = {
   includeName: boolean;
   useLocalLlm: boolean;
   preferredModel: string;
+  language: VoiceLanguage;
+  tone: VoiceTone;
+  emoji: boolean;
+  signature: string;
+  customFacts: string;
+  replyMode: ReplyMode;
+  replyToMedia: boolean;
+  replyToGroups: boolean;
+  showTyping: boolean;
   businessHoursEnabled: boolean;
   timezone: string;
   openHour: number;
@@ -40,6 +53,8 @@ export type ScanSnapshot = {
   qrDataUrl: string | null;
   phone: string | null;
   error: string | null;
+  persisted: boolean;
+  savedAt: string | null;
 };
 
 export type LlmEndpoint = {

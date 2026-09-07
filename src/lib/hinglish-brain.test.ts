@@ -20,6 +20,13 @@ describe("writeHinglishReply", () => {
     assert.match(text, /tarikislam\.in/);
   });
 
+  it("hires in first person, not on behalf", () => {
+    const text = writeHinglishReply("I want to hire you", "Amina", defaultRules);
+    assert.match(text.toLowerCase(), /\bmain\b/);
+    assert.doesNotMatch(text, /on behalf/i);
+    assert.doesNotMatch(text, /assistant/i);
+  });
+
   it("answers hours without stiff english", () => {
     const text = writeHinglishReply("Hi, what are your hours?", "Amina", defaultRules, "hours");
     assert.doesNotMatch(text, /I usually reply between/);

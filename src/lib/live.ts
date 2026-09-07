@@ -1,11 +1,8 @@
-import { existsSync } from "node:fs";
 import { discoverLocalLlms, warmLocalModel } from "@/lib/local-llm";
-import { getScanSnapshot, startScanSession } from "@/lib/scan-session";
+import { hydrateScanSnapshot, startScanSession } from "@/lib/scan-session";
+import { hasSavedSession } from "@/lib/session-persist";
 import { refreshTarikProfile } from "@/lib/tarik-profile";
 import type { LiveStatus } from "@/lib/types";
-import { writablePath } from "@/lib/writable-dir";
-
-const AUTH_DIR = writablePath("baileys-auth");
 
 const startedAt = new Date().toISOString();
 
@@ -13,15 +10,14 @@ export async function getLiveStatus(): Promise<LiveStatus> {
   return {
     alive: true,
     startedAt,
-    whatsapp: getScanSnapshot(),
+    whatsapp: await hydrateScanSnapshot(),
     llms: await discoverLocalLlms(),
   };
 }
 
 export async function keepAliveTick() {
-  const snapshot = getScanSnapshot();
-  const hasSession = existsSync(writablePath("baileys-auth", "creds.json"));
-  if (hasSession && snapshot.phase !== "ready" && snapshot.phase !== "qr") {
+  const snapshot = await hydrateScanSnapshot();
+  if ((await hasSavedSession()) && snapshot.phase !== "ready" && snapshot.phase !== "qr") {
     await startScanSession();
   }
 }

@@ -37,6 +37,7 @@ yarn-error.log*
 # local reply inbox (generated at runtime)
 /data/store.json
 /data/baileys-auth
+/data/whatsapp-session.json
 /data/models
 
 # vercel

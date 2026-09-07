@@ -120,17 +120,18 @@ export function Dashboard({ initial }: { initial: DeskData }) {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium tracking-[0.18em] text-primary uppercase">
-              Tarik Islam · always live
+              Main Tarik hoon · always live
             </p>
             <h1 className="font-heading mt-1 text-2xl font-semibold tracking-tight">
-              {rules.botName} ke WhatsApp pe narm jawab
+              Mera WhatsApp, meri awaaz
             </h1>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Owner Tarik hai. Har fact pehle{" "}
+              Replies first person — main khud likh raha hoon, kisi ke behalf pe nahi.
+              Facts{" "}
               <a className="underline" href="https://tarikislam.in" target="_blank" rel="noreferrer">
                 tarikislam.in
               </a>{" "}
-              se aati hai. Reply Hinglish, calm, friendly — server on rakho.
+              se. Voice, language, hours, keywords — sab customize.
             </p>
           </div>
           <Badge variant={status.configured ? "default" : "secondary"} className="w-fit">
@@ -250,16 +251,165 @@ export function Dashboard({ initial }: { initial: DeskData }) {
                 <div>
                   <CardTitle>Inbox and rules</CardTitle>
                   <CardDescription>
-                    Keyword matches first, then greetings, then the default reply.
+                    Main Tarik hoon. Voice, language, media, aur keywords yahan set karo.
                   </CardDescription>
                 </div>
                 <TabsList>
+                  <TabsTrigger value="voice">Voice</TabsTrigger>
                   <TabsTrigger value="rules">Rules</TabsTrigger>
                   <TabsTrigger value="inbox">Inbox</TabsTrigger>
                 </TabsList>
               </div>
             </CardHeader>
             <CardContent>
+              <TabsContent value="voice" className="space-y-5">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Language</Label>
+                    <select
+                      className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
+                      value={rules.language}
+                      onChange={(event) =>
+                        setRules({
+                          ...rules,
+                          language: event.target.value as BotRules["language"],
+                        })
+                      }
+                    >
+                      <option value="hinglish">Hinglish (soft)</option>
+                      <option value="english">English (calm)</option>
+                      <option value="hindi">Hindi (narm)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tone</Label>
+                    <select
+                      className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
+                      value={rules.tone}
+                      onChange={(event) =>
+                        setRules({ ...rules, tone: event.target.value as BotRules["tone"] })
+                      }
+                    >
+                      <option value="soft">Soft</option>
+                      <option value="warm">Warm</option>
+                      <option value="sharp">Short & clear</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Who gets a reply</Label>
+                    <select
+                      className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
+                      value={rules.replyMode}
+                      onChange={(event) =>
+                        setRules({
+                          ...rules,
+                          replyMode: event.target.value as BotRules["replyMode"],
+                        })
+                      }
+                    >
+                      <option value="all">Every chat</option>
+                      <option value="keywords">Keywords only</option>
+                      <option value="greetings">Greetings only</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <ToggleRow
+                    title="Use contact’s first name"
+                    hint="Amina, … jaise narm start."
+                    checked={rules.includeName}
+                    onChange={(checked) => setRules({ ...rules, includeName: checked })}
+                  />
+                  <ToggleRow
+                    title="Local models"
+                    hint="Ollama / Flan, phir meri Hinglish voice."
+                    checked={rules.useLocalLlm}
+                    onChange={(checked) => setRules({ ...rules, useLocalLlm: checked })}
+                  />
+                  <ToggleRow
+                    title="Soft emoji"
+                    hint="Ek chhota smile, zyada nahi."
+                    checked={rules.emoji}
+                    onChange={(checked) => setRules({ ...rules, emoji: checked })}
+                  />
+                  <ToggleRow
+                    title="Typing indicator"
+                    hint="Pehle composing, phir reply."
+                    checked={rules.showTyping}
+                    onChange={(checked) => setRules({ ...rules, showTyping: checked })}
+                  />
+                  <ToggleRow
+                    title="Reply to photos / voice / files"
+                    hint="Main dekh raha hoon, quietly."
+                    checked={rules.replyToMedia}
+                    onChange={(checked) => setRules({ ...rules, replyToMedia: checked })}
+                  />
+                  <ToggleRow
+                    title="Reply in groups"
+                    hint="Off by default — groups messy hote hain."
+                    checked={rules.replyToGroups}
+                    onChange={(checked) => setRules({ ...rules, replyToGroups: checked })}
+                  />
+                </div>
+                <TextField
+                  label="Signature (optional)"
+                  value={rules.signature}
+                  onChange={(value) => setRules({ ...rules, signature: value })}
+                />
+                <TextField
+                  label="Extra facts I should say (one per line)"
+                  value={rules.customFacts}
+                  onChange={(value) => setRules({ ...rules, customFacts: value })}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setRules({
+                        ...rules,
+                        language: "hinglish",
+                        tone: "soft",
+                        emoji: false,
+                      })
+                    }
+                  >
+                    Preset: Soft Hinglish
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setRules({
+                        ...rules,
+                        language: "english",
+                        tone: "warm",
+                        emoji: false,
+                      })
+                    }
+                  >
+                    Preset: Warm English
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setRules({
+                        ...rules,
+                        language: "hindi",
+                        tone: "soft",
+                        emoji: true,
+                      })
+                    }
+                  >
+                    Preset: Narm Hindi
+                  </Button>
+                </div>
+                <Button onClick={saveRules} disabled={busy}>
+                  Save voice
+                </Button>
+              </TabsContent>
+
               <TabsContent value="rules" className="space-y-5">
                 <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
                   <div>
@@ -555,6 +705,28 @@ function TextField({
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
       <Textarea id={id} value={value} rows={3} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function ToggleRow({
+  title,
+  hint,
+  checked,
+  onChange,
+}: {
+  title: string;
+  hint: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+      <div>
+        <p className="font-medium">{title}</p>
+        <p className="text-sm text-muted-foreground">{hint}</p>
+      </div>
+      <Switch checked={checked} onCheckedChange={onChange} />
     </div>
   );
 }

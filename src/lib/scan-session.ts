@@ -1,10 +1,18 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import QRCode from "qrcode";
 import { composeReply } from "@/lib/compose-reply";
 import { recordReply } from "@/lib/record-reply";
+import {
+  AUTH_DIR,
+  clearSavedSession,
+  getSavedPhone,
+  hasSavedSession,
+  persistSavedSession,
+  restoreSavedSession,
+} from "@/lib/session-persist";
 import { getRules, markProcessed, wasProcessed } from "@/lib/store";
 import type { ScanSnapshot } from "@/lib/types";
-import { writablePath } from "@/lib/writable-dir";
+import { mediaAck } from "@/lib/voice";
 
 type BaileysModule = typeof import("@whiskeysockets/baileys");
 
@@ -14,18 +22,41 @@ type Manager = {
   snapshot: ScanSnapshot;
   sock: Socket | null;
   starting: boolean;
+  reconnectDelay: number;
   start: () => Promise<ScanSnapshot>;
   logout: () => Promise<ScanSnapshot>;
 };
 
-const AUTH_DIR = writablePath("baileys-auth");
+function scheduleReconnect(manager: Manager) {
+  const delay = manager.reconnectDelay;
+  setTimeout(() => {
+    manager.reconnectDelay = Math.min(delay * 2, 30_000);
+    void manager.start();
+  }, delay);
+}
 
 const emptySnapshot = (): ScanSnapshot => ({
   phase: "idle",
   qrDataUrl: null,
   phone: null,
   error: null,
+  persisted: false,
+  savedAt: null,
 });
+
+async function snapshotWithSave(
+  patch: Partial<ScanSnapshot>,
+): Promise<ScanSnapshot> {
+  const saved = await getSavedPhone();
+  const persisted = await hasSavedSession();
+  return {
+    ...emptySnapshot(),
+    ...patch,
+    persisted,
+    savedAt: saved.savedAt,
+    phone: patch.phone ?? saved.phone,
+  };
+}
 
 function getManager(): Manager {
   const globalRef = globalThis as typeof globalThis & { __relayScan?: Manager };
@@ -45,30 +76,48 @@ function textFromMessage(message: Record<string, unknown> | null | undefined): s
   return "";
 }
 
+function mediaKind(message: Record<string, unknown> | null | undefined): string | null {
+  if (!message) return null;
+  if (message.imageMessage) return "image";
+  if (message.audioMessage || message.pttMessage) return "voice";
+  if (message.videoMessage) return "video";
+  if (message.documentMessage) return "document";
+  if (message.stickerMessage) return "sticker";
+  if (message.locationMessage || message.liveLocationMessage) return "location";
+  if (message.contactMessage || message.contactsArrayMessage) return "contact";
+  return null;
+}
+
 function createManager(): Manager {
   const manager: Manager = {
     snapshot: emptySnapshot(),
     sock: null,
     starting: false,
+    reconnectDelay: 2000,
     async start() {
       if (manager.snapshot.phase === "ready" && manager.sock) {
         return manager.snapshot;
       }
       if (manager.starting) return manager.snapshot;
       manager.starting = true;
-      manager.snapshot = {
-        ...manager.snapshot,
+      const restored = await restoreSavedSession();
+      const saved = await getSavedPhone();
+      manager.snapshot = await snapshotWithSave({
         phase: manager.snapshot.qrDataUrl ? "qr" : "connecting",
-        error: null,
-      };
+        qrDataUrl: manager.snapshot.qrDataUrl,
+        phone: saved.phone,
+        error: restored ? "Saved login mil gaya. Reconnect ho raha hai…" : null,
+      });
       try {
         await openSocket(manager);
       } catch (error) {
-        manager.snapshot = {
-          ...emptySnapshot(),
-          phase: "logged_out",
+        manager.snapshot = await snapshotWithSave({
+          phase: restored ? "connecting" : "logged_out",
           error: error instanceof Error ? error.message : "Could not start WhatsApp scan.",
-        };
+        });
+        if (restored) {
+          scheduleReconnect(manager);
+        }
       } finally {
         manager.starting = false;
       }
@@ -83,7 +132,7 @@ function createManager(): Manager {
         // Session may already be dead.
       }
       manager.sock = null;
-      await rm(AUTH_DIR, { recursive: true, force: true });
+      await clearSavedSession();
       manager.snapshot = {
         ...emptySnapshot(),
         phase: "logged_out",
@@ -125,33 +174,39 @@ async function openSocket(manager: Manager) {
   });
   manager.sock = sock;
 
-  sock.ev.on("creds.update", saveCreds);
+  sock.ev.on("creds.update", async () => {
+    await saveCreds();
+    await persistSavedSession(manager.snapshot.phone);
+    manager.snapshot = await snapshotWithSave(manager.snapshot);
+  });
 
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
-      manager.snapshot = {
+      manager.snapshot = await snapshotWithSave({
         phase: "qr",
         qrDataUrl: await QRCode.toDataURL(qr, { width: 280, margin: 1 }),
         phone: null,
         error: null,
-      };
+      });
     }
     if (connection === "connecting") {
-      manager.snapshot = {
+      manager.snapshot = await snapshotWithSave({
         ...manager.snapshot,
         phase: manager.snapshot.qrDataUrl ? "qr" : "connecting",
         error: null,
-      };
+      });
     }
     if (connection === "open") {
       const phone = sock.user?.id?.split(":")[0] ?? sock.user?.id ?? null;
-      manager.snapshot = {
+      manager.reconnectDelay = 2000;
+      await persistSavedSession(phone);
+      manager.snapshot = await snapshotWithSave({
         phase: "ready",
         qrDataUrl: null,
         phone,
         error: null,
-      };
+      });
     }
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
@@ -159,23 +214,21 @@ async function openSocket(manager: Manager) {
       const loggedOut = statusCode === DisconnectReason.loggedOut;
       manager.sock = null;
       if (loggedOut) {
-        await rm(AUTH_DIR, { recursive: true, force: true });
+        await clearSavedSession();
         manager.snapshot = {
           ...emptySnapshot(),
           phase: "logged_out",
-          error: "WhatsApp logged this device out. Show a new QR to link again.",
+          error: "WhatsApp ne is device ko logout kar diya. Naya QR scan karo.",
         };
         return;
       }
-      manager.snapshot = {
+      manager.snapshot = await snapshotWithSave({
         ...manager.snapshot,
         phase: "connecting",
         qrDataUrl: null,
-        error: "Connection dropped. Reconnecting…",
-      };
-      setTimeout(() => {
-        void manager.start();
-      }, 2000);
+        error: "Line drop hui. Saved login se reconnect ho raha hai…",
+      });
+      scheduleReconnect(manager);
     }
   });
 
@@ -184,19 +237,50 @@ async function openSocket(manager: Manager) {
     for (const message of messages) {
       if (message.key.fromMe) continue;
       const jid = message.key.remoteJid;
-      if (!jid || jid === "status@broadcast" || jid.endsWith("@g.us") || jid.endsWith("@broadcast")) {
+      if (!jid || jid === "status@broadcast" || jid.endsWith("@broadcast")) {
+        continue;
+      }
+      if (jid.endsWith("@g.us") && !rules.replyToGroups) {
         continue;
       }
       const id = message.key.id;
       if (!id || (await wasProcessed(`scan_${id}`))) continue;
       await markProcessed(`scan_${id}`);
 
-      const body = textFromMessage(message.message as Record<string, unknown> | undefined);
-      if (!body) continue;
-
+      const raw = message.message as Record<string, unknown> | undefined;
+      const body = textFromMessage(raw);
+      const media = mediaKind(raw);
       const fromName =
         message.pushName ||
         (typeof jid === "string" ? jid.replace(/@s\.whatsapp\.net$/, "") : "Contact");
+
+      if (!body && media) {
+        if (!rules.replyToMedia) continue;
+        const text = mediaAck(media, rules);
+        try {
+          if (rules.showTyping) {
+            await sock.sendPresenceUpdate("composing", jid);
+          }
+          await sock.sendMessage(jid, { text });
+        } catch {
+          // keep going
+        }
+        await recordReply(
+          {
+            id: `scan_${id}`,
+            from: jid,
+            fromName,
+            body: `[${media}]`,
+            source: "scan",
+            createdAt: new Date().toISOString(),
+          },
+          { action: "reply", text, matchedRule: media, engine: "tarik-live" },
+        );
+        continue;
+      }
+
+      if (!body) continue;
+
       const decision = await composeReply({
         text: body,
         fromName,
@@ -220,6 +304,9 @@ async function openSocket(manager: Manager) {
       }
 
       try {
+        if (rules.showTyping) {
+          await sock.sendPresenceUpdate("composing", jid);
+        }
         await sock.sendMessage(jid, { text: decision.text });
         await recordReply(
           {
@@ -255,6 +342,22 @@ async function openSocket(manager: Manager) {
 
 export function getScanSnapshot(): ScanSnapshot {
   return getManager().snapshot;
+}
+
+export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
+  const manager = getManager();
+  const persisted = await hasSavedSession();
+  const saved = await getSavedPhone();
+  if (persisted && manager.snapshot.phase === "idle") {
+    manager.snapshot = await snapshotWithSave({
+      phase: "connecting",
+      phone: saved.phone,
+      error: "Saved login ready. Always-live reconnect chal raha hai.",
+    });
+  } else {
+    manager.snapshot = await snapshotWithSave(manager.snapshot);
+  }
+  return manager.snapshot;
 }
 
 export async function startScanSession(): Promise<ScanSnapshot> {

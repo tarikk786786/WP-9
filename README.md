@@ -7,7 +7,9 @@ Relay answers WhatsApp for you with **free local models** and a safety layer.
 3. **Safety** — skips OTPs, money/transfer asks, secrets, and jailbreaks. Rate-limits each contact.
 4. **Cloud API** — optional Meta webhook if you later move the Business number to Vercel.
 
-`npm run live` (or `npm run dev`) stays up, reconnects a saved WhatsApp session, and warms the on-device model. Vercel serverless cannot keep a scan session or a local LLM socket alive.
+Replies are **first person as Tarik** (“main Tarik hoon”), never “on behalf of”. After one QR scan, login is saved on this machine (`data/whatsapp-session.json` + `data/baileys-auth`). Restart `npm run live` and it reconnects — no new QR unless you tap Log out or WhatsApp unlinks the device.
+
+`npm run live` stays up, restores that saved session, and warms the on-device model. Vercel serverless cannot keep a scan socket 24/7; use this Node process (laptop or VPS) for always-live personal WhatsApp.
 
 ## What you get
 
@@ -32,7 +34,7 @@ Optional stronger free model:
 ollama pull llama3.2
 ```
 
-Open [http://127.0.0.1:43217](http://127.0.0.1:43217). Click **Show QR**, scan from Linked devices, then use **Generate reply** to hear the local brain.
+Open [http://127.0.0.1:43217](http://127.0.0.1:43217). Click **Show QR**, scan from Linked devices once. The session is written to disk and reused forever on this host. Use **Voice** for language, tone, media, groups, signature, and extra facts. Use **Generate reply** to hear the same first-person voice.
 
 ## Connect WhatsApp Business
 

@@ -8,6 +8,7 @@ import { generateLocalReply } from "@/lib/local-llm";
 import { decideReply, type ReplyDecision } from "@/lib/reply-engine";
 import { inspectIncoming, isRateLimited, sanitizeOutgoing } from "@/lib/safety";
 import type { BotRules } from "@/lib/types";
+import { applyVoice } from "@/lib/voice";
 
 export type ComposedReply = ReplyDecision & { engine: string };
 
@@ -51,20 +52,30 @@ export async function composeReply(options: {
 
   const hint = fallback.matchedRule;
 
+  if (rules.replyMode === "greetings" && hint !== "greeting") {
+    return { action: "skip", reason: "Only greetings are set to auto-reply.", engine: "mode" };
+  }
+  if (rules.replyMode === "keywords") {
+    const isKeyword = rules.keywordRules.some((rule) => rule.enabled && rule.keyword === hint);
+    if (!isKeyword) {
+      return { action: "skip", reason: "Only keyword matches are set to auto-reply.", engine: "mode" };
+    }
+  }
+
   if (hint === "greeting" || hint === "after-hours" || isOwnerFactQuestion(text)) {
     return {
       action: "reply",
-      text: sanitizeOutgoing(writeHinglishReply(text, fromName, rules, hint)),
+      text: sanitizeOutgoing(applyVoice(writeHinglishReply(text, fromName, rules, hint), rules)),
       matchedRule: hint,
-      engine: "hinglish-live",
+      engine: "tarik-live",
     };
   }
 
   if (rules.useLocalLlm !== false) {
     try {
       const generated = await generateLocalReply(text, fromName, rules);
-      const polished = polishToHinglish(generated.text, fromName);
-      const clean = sanitizeOutgoing(polished);
+      const polished = polishToHinglish(generated.text, fromName, rules.includeName);
+      const clean = sanitizeOutgoing(applyVoice(polished, rules));
       if (clean && !isLowQualityReply(clean)) {
         return {
           action: "reply",
@@ -80,8 +91,8 @@ export async function composeReply(options: {
 
   return {
     action: "reply",
-    text: sanitizeOutgoing(writeHinglishReply(text, fromName, rules, hint)),
+    text: sanitizeOutgoing(applyVoice(writeHinglishReply(text, fromName, rules, hint), rules)),
     matchedRule: hint,
-    engine: "hinglish-live",
+    engine: "tarik-live",
   };
 }

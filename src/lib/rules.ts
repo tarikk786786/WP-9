@@ -37,6 +37,21 @@ export function parseRules(value: unknown): BotRules | null {
       typeof raw.useLocalLlm === "boolean" ? raw.useLocalLlm : defaultRules.useLocalLlm,
     preferredModel:
       typeof raw.preferredModel === "string" ? raw.preferredModel : defaultRules.preferredModel,
+    language:
+      raw.language === "english" || raw.language === "hindi" || raw.language === "hinglish"
+        ? raw.language
+        : defaultRules.language,
+    tone: raw.tone === "warm" || raw.tone === "sharp" || raw.tone === "soft" ? raw.tone : defaultRules.tone,
+    emoji: typeof raw.emoji === "boolean" ? raw.emoji : defaultRules.emoji,
+    signature: typeof raw.signature === "string" ? raw.signature : defaultRules.signature,
+    customFacts: typeof raw.customFacts === "string" ? raw.customFacts : defaultRules.customFacts,
+    replyMode:
+      raw.replyMode === "keywords" || raw.replyMode === "greetings" || raw.replyMode === "all"
+        ? raw.replyMode
+        : defaultRules.replyMode,
+    replyToMedia: typeof raw.replyToMedia === "boolean" ? raw.replyToMedia : defaultRules.replyToMedia,
+    replyToGroups: typeof raw.replyToGroups === "boolean" ? raw.replyToGroups : defaultRules.replyToGroups,
+    showTyping: typeof raw.showTyping === "boolean" ? raw.showTyping : defaultRules.showTyping,
     businessHoursEnabled:
       typeof raw.businessHoursEnabled === "boolean"
         ? raw.businessHoursEnabled

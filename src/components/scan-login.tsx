@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,7 @@ import type { ScanSnapshot } from "@/lib/types";
 function phaseLabel(phase: ScanSnapshot["phase"]) {
   switch (phase) {
     case "ready":
-      return "Linked";
+      return "Linked · saved";
     case "qr":
       return "Scan the QR";
     case "connecting":
@@ -33,6 +33,8 @@ export function ScanLogin() {
     qrDataUrl: null,
     phone: null,
     error: null,
+    persisted: false,
+    savedAt: null,
   });
   const [busy, setBusy] = useState(false);
   const [pollId, setPollId] = useState<number | null>(null);
@@ -51,7 +53,7 @@ export function ScanLogin() {
         .then((response) => response.json())
         .then((snapshot: ScanSnapshot) => {
           setScan(snapshot);
-          if (snapshot.phase === "ready") {
+          if (snapshot.phase === "ready" || snapshot.phase === "logged_out") {
             window.clearInterval(id);
             setPollId(null);
           }
@@ -62,6 +64,36 @@ export function ScanLogin() {
     }, 1500);
     setPollId(id);
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/scan")
+      .then((response) => response.json())
+      .then(async (snapshot: ScanSnapshot) => {
+        if (cancelled) return;
+        setScan(snapshot);
+        if (snapshot.persisted && snapshot.phase !== "ready") {
+          const started = await fetch("/api/scan", { method: "POST" });
+          const next = (await started.json()) as ScanSnapshot;
+          if (!cancelled) {
+            setScan(next);
+            startPolling();
+          }
+          return;
+        }
+        if (snapshot.phase === "qr" || snapshot.phase === "connecting") {
+          startPolling();
+        }
+      })
+      .catch(() => {
+        // Desk still works if WhatsApp is offline.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Mount-only restore of a saved login.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function showQr() {
     setBusy(true);
@@ -94,9 +126,9 @@ export function ScanLogin() {
           <div>
             <CardTitle>Tarik ka WhatsApp link</CardTitle>
             <CardDescription>
-              Phone pe WhatsApp → Settings → Linked devices → Link a device,
-              phir yeh QR scan. Server on rahe to Tarik ke naam se narm
-              Hinglish replies chalte rehte hain. Facts tarikislam.in se.
+              Ek baar QR scan. Login is machine pe forever save hota hai —
+              restart ke baad bhi naya QR nahi. Main khud reply karta hoon,
+              kisi ke behalf pe nahi. Facts tarikislam.in se.
             </CardDescription>
           </div>
           <Badge variant={scan.phase === "ready" ? "default" : "secondary"}>
@@ -115,30 +147,37 @@ export function ScanLogin() {
             />
           ) : scan.phase === "ready" ? (
             <p className="px-4 text-center text-sm font-medium text-primary">
-              Linked{scan.phone ? ` as ${scan.phone}` : ""}. Incoming chats
-              will get an auto-reply.
+              Linked{scan.phone ? ` as ${scan.phone}` : ""}. Login saved.
+              Incoming chats pe main khud reply karta hoon.
             </p>
           ) : (
             <p className="px-4 text-center text-sm text-muted-foreground">
               {scan.phase === "connecting"
-                ? "Asking WhatsApp for a QR…"
+                ? scan.persisted
+                  ? "Saved login se WhatsApp reconnect ho raha hai…"
+                  : "Asking WhatsApp for a QR…"
                 : "Click Show QR to start linking your phone."}
             </p>
           )}
         </div>
         <div className="space-y-3 text-sm leading-6">
           <ol className="list-decimal space-y-1 pl-5">
-            <li>Keep this page and the Relay server running while you are linked.</li>
-            <li>On your phone, open WhatsApp → Linked devices → Link a device.</li>
-            <li>Scan the QR. A new code appears if the first one expires.</li>
-            <li>Send yourself a test text from another phone to confirm replies.</li>
+            <li>Is machine pe <code>npm run live</code> hamesha on rakho — yahi always-live hai.</li>
+            <li>Phone: WhatsApp → Linked devices → Link a device → QR scan.</li>
+            <li>Scan ke baad creds <code>data/whatsapp-session.json</code> mein save ho jaate hain.</li>
+            <li>Server restart ho to saved login se khud reconnect. Log out tabhi jab tum chaho.</li>
           </ol>
+          {scan.persisted ? (
+            <p className="text-xs text-primary">
+              Saved login on this disk{scan.savedAt ? ` · ${scan.savedAt}` : ""}.
+              WhatsApp ne logout kiya ho tabhi naya QR chahiye.
+            </p>
+          ) : null}
           {scan.error ? <p className="text-destructive">{scan.error}</p> : null}
           <p className="text-xs text-muted-foreground">
-            This uses WhatsApp Web linking, not Meta Cloud API. WhatsApp can
-            drop unofficial sessions. It works on this always-on Node process
-            (local preview or a VPS). Vercel serverless will not keep the scan
-            session alive after the function sleeps.
+            Personal WhatsApp Web link. Vercel serverless so jaata hai, isliye
+            24/7 ke liye yahi Node process (laptop ya VPS) chalao. Session files
+            git mein mat daalo.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={showQr} disabled={busy || scan.phase === "ready"}>
@@ -147,7 +186,7 @@ export function ScanLogin() {
             <Button
               variant="outline"
               onClick={logout}
-              disabled={busy || scan.phase === "idle"}
+              disabled={busy || (scan.phase === "idle" && !scan.persisted)}
             >
               Log out
             </Button>

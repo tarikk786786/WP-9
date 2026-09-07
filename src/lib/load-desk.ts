@@ -14,7 +14,14 @@ function emptyLive(): LiveStatus {
   return {
     alive: true,
     startedAt: new Date().toISOString(),
-    whatsapp: { phase: "idle", qrDataUrl: null, phone: null, error: null },
+    whatsapp: {
+      phase: "idle",
+      qrDataUrl: null,
+      phone: null,
+      error: null,
+      persisted: false,
+      savedAt: null,
+    },
     llms: [],
   };
 }
