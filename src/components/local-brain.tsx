@@ -37,7 +37,7 @@ export function LocalBrain({ initial }: { initial: LiveStatus }) {
           </div>
           <Badge className="gap-1.5">
             <span className="size-1.5 animate-pulse rounded-full bg-primary-foreground" />
-            Live since {new Date(live.startedAt).toLocaleTimeString()}
+            Live
           </Badge>
         </div>
       </CardHeader>

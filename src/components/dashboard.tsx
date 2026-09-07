@@ -32,12 +32,13 @@ function emptyRule(): KeywordRule {
 }
 
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    day: "numeric",
-  });
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hours = String(date.getUTCHours()).padStart(2, "0");
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${months[date.getUTCMonth()]} ${day} ${hours}:${minutes} UTC`;
 }
 
 export function Dashboard({ initial }: { initial: DeskData }) {
