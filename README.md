@@ -1,15 +1,18 @@
 # Relay — WhatsApp auto-reply on Vercel
 
-Relay is a Next.js app you deploy on Vercel. Meta’s WhatsApp Cloud API posts incoming messages to `/api/whatsapp/webhook`. Relay picks a reply from your rules and sends it back so the chat is answered while you are away.
+Relay is a Next.js app with two ways to answer chats:
 
-This uses the **official WhatsApp Business Cloud API**. It cannot log into a personal WhatsApp account with a QR code. WhatsApp does not allow that on a serverless host, and unofficial “WhatsApp Web” bots violate their terms.
+1. **Login by scan** — show a QR, link the WhatsApp already on your phone (WhatsApp Web style), and auto-reply from this running Node process.
+2. **WhatsApp Cloud API** — Meta posts incoming Business messages to `/api/whatsapp/webhook` on Vercel.
+
+Scan login needs the server to stay online (`npm run dev` or `npm start` on a machine/VPS). Vercel serverless will drop that socket when the function sleeps. WhatsApp can also disconnect unofficial linked devices.
 
 ## What you get
 
+- QR login on the desk: Settings → Linked devices → Link a device on your phone
 - A control desk to write keyword, greeting, default, and after-hours replies
-- A simulator that uses the same reply engine without Meta credentials
-- A production webhook that verifies Meta’s hub challenge and optional `X-Hub-Signature-256`
-- Inbox of simulated and (when the function instance still has them) live messages
+- A simulator that uses the same reply engine without any WhatsApp connection
+- A production Cloud API webhook with hub challenge and optional `X-Hub-Signature-256`
 
 ## Run locally
 
@@ -19,7 +22,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://127.0.0.1:43217](http://127.0.0.1:43217). Use **Generate reply** to test rules before you connect Meta.
+Open [http://127.0.0.1:43217](http://127.0.0.1:43217). Click **Show QR**, then scan it from WhatsApp → Linked devices. Use **Generate reply** to test rules without your phone.
 
 ## Connect WhatsApp Business
 

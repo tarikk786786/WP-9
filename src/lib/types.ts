@@ -26,8 +26,17 @@ export type InboxMessage = {
   body: string;
   reply: string | null;
   skippedReason: string | null;
-  source: "whatsapp" | "simulator";
+  source: "whatsapp" | "simulator" | "scan";
   createdAt: string;
+};
+
+export type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
+
+export type ScanSnapshot = {
+  phase: ScanPhase;
+  qrDataUrl: string | null;
+  phone: string | null;
+  error: string | null;
 };
 
 export type ConnectionStatus = {

@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ScanLogin } from "@/components/scan-login";
 import type { DeskData } from "@/lib/load-desk";
 import type { BotRules, InboxMessage, KeywordRule } from "@/lib/types";
 
@@ -134,6 +135,8 @@ export function Dashboard({ initial }: { initial: DeskData }) {
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <ScanLogin />
+
         {(notice || error) && (
           <div className="lg:col-span-2">
             {error ? (
@@ -152,11 +155,10 @@ export function Dashboard({ initial }: { initial: DeskData }) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Connect your WhatsApp Business number</CardTitle>
+            <CardTitle>Or use WhatsApp Cloud API on Vercel</CardTitle>
             <CardDescription>
-              Official Meta Cloud API only. A personal WhatsApp account cannot be
-              logged in here with a QR code — that needs a always-on browser
-              session and is blocked by WhatsApp’s terms.
+              Official Meta webhook path for serverless hosting. Use scan login
+              above if you want to link the WhatsApp already on your phone.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
