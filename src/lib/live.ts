@@ -4,6 +4,7 @@ import { hasSavedSession, writeHeartbeat } from "@/lib/session-persist";
 import { flushStore } from "@/lib/store";
 import { refreshTarikProfile } from "@/lib/tarik-profile";
 import type { LiveStatus } from "@/lib/types";
+import { isServerlessDisk } from "@/lib/writable-dir";
 
 const startedAt = new Date().toISOString();
 
@@ -19,6 +20,7 @@ export async function getLiveStatus(): Promise<LiveStatus> {
 export async function keepAliveTick() {
   await writeHeartbeat();
   await flushStore();
+  if (isServerlessDisk()) return;
   const snapshot = await hydrateScanSnapshot();
   const saved = await hasSavedSession();
   if (saved && snapshot.phase !== "ready") {

@@ -12,8 +12,21 @@ import {
 } from "@/components/ui/card";
 import type { ScanSnapshot } from "@/lib/types";
 
-function phaseLabel(phase: ScanSnapshot["phase"]) {
-  switch (phase) {
+function emptyScan(): ScanSnapshot {
+  return {
+    phase: "idle",
+    qrDataUrl: null,
+    phone: null,
+    error: null,
+    persisted: false,
+    savedAt: null,
+    serverless: false,
+  };
+}
+
+function phaseLabel(scan: ScanSnapshot) {
+  if (scan.serverless) return "Vercel · QR off";
+  switch (scan.phase) {
     case "ready":
       return "Linked · saved";
     case "qr":
@@ -28,14 +41,7 @@ function phaseLabel(phase: ScanSnapshot["phase"]) {
 }
 
 export function ScanLogin() {
-  const [scan, setScan] = useState<ScanSnapshot>({
-    phase: "idle",
-    qrDataUrl: null,
-    phone: null,
-    error: null,
-    persisted: false,
-    savedAt: null,
-  });
+  const [scan, setScan] = useState<ScanSnapshot>(emptyScan);
   const [busy, setBusy] = useState(false);
   const [pollId, setPollId] = useState<number | null>(null);
 
@@ -53,7 +59,7 @@ export function ScanLogin() {
         .then((response) => response.json())
         .then((snapshot: ScanSnapshot) => {
           setScan(snapshot);
-          if (snapshot.phase === "ready" || snapshot.phase === "logged_out") {
+          if (snapshot.qrDataUrl || snapshot.phase === "ready" || snapshot.phase === "logged_out" || snapshot.serverless) {
             window.clearInterval(id);
             setPollId(null);
           }
@@ -61,7 +67,7 @@ export function ScanLogin() {
         .catch(() => {
           // Keep trying while WhatsApp is opening the QR.
         });
-    }, 1500);
+    }, 1200);
     setPollId(id);
   }
 
@@ -72,12 +78,13 @@ export function ScanLogin() {
       .then(async (snapshot: ScanSnapshot) => {
         if (cancelled) return;
         setScan(snapshot);
+        if (snapshot.serverless) return;
         if (snapshot.persisted && snapshot.phase !== "ready") {
           const started = await fetch("/api/scan", { method: "POST" });
           const next = (await started.json()) as ScanSnapshot;
           if (!cancelled) {
             setScan(next);
-            startPolling();
+            if (!next.serverless) startPolling();
           }
           return;
         }
@@ -101,7 +108,9 @@ export function ScanLogin() {
       const response = await fetch("/api/scan", { method: "POST" });
       const snapshot = (await response.json()) as ScanSnapshot;
       setScan(snapshot);
-      startPolling();
+      if (!snapshot.serverless && snapshot.phase !== "idle") {
+        startPolling();
+      }
     } finally {
       setBusy(false);
     }
@@ -126,18 +135,17 @@ export function ScanLogin() {
           <div>
             <CardTitle>Tarik ka WhatsApp link</CardTitle>
             <CardDescription>
-              Ek baar QR scan. Login is machine pe forever save hota hai —
-              restart ke baad bhi naya QR nahi. Main khud reply karta hoon,
-              kisi ke behalf pe nahi. Facts tarikislam.in se.
+              QR sirf us machine pe aata hai jahan <code>npm run live</code>{" "}
+              chal raha ho. Vercel pe Show QR kaam nahi karta.
             </CardDescription>
           </div>
           <Badge variant={scan.phase === "ready" ? "default" : "secondary"}>
-            {phaseLabel(scan.phase)}
+            {phaseLabel(scan)}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="grid gap-6 md:grid-cols-[280px_1fr]">
-        <div className="flex items-center justify-center rounded-2xl border bg-white p-4">
+        <div className="flex items-center justify-center rounded-2xl border bg-white p-4 min-h-[240px]">
           {scan.qrDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -148,40 +156,37 @@ export function ScanLogin() {
           ) : scan.phase === "ready" ? (
             <p className="px-4 text-center text-sm font-medium text-primary">
               Linked{scan.phone ? ` as ${scan.phone}` : ""}. Login saved.
-              Incoming chats pe main khud reply karta hoon.
             </p>
           ) : (
             <p className="px-4 text-center text-sm text-muted-foreground">
-              {scan.phase === "connecting"
-                ? scan.persisted
-                  ? "Saved login se WhatsApp reconnect ho raha hai…"
-                  : "Asking WhatsApp for a QR…"
-                : "Click Show QR to start linking your phone."}
+              {scan.serverless
+                ? "Yahan QR nahi banega. Local live desk kholo."
+                : busy || scan.phase === "connecting"
+                  ? "WhatsApp se QR maang raha hoon — 20 sec tak wait…"
+                  : "Laptop pe npm run live, phir Show QR."}
             </p>
           )}
         </div>
         <div className="space-y-3 text-sm leading-6">
           <ol className="list-decimal space-y-1 pl-5">
-            <li>Is machine pe <code>npm run live</code> hamesha on rakho — yahi always-live hai.</li>
-            <li>Phone: WhatsApp → Linked devices → Link a device → QR scan.</li>
-            <li>Scan ke baad creds <code>data/whatsapp-session.json</code> mein save ho jaate hain.</li>
-            <li>Server restart ho to saved login se khud reconnect. Log out tabhi jab tum chaho.</li>
+            <li>
+              Apne laptop pe project folder mein <code>npm run live</code> chalao.
+            </li>
+            <li>
+              Browser mein <code>http://127.0.0.1:43217</code> kholo — yeh Vercel URL nahi.
+            </li>
+            <li>Show QR dabao. Code yahi box mein aayega.</li>
+            <li>Phone: WhatsApp → Linked devices → Link a device → scan.</li>
           </ol>
           {scan.persisted ? (
             <p className="text-xs text-primary">
               Saved login on this disk{scan.savedAt ? ` · ${scan.savedAt}` : ""}.
-              WhatsApp ne logout kiya ho tabhi naya QR chahiye.
             </p>
           ) : null}
           {scan.error ? <p className="text-destructive">{scan.error}</p> : null}
-          <p className="text-xs text-muted-foreground">
-            Personal WhatsApp Web link. Vercel serverless so jaata hai, isliye
-            24/7 ke liye yahi Node process (laptop ya VPS) chalao. Session files
-            git mein mat daalo.
-          </p>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={showQr} disabled={busy || scan.phase === "ready"}>
-              {busy ? "Starting…" : scan.qrDataUrl ? "Refresh QR" : "Show QR"}
+            <Button onClick={showQr} disabled={busy || scan.phase === "ready" || scan.serverless}>
+              {busy ? "QR aa raha hai…" : scan.qrDataUrl ? "Refresh QR" : "Show QR"}
             </Button>
             <Button
               variant="outline"

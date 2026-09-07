@@ -21,6 +21,7 @@ function emptyLive(): LiveStatus {
       error: null,
       persisted: false,
       savedAt: null,
+      serverless: false,
     },
     llms: [],
   };

@@ -13,6 +13,7 @@ import {
 import { flushStore, getRules, markProcessed, wasProcessed } from "@/lib/store";
 import type { ScanSnapshot } from "@/lib/types";
 import { mediaAck } from "@/lib/voice";
+import { isServerlessDisk } from "@/lib/writable-dir";
 
 type BaileysModule = typeof import("@whiskeysockets/baileys");
 
@@ -42,6 +43,7 @@ const emptySnapshot = (): ScanSnapshot => ({
   error: null,
   persisted: false,
   savedAt: null,
+  serverless: isServerlessDisk(),
 });
 
 async function snapshotWithSave(
@@ -55,7 +57,32 @@ async function snapshotWithSave(
     persisted,
     savedAt: saved.savedAt,
     phone: patch.phone ?? saved.phone,
+    serverless: isServerlessDisk(),
   };
+}
+
+function waitForQrOrReady(manager: Manager, ms: number) {
+  return new Promise<ScanSnapshot>((resolve) => {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      const snap = manager.snapshot;
+      if (snap.qrDataUrl || snap.phase === "ready" || snap.phase === "logged_out") {
+        clearInterval(timer);
+        resolve(snap);
+        return;
+      }
+      if (Date.now() - started >= ms) {
+        clearInterval(timer);
+        void snapshotWithSave({
+          ...snap,
+          phase: snap.qrDataUrl ? "qr" : "idle",
+          error:
+            snap.error ||
+            "QR nahi aaya. Yeh page Vercel pe ho to laptop pe npm run live chalao — serverless QR nahi nikalta.",
+        }).then(resolve);
+      }
+    }, 200);
+  });
 }
 
 function getManager(): Manager {
@@ -95,6 +122,15 @@ function createManager(): Manager {
     starting: false,
     reconnectDelay: 2000,
     async start() {
+      if (isServerlessDisk()) {
+        manager.snapshot = await snapshotWithSave({
+          phase: "idle",
+          qrDataUrl: null,
+          error:
+            "QR Vercel pe nahi aata. Laptop ya VPS pe npm run live chalao, phir http://127.0.0.1:43217 kholo aur Show QR dabao.",
+        });
+        return manager.snapshot;
+      }
       if (manager.snapshot.phase === "ready" && manager.sock) {
         return manager.snapshot;
       }
@@ -110,9 +146,10 @@ function createManager(): Manager {
       });
       try {
         await openSocket(manager);
+        manager.snapshot = await waitForQrOrReady(manager, restored ? 12_000 : 22_000);
       } catch (error) {
         manager.snapshot = await snapshotWithSave({
-          phase: restored ? "connecting" : "logged_out",
+          phase: restored ? "connecting" : "idle",
           error: error instanceof Error ? error.message : "Could not start WhatsApp scan.",
         });
         if (restored) {
@@ -156,7 +193,12 @@ async function openSocket(manager: Manager) {
   const authDir = getAuthDir();
   await mkdir(authDir, { recursive: true });
   const { state, saveCreds } = await loadAuthState(authDir);
-  const { version } = await fetchLatestBaileysVersion();
+  const version = await Promise.race([
+    fetchLatestBaileysVersion().then((result) => result.version),
+    new Promise<undefined>((resolve) => {
+      setTimeout(() => resolve(undefined), 6000);
+    }),
+  ]);
 
   if (manager.sock) {
     try {
@@ -167,11 +209,12 @@ async function openSocket(manager: Manager) {
   }
 
   const sock = makeWASocket({
-    version,
+    ...(version ? { version } : {}),
     auth: state,
     printQRInTerminal: false,
     browser: Browsers.ubuntu("Chrome"),
     syncFullHistory: false,
+    markOnlineOnConnect: false,
   });
   manager.sock = sock;
 
@@ -348,6 +391,15 @@ export function getScanSnapshot(): ScanSnapshot {
 
 export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
   const manager = getManager();
+  if (isServerlessDisk()) {
+    manager.snapshot = await snapshotWithSave({
+      phase: "idle",
+      qrDataUrl: null,
+      error:
+        "QR Vercel pe nahi aata. Laptop pe npm run live, phir 127.0.0.1:43217 pe Show QR.",
+    });
+    return manager.snapshot;
+  }
   const persisted = await hasSavedSession();
   const saved = await getSavedPhone();
   if (persisted && manager.snapshot.phase === "idle") {
