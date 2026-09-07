@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -84,10 +84,7 @@ export function Dashboard({ initial }: { initial: DeskData }) {
     setInbox(inboxJson.messages);
   }
 
-  const webhookUrl = useMemo(() => {
-    if (typeof window === "undefined") return "/api/whatsapp/webhook";
-    return `${window.location.origin}/api/whatsapp/webhook`;
-  }, []);
+  const webhookUrl = "/api/whatsapp/webhook";
 
   async function saveRules() {
     if (!rules) return;

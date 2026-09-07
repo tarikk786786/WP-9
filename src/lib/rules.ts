@@ -1,5 +1,12 @@
-import { defaultRules } from "@/lib/default-rules";
-import type { BotRules, KeywordRule } from "@/lib/types";
+import { defaultRules } from "./default-rules.ts";
+import type { BotRules, KeywordRule } from "./types.ts";
+
+function asTarik(text: string, fallback: string) {
+  if (/on behalf|Tarik yahan hai|Tarik yahin hai|assistant/i.test(text)) {
+    return fallback;
+  }
+  return text;
+}
 
 function isKeywordRule(value: unknown): value is KeywordRule {
   if (!value || typeof value !== "object") return false;
@@ -24,11 +31,11 @@ export function parseRules(value: unknown): BotRules | null {
   return {
     enabled: raw.enabled,
     botName: typeof raw.botName === "string" ? raw.botName : defaultRules.botName,
-    defaultReply: raw.defaultReply,
-    greetingReply:
-      typeof raw.greetingReply === "string"
-        ? raw.greetingReply
-        : defaultRules.greetingReply,
+    defaultReply: asTarik(raw.defaultReply, defaultRules.defaultReply),
+    greetingReply: asTarik(
+      typeof raw.greetingReply === "string" ? raw.greetingReply : defaultRules.greetingReply,
+      defaultRules.greetingReply,
+    ),
     includeName:
       typeof raw.includeName === "boolean"
         ? raw.includeName
@@ -59,11 +66,16 @@ export function parseRules(value: unknown): BotRules | null {
     timezone: typeof raw.timezone === "string" ? raw.timezone : defaultRules.timezone,
     openHour: typeof raw.openHour === "number" ? raw.openHour : defaultRules.openHour,
     closeHour: typeof raw.closeHour === "number" ? raw.closeHour : defaultRules.closeHour,
-    afterHoursReply:
+    afterHoursReply: asTarik(
       typeof raw.afterHoursReply === "string"
         ? raw.afterHoursReply
         : defaultRules.afterHoursReply,
-    keywordRules: raw.keywordRules,
+      defaultRules.afterHoursReply,
+    ),
+    keywordRules: raw.keywordRules.map((rule) => ({
+      ...rule,
+      reply: asTarik(rule.reply, rule.reply.replace(/Tarik yahan hai|Tarik yahin hai/gi, "main yahin hoon")),
+    })),
   };
 }
 

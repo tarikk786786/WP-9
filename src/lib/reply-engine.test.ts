@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { defaultRules } from "./default-rules.ts";
+import { parseRules } from "./rules.ts";
 import { decideReply } from "./reply-engine.ts";
+
+describe("parseRules", () => {
+  it("rewrites leftover third-person greetings as Tarik", () => {
+    const parsed = parseRules({
+      ...defaultRules,
+      greetingReply: "Hey, kaise ho? Tarik yahan hai — forensics.",
+    });
+    assert.ok(parsed);
+    assert.equal(parsed?.greetingReply, defaultRules.greetingReply);
+    assert.match(parsed?.greetingReply ?? "", /Main Tarik hoon/);
+  });
+});
 
 describe("decideReply", () => {
   it("skips when the bot is off", () => {

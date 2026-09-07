@@ -34,12 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
-# local reply inbox (generated at runtime)
-/data/store.json
-/data/baileys-auth
-/data/whatsapp-session.json
-/data/heartbeat.json
-/data/models
+# local reply inbox + forever login (generated at runtime)
+/data/*
+!/data/.gitkeep
 
 # vercel
 .vercel
