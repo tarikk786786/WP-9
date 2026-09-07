@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { composeReply } from "@/lib/compose-reply";
 import { recordReply } from "@/lib/record-reply";
 import {
-  AUTH_DIR,
+  getAuthDir,
   clearSavedSession,
   getSavedPhone,
   hasSavedSession,
@@ -153,8 +153,9 @@ async function openSocket(manager: Manager) {
     useMultiFileAuthState: loadAuthState,
   } = baileys;
 
-  await mkdir(AUTH_DIR, { recursive: true });
-  const { state, saveCreds } = await loadAuthState(AUTH_DIR);
+  const authDir = getAuthDir();
+  await mkdir(authDir, { recursive: true });
+  const { state, saveCreds } = await loadAuthState(authDir);
   const { version } = await fetchLatestBaileysVersion();
 
   if (manager.sock) {

@@ -10,5 +10,6 @@ describe("persist roots", () => {
     assert.equal(ok, true);
     assert.equal(existsSync(writablePath(rel)), true);
     assert.ok(persistRoots()[0].endsWith("/data"));
+    assert.ok(!persistRoots()[0].includes("/var/task"));
   });
 });

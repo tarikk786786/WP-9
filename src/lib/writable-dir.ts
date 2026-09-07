@@ -6,14 +6,23 @@ function unique(paths: string[]) {
   return [...new Set(paths)];
 }
 
-/** Every disk we can keep forever — laptop/VPS `./data` first, then /tmp on serverless. */
+/** Vercel/Lambda: only /tmp is writable. Never mkdir under /var/task. */
+export function isServerlessDisk() {
+  return Boolean(
+    process.env.VERCEL ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.LAMBDA_TASK_ROOT ||
+      process.cwd() === "/var/task",
+  );
+}
+
+/** Disk roots we may write. Serverless = /tmp only. Laptop/VPS = ./data. */
 export function persistRoots() {
-  const local = path.join(process.cwd(), "data");
   const tmp = path.join("/tmp", "relay-data");
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    return unique([local, tmp]);
+  if (isServerlessDisk()) {
+    return [tmp];
   }
-  return unique([local]);
+  return unique([path.join(process.cwd(), "data")]);
 }
 
 export function writableRoot() {
@@ -33,7 +42,7 @@ export async function writeToAllRoots(relPath: string, data: string | Buffer) {
       await writeFile(dest, data);
       wrote = true;
     } catch {
-      // Try the next root (serverless may block cwd).
+      // Next root (should not happen on /tmp).
     }
   }
   return wrote;

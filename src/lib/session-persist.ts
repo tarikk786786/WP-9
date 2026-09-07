@@ -9,7 +9,9 @@ import {
   writeToAllRoots,
 } from "@/lib/writable-dir";
 
-export const AUTH_DIR = writablePath("baileys-auth");
+export function getAuthDir() {
+  return writablePath("baileys-auth");
+}
 const ARCHIVE_REL = "whatsapp-session.json";
 
 export type SessionArchive = {
@@ -114,7 +116,7 @@ async function writeAuthFiles(files: Record<string, string>) {
 }
 
 export async function restoreSavedSession(): Promise<boolean> {
-  if (existsSync(path.join(AUTH_DIR, "creds.json"))) return true;
+  if (existsSync(path.join(getAuthDir(), "creds.json"))) return true;
   const existing = firstExistingPath("baileys-auth", "creds.json");
   if (existsSync(existing)) {
     const names = await walkFiles(path.dirname(existing));
@@ -124,16 +126,16 @@ export async function restoreSavedSession(): Promise<boolean> {
       files[rel] = buf.toString("base64");
     }
     await writeAuthFiles(files);
-    return existsSync(path.join(AUTH_DIR, "creds.json"));
+    return existsSync(path.join(getAuthDir(), "creds.json"));
   }
   const archive = await readSessionArchive();
   if (!archive) return false;
   await writeAuthFiles(archive.files);
-  return existsSync(path.join(AUTH_DIR, "creds.json"));
+  return existsSync(path.join(getAuthDir(), "creds.json"));
 }
 
 export async function persistSavedSession(phone: string | null): Promise<void> {
-  let sourceDir = AUTH_DIR;
+  let sourceDir = getAuthDir();
   if (!existsSync(path.join(sourceDir, "creds.json"))) {
     const found = firstExistingPath("baileys-auth", "creds.json");
     if (existsSync(found)) sourceDir = path.dirname(found);
