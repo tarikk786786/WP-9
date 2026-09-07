@@ -122,15 +122,6 @@ function createManager(): Manager {
     starting: false,
     reconnectDelay: 2000,
     async start() {
-      if (isServerlessDisk()) {
-        manager.snapshot = await snapshotWithSave({
-          phase: "idle",
-          qrDataUrl: null,
-          error:
-            "QR Vercel pe nahi aata. Laptop ya VPS pe npm run live chalao, phir http://127.0.0.1:43217 kholo aur Show QR dabao.",
-        });
-        return manager.snapshot;
-      }
       if (manager.snapshot.phase === "ready" && manager.sock) {
         return manager.snapshot;
       }
@@ -391,15 +382,6 @@ export function getScanSnapshot(): ScanSnapshot {
 
 export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
   const manager = getManager();
-  if (isServerlessDisk()) {
-    manager.snapshot = await snapshotWithSave({
-      phase: "idle",
-      qrDataUrl: null,
-      error:
-        "QR Vercel pe nahi aata. Laptop pe npm run live, phir 127.0.0.1:43217 pe Show QR.",
-    });
-    return manager.snapshot;
-  }
   const persisted = await hasSavedSession();
   const saved = await getSavedPhone();
   if (persisted && manager.snapshot.phase === "idle") {

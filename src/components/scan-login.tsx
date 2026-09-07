@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import type { ScanSnapshot } from "@/lib/types";
 
-function emptyScan(): ScanSnapshot {
+function emptyScan(serverless = false): ScanSnapshot {
   return {
     phase: "idle",
     qrDataUrl: null,
@@ -20,15 +20,14 @@ function emptyScan(): ScanSnapshot {
     error: null,
     persisted: false,
     savedAt: null,
-    serverless: false,
+    serverless,
   };
 }
 
 function phaseLabel(scan: ScanSnapshot) {
-  if (scan.serverless) return "Vercel · QR off";
   switch (scan.phase) {
     case "ready":
-      return "Linked · saved";
+      return "Linked";
     case "qr":
       return "Scan the QR";
     case "connecting":
@@ -36,93 +35,53 @@ function phaseLabel(scan: ScanSnapshot) {
     case "logged_out":
       return "Logged out";
     default:
-      return "Not linked";
+      return scan.serverless ? "Ready to show QR" : "Not linked";
   }
 }
 
 export function ScanLogin({ hostedOnVercel = false }: { hostedOnVercel?: boolean }) {
-  const [scan, setScan] = useState<ScanSnapshot>(() => ({
-    ...emptyScan(),
-    serverless: hostedOnVercel,
-  }));
+  const [scan, setScan] = useState<ScanSnapshot>(() => emptyScan(hostedOnVercel));
   const [busy, setBusy] = useState(false);
-  const [pollId, setPollId] = useState<number | null>(null);
+  const streamRef = useRef<EventSource | null>(null);
 
-  function stopPolling() {
-    if (pollId !== null) {
-      window.clearInterval(pollId);
-      setPollId(null);
-    }
+  function stopStream() {
+    streamRef.current?.close();
+    streamRef.current = null;
   }
 
-  function startPolling() {
-    stopPolling();
-    const id = window.setInterval(() => {
-      void fetch("/api/scan")
-        .then((response) => response.json())
-        .then((snapshot: ScanSnapshot) => {
-          setScan(snapshot);
-          if (snapshot.qrDataUrl || snapshot.phase === "ready" || snapshot.phase === "logged_out" || snapshot.serverless) {
-            window.clearInterval(id);
-            setPollId(null);
-          }
-        })
-        .catch(() => {
-          // Keep trying while WhatsApp is opening the QR.
-        });
-    }, 1200);
-    setPollId(id);
+  function startStream() {
+    stopStream();
+    setBusy(true);
+    const source = new EventSource("/api/scan/stream");
+    streamRef.current = source;
+    source.onmessage = (event) => {
+      try {
+        const snapshot = JSON.parse(event.data) as ScanSnapshot;
+        setScan(snapshot);
+        if (snapshot.qrDataUrl || snapshot.phase === "ready") {
+          setBusy(false);
+        }
+        if (snapshot.phase === "ready" || snapshot.phase === "logged_out") {
+          stopStream();
+          setBusy(false);
+        }
+      } catch {
+        // ignore a bad frame
+      }
+    };
+    source.onerror = () => {
+      setBusy(false);
+    };
   }
 
   useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/scan")
-      .then((response) => response.json())
-      .then(async (snapshot: ScanSnapshot) => {
-        if (cancelled) return;
-        setScan(snapshot);
-        if (snapshot.serverless) return;
-        if (snapshot.persisted && snapshot.phase !== "ready") {
-          const started = await fetch("/api/scan", { method: "POST" });
-          const next = (await started.json()) as ScanSnapshot;
-          if (!cancelled) {
-            setScan(next);
-            if (!next.serverless) startPolling();
-          }
-          return;
-        }
-        if (snapshot.phase === "qr" || snapshot.phase === "connecting") {
-          startPolling();
-        }
-      })
-      .catch(() => {
-        // Desk still works if WhatsApp is offline.
-      });
-    return () => {
-      cancelled = true;
-    };
-    // Mount-only restore of a saved login.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => stopStream();
   }, []);
-
-  async function showQr() {
-    setBusy(true);
-    try {
-      const response = await fetch("/api/scan", { method: "POST" });
-      const snapshot = (await response.json()) as ScanSnapshot;
-      setScan(snapshot);
-      if (!snapshot.serverless && snapshot.phase !== "idle") {
-        startPolling();
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function logout() {
     setBusy(true);
     try {
-      stopPolling();
+      stopStream();
       const response = await fetch("/api/scan", { method: "DELETE" });
       const snapshot = (await response.json()) as ScanSnapshot;
       setScan(snapshot);
@@ -138,9 +97,8 @@ export function ScanLogin({ hostedOnVercel = false }: { hostedOnVercel?: boolean
           <div>
             <CardTitle>Tarik ka WhatsApp link</CardTitle>
             <CardDescription>
-              {scan.serverless
-                ? "Yeh Vercel URL hai. Yahan QR box hamesha khali rahega — serverless WhatsApp Web nahi chala sakta."
-                : "Is machine pe npm run live chal raha ho to Show QR se code aata hai."}
+              Show QR dabao. Code is box mein aayega. Tab band mat karna jab tak
+              scan ho jaye.
             </CardDescription>
           </div>
           <Badge variant={scan.phase === "ready" ? "default" : "secondary"}>
@@ -149,7 +107,7 @@ export function ScanLogin({ hostedOnVercel = false }: { hostedOnVercel?: boolean
         </div>
       </CardHeader>
       <CardContent className="grid gap-6 md:grid-cols-[280px_1fr]">
-        <div className="flex items-center justify-center rounded-2xl border bg-white p-4 min-h-[240px]">
+        <div className="flex min-h-[240px] items-center justify-center rounded-2xl border bg-white p-4">
           {scan.qrDataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -159,50 +117,30 @@ export function ScanLogin({ hostedOnVercel = false }: { hostedOnVercel?: boolean
             />
           ) : scan.phase === "ready" ? (
             <p className="px-4 text-center text-sm font-medium text-primary">
-              Linked{scan.phone ? ` as ${scan.phone}` : ""}. Login saved.
+              Linked{scan.phone ? ` as ${scan.phone}` : ""}.
             </p>
           ) : (
             <p className="px-4 text-center text-sm text-muted-foreground">
-              {scan.serverless
-                ? "Yahan QR nahi banega. Local live desk kholo."
-                : busy || scan.phase === "connecting"
-                  ? "WhatsApp se QR maang raha hoon — 20 sec tak wait…"
-                  : "Laptop pe npm run live, phir Show QR."}
+              {busy || scan.phase === "connecting"
+                ? "WhatsApp se QR aa raha hai…"
+                : "Show QR dabao."}
             </p>
           )}
         </div>
         <div className="space-y-3 text-sm leading-6">
           <ol className="list-decimal space-y-1 pl-5">
-            {scan.serverless ? (
-              <>
-                <li>Is page pe QR nahi aayega. Yeh expected hai.</li>
-                <li>WhatsApp yahan chalane ke liye upar/neeche Cloud API card use karo (Meta Business number).</li>
-                <li>
-                  Personal phone ka QR chahiye to repo apne laptop pe clone karke{" "}
-                  <code>npm run live</code> chalao — phir us machine ke browser mein kholo.
-                </li>
-              </>
-            ) : (
-              <>
-                <li>Show QR dabao. Code is white box mein aayega.</li>
-                <li>Phone: WhatsApp → Linked devices → Link a device → scan.</li>
-                <li>Scan ke baad login is disk pe save ho jaata hai.</li>
-              </>
-            )}
+            <li>Show QR. 15–25 second wait — code yahi dikhega.</li>
+            <li>Phone: WhatsApp → Linked devices → Link a device → scan.</li>
+            <li>Yeh tab khula rakho jab tak Linked na ho.</li>
           </ol>
-          {scan.persisted ? (
-            <p className="text-xs text-primary">
-              Saved login on this disk{scan.savedAt ? ` · ${scan.savedAt}` : ""}.
-            </p>
-          ) : null}
           {scan.error ? <p className="text-destructive">{scan.error}</p> : null}
           <div className="flex flex-wrap gap-2">
-            <Button onClick={showQr} disabled={busy || scan.phase === "ready" || scan.serverless}>
+            <Button onClick={startStream} disabled={busy || scan.phase === "ready"}>
               {busy ? "QR aa raha hai…" : scan.qrDataUrl ? "Refresh QR" : "Show QR"}
             </Button>
             <Button
               variant="outline"
-              onClick={logout}
+              onClick={() => void logout()}
               disabled={busy || (scan.phase === "idle" && !scan.persisted)}
             >
               Log out
