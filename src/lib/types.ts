@@ -74,6 +74,17 @@ export type LiveStatus = {
   startedAt: string;
   whatsapp: ScanSnapshot;
   llms: LlmEndpoint[];
+  profile?: {
+    name: string;
+    site: string;
+    studio: string;
+    studioUrl: string;
+    title: string;
+    base: string;
+    accepting: string;
+    services: string[];
+    refreshedAt: string;
+  };
 };
 
 export type ConnectionStatus = {

@@ -32,6 +32,10 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
     return pick(lower, ["tarik. yahin hoon, bolo", "main tarik. kya kaam hai", "tarik hoon. haan bolo"]);
   }
 
+  if (has(lower, /\b(what do you do|about you|kya karte|kaam kya|services?)\b/)) {
+    return "forensics, security, ai, products. short mein bata kya chahiye";
+  }
+
   if (has(lower, /\b(website|site|portfolio|profile|link)\b/) || has(text, /वेबसाइट/)) {
     return `${tarik.site.replace("https://", "")} pe dekh lena. kuch specific chahiye to yahin likh`;
   }
@@ -118,6 +122,14 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
     return "take care. baad mein likhna";
   }
 
+  const extra = rules.customFacts
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (extra && has(lower, /\b(about|facts?|details?|more)\b/) && extra.length < 120) {
+    return extra;
+  }
+
   const fact = rules.keywordRules.find((rule) => rule.enabled && hint === rule.keyword);
   if (fact && !isCannedScript(fact.reply)) {
     return fact.reply;
@@ -137,7 +149,7 @@ export function isCannedScript(text: string) {
 }
 
 export function isOwnerFactQuestion(text: string) {
-  return /\b(who are you|your name|aap kaun|tum kaun|hire|hiring|website|portfolio|dezo|resume|cv|project|kaam)\b/i.test(
+  return /\b(who are you|your name|aap kaun|tum kaun|what do you do|about you|website|portfolio|dezo|resume|cv|hire|hiring|project|kaam)\b/i.test(
     text,
   );
 }

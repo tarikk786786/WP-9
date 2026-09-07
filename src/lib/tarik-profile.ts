@@ -47,8 +47,18 @@ let cached: TarikProfile = {
   refreshedAt: new Date().toISOString(),
 };
 
+let lastFetchMs = 0;
+let inFlight: Promise<TarikProfile> | null = null;
+const PROFILE_TTL_MS = 10 * 60 * 1000;
+
 export function getTarikProfile(): TarikProfile {
   return cached;
+}
+
+/** Refresh in the background. Never blocks a WhatsApp reply. */
+export function scheduleProfileRefresh() {
+  if (Date.now() - lastFetchMs < PROFILE_TTL_MS) return;
+  void refreshTarikProfile();
 }
 
 export function profileBrief(profile = cached) {
@@ -76,10 +86,26 @@ function stripHtml(html: string) {
 }
 
 export async function refreshTarikProfile(): Promise<TarikProfile> {
+  if (inFlight) return inFlight;
+  if (Date.now() - lastFetchMs < PROFILE_TTL_MS && cached.notes.length > 0) {
+    return cached;
+  }
+  inFlight = pullSiteProfile().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function pullSiteProfile(): Promise<TarikProfile> {
+  lastFetchMs = Date.now();
   try {
     const response = await fetch(TARIK_SITE, {
-      signal: AbortSignal.timeout(8000),
-      headers: { Accept: "text/html" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+      headers: {
+        Accept: "text/html",
+        "User-Agent": "Mozilla/5.0 (compatible; TarikDesk/1.0; +https://tarikislam.in)",
+      },
     });
     if (!response.ok) throw new Error(String(response.status));
     const html = await response.text();

@@ -60,6 +60,16 @@ export function LocalBrain({ initial }: { initial: LiveStatus }) {
             </button>
           ))}
         </div>
+        {live.profile ? (
+          <div className="rounded-xl border bg-muted/40 px-3 py-3 text-sm">
+            <p className="font-medium">{live.profile.name}</p>
+            <p className="text-muted-foreground">{live.profile.title}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {live.profile.site.replace("https://", "")} · {live.profile.studio} ·{" "}
+              {live.profile.accepting}
+            </p>
+          </div>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           Tone: friendly, slow, soft. Hinglish pehle. Safety pehle. Click a card
           to refresh the stack.

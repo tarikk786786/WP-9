@@ -64,9 +64,11 @@ Use the same verify token as `WHATSAPP_VERIFY_TOKEN`. Subscribe to `messages`.
 
 1. Auto-reply must be on.
 2. If business hours are on and it is outside the window, send the after-hours text.
-3. First enabled keyword found in the message wins.
-4. Short greetings (`hi`, `hello`, `hey`, …) use the greeting reply.
-5. Everything else uses the default reply.
+3. Short greetings (`hi`, `hello`, `hey`, …) use the greeting reply.
+4. Hours, price, site, and hire questions use the live Hinglish voice (facts from tarikislam.in).
+5. Other messages use the same voice. A local LLM is optional and never blocks a reply.
+
+After you **Generate reply**, the thread stays in the Inbox tab. WhatsApp scan stays open after Linked — keep the tab open so messages keep arriving.
 
 Dashboard **Save** writes `data/store.json` on a long-lived disk (local). On Vercel that file is not shared across functions, so paste the copied JSON into `REPLY_RULES_JSON` after you settle on copy.
 

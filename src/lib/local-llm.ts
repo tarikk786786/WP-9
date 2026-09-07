@@ -51,7 +51,12 @@ async function fetchJson(url: string, init?: RequestInit, timeoutMs = 1200) {
   return response.json();
 }
 
+let discoveryCache: { at: number; value: LlmEndpoint[] } | null = null;
+
 export async function discoverLocalLlms(): Promise<LlmEndpoint[]> {
+  if (discoveryCache && Date.now() - discoveryCache.at < 20_000) {
+    return discoveryCache.value;
+  }
   const found = await Promise.all(
     LOCAL_TARGETS.map(async (target) => {
       try {
@@ -73,7 +78,7 @@ export async function discoverLocalLlms(): Promise<LlmEndpoint[]> {
     }),
   );
 
-  return [
+  const list: LlmEndpoint[] = [
     {
       id: "hinglish",
       name: "Hinglish soft voice",
@@ -92,6 +97,8 @@ export async function discoverLocalLlms(): Promise<LlmEndpoint[]> {
       models: ["Xenova/LaMini-Flan-T5-248M"],
     },
   ];
+  discoveryCache = { at: Date.now(), value: list };
+  return list;
 }
 
 async function generateOllama(baseUrl: string, model: string, prompt: string, system: string) {

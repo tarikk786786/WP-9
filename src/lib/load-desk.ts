@@ -1,5 +1,6 @@
 import { getLiveStatus } from "@/lib/live";
 import { getInbox, getRules } from "@/lib/store";
+import { getTarikProfile, scheduleProfileRefresh, type TarikProfile } from "@/lib/tarik-profile";
 import { GRAPH_API_VERSION, getWhatsAppConfig, isWhatsAppConfigured } from "@/lib/whatsapp";
 import type { BotRules, ConnectionStatus, InboxMessage, LiveStatus } from "@/lib/types";
 
@@ -8,6 +9,7 @@ export type DeskData = {
   status: ConnectionStatus;
   inbox: InboxMessage[];
   live: LiveStatus;
+  profile: TarikProfile;
 };
 
 function emptyLive(): LiveStatus {
@@ -30,6 +32,7 @@ function emptyLive(): LiveStatus {
 
 export async function loadDesk(): Promise<DeskData> {
   const config = getWhatsAppConfig();
+  scheduleProfileRefresh();
   let live = emptyLive();
   try {
     live = await getLiveStatus();
@@ -39,6 +42,7 @@ export async function loadDesk(): Promise<DeskData> {
   return {
     rules: await getRules(),
     inbox: await getInbox(),
+    profile: getTarikProfile(),
     live,
     status: {
       configured: isWhatsAppConfigured(),

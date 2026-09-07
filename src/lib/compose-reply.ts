@@ -7,8 +7,10 @@ import {
 import { generateLocalReply } from "@/lib/local-llm";
 import { decideReply, isGreetingMessage, type ReplyDecision } from "@/lib/reply-engine";
 import { inspectIncoming, isRateLimited, sanitizeOutgoing } from "@/lib/safety";
+import { scheduleProfileRefresh } from "@/lib/tarik-profile";
 import type { BotRules } from "@/lib/types";
 import { applyVoice } from "@/lib/voice";
+import { isServerlessDisk } from "@/lib/writable-dir";
 
 export type ComposedReply = ReplyDecision & { engine: string };
 
@@ -24,7 +26,9 @@ export async function composeReply(options: {
   if (!rules.enabled) {
     return { action: "skip", reason: "Auto-reply is turned off.", engine: "off" };
   }
-  if (isRateLimited(fromId)) {
+  scheduleProfileRefresh();
+
+  if (!fromId.startsWith("sim:") && isRateLimited(fromId)) {
     return {
       action: "skip",
       reason: "Too many auto-replies to this contact in 10 minutes.",
@@ -79,7 +83,16 @@ export async function composeReply(options: {
     return { action: "reply", text: clean, matchedRule: matched, engine };
   }
 
-  if (greeting || hint === "after-hours" || isOwnerFactQuestion(text)) {
+  if (
+    greeting ||
+    hint === "after-hours" ||
+    hint === "hours" ||
+    hint === "price" ||
+    hint === "hello" ||
+    hint === "hi" ||
+    isOwnerFactQuestion(text) ||
+    hint !== "default"
+  ) {
     return finish(
       writeHinglishReply(text, fromName, rules, greeting ? "greeting" : hint),
       greeting ? "greeting" : hint,
@@ -87,7 +100,7 @@ export async function composeReply(options: {
     );
   }
 
-  if (rules.useLocalLlm !== false) {
+  if (rules.useLocalLlm !== false && !isServerlessDisk()) {
     try {
       const generated = await generateLocalReply(text, fromName, rules);
       const polished = polishToHinglish(generated.text);

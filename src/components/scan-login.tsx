@@ -36,29 +36,39 @@ function phaseLabel(scan: ScanSnapshot) {
   return "Not linked";
 }
 
-export function ScanLogin({ hostedOnVercel = false }: { hostedOnVercel?: boolean }) {
+export function ScanLogin({
+  hostedOnVercel = false,
+  onInbox,
+}: {
+  hostedOnVercel?: boolean;
+  onInbox?: (messages: import("@/lib/types").InboxMessage[]) => void;
+}) {
   const [scan, setScan] = useState<ScanSnapshot>(() => emptyScan(hostedOnVercel));
   const [busy, setBusy] = useState(false);
   const [phone, setPhone] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+  const phaseRef = useRef(scan.phase);
+  phaseRef.current = scan.phase;
 
   function stopLogin() {
     abortRef.current?.abort();
     abortRef.current = null;
   }
 
-  async function readStream(pair?: string) {
+  async function readStream(pair?: string, silent = false) {
     stopLogin();
     const controller = new AbortController();
     abortRef.current = controller;
-    setBusy(true);
-    setScan((current) => ({
-      ...current,
-      phase: "connecting",
-      error: null,
-      qrDataUrl: null,
-      pairingCode: null,
-    }));
+    setBusy(!silent);
+    if (!silent) {
+      setScan((current) => ({
+        ...current,
+        phase: "connecting",
+        error: null,
+        qrDataUrl: null,
+        pairingCode: null,
+      }));
+    }
 
     try {
       const response = await fetch("/api/scan/stream", {
@@ -86,12 +96,17 @@ export function ScanLogin({ hostedOnVercel = false }: { hostedOnVercel?: boolean
             .split("\n")
             .find((item) => item.startsWith("data: "));
           if (!line) continue;
-          const snapshot = JSON.parse(line.slice(6)) as ScanSnapshot;
-          setScan(snapshot);
-          if (snapshot.qrDataUrl || snapshot.pairingCode) {
+          const payload = JSON.parse(line.slice(6)) as {
+            snapshot?: ScanSnapshot;
+            inbox?: import("@/lib/types").InboxMessage[];
+          } & Partial<ScanSnapshot>;
+          const snapshot = (payload.snapshot ?? payload) as ScanSnapshot;
+          if (snapshot.phase) setScan(snapshot);
+          if (payload.inbox && onInbox) onInbox(payload.inbox);
+          if (snapshot.qrDataUrl || snapshot.pairingCode || snapshot.phase === "ready") {
             setBusy(false);
           }
-          if (snapshot.phase === "ready" || snapshot.phase === "logged_out") {
+          if (snapshot.phase === "logged_out") {
             setBusy(false);
             stopLogin();
             return;
@@ -107,6 +122,19 @@ export function ScanLogin({ hostedOnVercel = false }: { hostedOnVercel?: boolean
       }));
     } finally {
       setBusy(false);
+      if (
+        !controller.signal.aborted &&
+        abortRef.current === controller &&
+        (phaseRef.current === "ready" ||
+          phaseRef.current === "qr" ||
+          phaseRef.current === "connecting")
+      ) {
+        abortRef.current = null;
+        window.setTimeout(() => {
+          if (abortRef.current) return;
+          void readStream(undefined, true);
+        }, 800);
+      }
     }
   }
 
@@ -155,7 +183,8 @@ export function ScanLogin({ hostedOnVercel = false }: { hostedOnVercel?: boolean
             </div>
           ) : scan.phase === "ready" ? (
             <p className="px-4 text-center text-sm font-medium text-primary">
-              Linked{scan.phone ? ` as ${scan.phone}` : ""}.
+              Linked{scan.phone ? ` as ${scan.phone}` : ""}. Tab khula rakho —
+              main chats sun raha hoon.
             </p>
           ) : (
             <p className="px-4 text-center text-sm text-muted-foreground">

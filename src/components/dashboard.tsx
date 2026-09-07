@@ -77,12 +77,26 @@ export function Dashboard({ initial }: { initial: DeskData }) {
     return () => window.clearTimeout(timer);
   }, [rules]);
 
-  async function refreshInbox() {
-    const inboxRes = await fetch("/api/inbox");
-    if (!inboxRes.ok) throw new Error("Could not refresh the inbox.");
-    const inboxJson = (await inboxRes.json()) as { messages: InboxMessage[] };
-    setInbox(inboxJson.messages);
+  function mergeInbox(incoming: InboxMessage[]) {
+    if (!incoming.length) return;
+    setInbox((current) => {
+      const byId = new Map(current.map((item) => [item.id, item]));
+      for (const item of incoming) byId.set(item.id, item);
+      return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    });
   }
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void (async () => {
+        const inboxRes = await fetch("/api/inbox", { cache: "no-store" });
+        if (!inboxRes.ok) return;
+        const inboxJson = (await inboxRes.json()) as { messages?: InboxMessage[] };
+        mergeInbox(inboxJson.messages ?? []);
+      })();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const webhookUrl = "/api/whatsapp/webhook";
 
@@ -116,10 +130,19 @@ export function Dashboard({ initial }: { initial: DeskData }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fromName, text: simText }),
       });
-      const json = (await response.json()) as { error?: string };
+      const json = (await response.json()) as {
+        error?: string;
+        message?: InboxMessage;
+      };
       if (!response.ok) throw new Error(json.error ?? "Simulation failed.");
-      await refreshInbox();
-      setNotice("Simulator ne narm Hinglish mein reply likha. WhatsApp pe kuch nahi gaya.");
+      if (json.message) {
+        mergeInbox([json.message]);
+      }
+      setNotice(
+        json.message?.reply
+          ? "Reply ready — yeh usi engine se hai jo WhatsApp use karta hai."
+          : (json.message?.skippedReason ?? "Reply skip ho gaya."),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Simulation failed.");
     } finally {
@@ -161,8 +184,16 @@ export function Dashboard({ initial }: { initial: DeskData }) {
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <LocalBrain initial={initial.live} />
-        <ScanLogin hostedOnVercel={initial.live.whatsapp.serverless} />
+        <LocalBrain
+          initial={{
+            ...initial.live,
+            profile: initial.live.profile ?? initial.profile,
+          }}
+        />
+        <ScanLogin
+          hostedOnVercel={initial.live.whatsapp.serverless}
+          onInbox={mergeInbox}
+        />
 
         {(notice || error) && (
           <div className="lg:col-span-2">

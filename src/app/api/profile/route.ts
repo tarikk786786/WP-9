@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getTarikProfile, refreshTarikProfile } from "@/lib/tarik-profile";
+import { refreshTarikProfile } from "@/lib/tarik-profile";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json(getTarikProfile());
+  return NextResponse.json(await refreshTarikProfile());
 }
 
 export async function POST() {

@@ -1,4 +1,5 @@
 import { getScanSnapshot, startScanSession } from "@/lib/scan-session";
+import { getInbox } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -20,27 +21,30 @@ async function streamLogin(pairingPhone?: string) {
       };
 
       try {
-        send(getScanSnapshot());
+        send({ snapshot: getScanSnapshot(), inbox: await getInbox() });
         void startScanSession(pairingPhone);
-        const deadline = Date.now() + 240_000;
+        const deadline = Date.now() + 270_000;
         while (!closed && Date.now() < deadline) {
-          await new Promise((resolve) => setTimeout(resolve, 600));
+          await new Promise((resolve) => setTimeout(resolve, 700));
           const snapshot = getScanSnapshot();
-          send(snapshot);
-          if (snapshot.phase === "ready" || snapshot.phase === "logged_out") {
+          send({ snapshot, inbox: await getInbox() });
+          if (snapshot.phase === "logged_out") {
             break;
           }
         }
       } catch (error) {
         send({
-          phase: "idle",
-          qrDataUrl: null,
-          pairingCode: null,
-          phone: null,
-          persisted: false,
-          savedAt: null,
-          serverless: true,
-          error: error instanceof Error ? error.message : "Login stream failed.",
+          snapshot: {
+            phase: "idle",
+            qrDataUrl: null,
+            pairingCode: null,
+            phone: null,
+            persisted: false,
+            savedAt: null,
+            serverless: true,
+            error: error instanceof Error ? error.message : "Login stream failed.",
+          },
+          inbox: [],
         });
       } finally {
         try {
