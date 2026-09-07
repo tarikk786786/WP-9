@@ -161,20 +161,6 @@ async function getTransformers(): Promise<Text2Text> {
   return transformersLoading;
 }
 
-async function generateTransformers(prompt: string, system: string) {
-  if (!transformersPipeline) {
-    void getTransformers().catch(() => undefined);
-    throw new Error("On-device model is warming up.");
-  }
-  const pipe = await getTransformers();
-  const result = await pipe(`${system}\n\nWrite a WhatsApp reply to:\n${prompt}`, {
-    max_new_tokens: 80,
-  });
-  const text = result[0]?.generated_text?.trim();
-  if (!text) throw new Error("Empty on-device reply.");
-  return text;
-}
-
 export function warmLocalModel() {
   void getTransformers().catch(() => undefined);
 }
