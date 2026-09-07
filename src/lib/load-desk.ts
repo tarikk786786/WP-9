@@ -10,12 +10,27 @@ export type DeskData = {
   live: LiveStatus;
 };
 
+function emptyLive(): LiveStatus {
+  return {
+    alive: true,
+    startedAt: new Date().toISOString(),
+    whatsapp: { phase: "idle", qrDataUrl: null, phone: null, error: null },
+    llms: [],
+  };
+}
+
 export async function loadDesk(): Promise<DeskData> {
   const config = getWhatsAppConfig();
+  let live = emptyLive();
+  try {
+    live = await getLiveStatus();
+  } catch {
+    // Keep the desk rendering even if a local-model probe fails.
+  }
   return {
     rules: await getRules(),
     inbox: await getInbox(),
-    live: await getLiveStatus(),
+    live,
     status: {
       configured: isWhatsAppConfigured(),
       hasAccessToken: Boolean(config.accessToken),
