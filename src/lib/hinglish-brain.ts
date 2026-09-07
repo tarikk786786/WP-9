@@ -74,7 +74,10 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
 
   if (
     hint === "greeting" ||
-    has(lower, /^(hi|hii|hello|hey|yo|hola|salam|salaam|namaste|namaskar|kaise ho|kya haal|whats?up)[\s!?.]*$/i)
+    has(
+      lower,
+      /^(hi|hii|hello|hey|yo|hola|salam|salaam|namaste|namaskar|assalamualaikum|good morning|good night|gm|gn|kaise ho|kya haal|whats?up|how are you)[\s!?.]*$/i,
+    )
   ) {
     return `${name}${rules.greetingReply}`;
   }

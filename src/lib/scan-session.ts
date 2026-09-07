@@ -10,7 +10,7 @@ import {
   persistSavedSession,
   restoreSavedSession,
 } from "@/lib/session-persist";
-import { getRules, markProcessed, wasProcessed } from "@/lib/store";
+import { flushStore, getRules, markProcessed, wasProcessed } from "@/lib/store";
 import type { ScanSnapshot } from "@/lib/types";
 import { mediaAck } from "@/lib/voice";
 
@@ -201,6 +201,7 @@ async function openSocket(manager: Manager) {
       const phone = sock.user?.id?.split(":")[0] ?? sock.user?.id ?? null;
       manager.reconnectDelay = 2000;
       await persistSavedSession(phone);
+      await flushStore();
       manager.snapshot = await snapshotWithSave({
         phase: "ready",
         qrDataUrl: null,

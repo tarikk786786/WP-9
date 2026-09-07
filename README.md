@@ -9,7 +9,7 @@ Relay answers WhatsApp for you with **free local models** and a safety layer.
 
 Replies are **first person as Tarik** (“main Tarik hoon”), never “on behalf of”. After one QR scan, login is saved on this machine (`data/whatsapp-session.json` + `data/baileys-auth`). Restart `npm run live` and it reconnects — no new QR unless you tap Log out or WhatsApp unlinks the device.
 
-`npm run live` stays up, restores that saved session, and warms the on-device model. Vercel serverless cannot keep a scan socket 24/7; use this Node process (laptop or VPS) for always-live personal WhatsApp.
+`npm run live` starts a keeper that restarts Next if it dies, pokes `/api/live` every 8 seconds, restores the saved WhatsApp login, and writes rules + heartbeat to `data/`. Voice and greetings auto-save on the desk. Vercel serverless cannot keep a scan socket 24/7; use this Node process (laptop or VPS) for always-live personal WhatsApp.
 
 ## What you get
 

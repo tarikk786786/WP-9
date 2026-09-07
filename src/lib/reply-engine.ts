@@ -16,7 +16,28 @@ const GREETING_WORDS = new Set([
   "namaskar",
   "hii",
   "helo",
+  "heloo",
+  "hlo",
+  "hlw",
+  "gm",
+  "gn",
+  "bro",
+  "bhai",
 ]);
+
+export function isGreetingMessage(incoming: string) {
+  const lower = incoming.trim().toLowerCase();
+  if (!lower) return false;
+  if (
+    /^(ass?alam(u)?[ -]?alaikum|salam(ualaikum)?|good (morning|evening|afternoon|night)|kaise ho|kya haal( hai)?|whats? ?up|how are you)[\s!?.]*$/i.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+  const words = lower.split(/\s+/).map((word) => word.replace(/[!?.,]/g, ""));
+  return words.length <= 4 && words.every((word) => GREETING_WORDS.has(word));
+}
 
 function hourInTimezone(date: Date, timezone: string): number | null {
   try {
@@ -75,7 +96,14 @@ export function decideReply(
   }
 
   const lower = body.toLowerCase();
-  const words = lower.split(/\s+/);
+
+  if (isGreetingMessage(body)) {
+    return {
+      action: "reply",
+      text: personalize(rules.greetingReply, fromName, rules.includeName),
+      matchedRule: "greeting",
+    };
+  }
 
   const keywordHit = rules.keywordRules
     .filter((rule) => {
@@ -94,18 +122,6 @@ export function decideReply(
       action: "reply",
       text: personalize(keywordHit.reply, fromName, rules.includeName),
       matchedRule: keywordHit.keyword,
-    };
-  }
-
-  if (
-    /^(kaise ho|kya haal|kya haal hai|whats? ?up)\b/i.test(lower) ||
-    (words.length <= 4 &&
-      words.every((word) => GREETING_WORDS.has(word.replace(/[!?.,]/g, ""))))
-  ) {
-    return {
-      action: "reply",
-      text: personalize(rules.greetingReply, fromName, rules.includeName),
-      matchedRule: "greeting",
     };
   }
 

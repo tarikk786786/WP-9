@@ -8,7 +8,7 @@
     "start": "next start --port 43217 --hostname 127.0.0.1",
     "lint": "eslint",
     "test": "node --experimental-strip-types --test src/lib/*.test.ts",
-    "live": "next dev --port 43217 --hostname 127.0.0.1"
+    "live": "node scripts/always-live.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",

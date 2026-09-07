@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,31 @@ export function Dashboard({ initial }: { initial: DeskData }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const skipAutoSave = useRef(true);
+
+  useEffect(() => {
+    if (skipAutoSave.current) {
+      skipAutoSave.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void fetch("/api/rules", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rules),
+      })
+        .then((response) => response.json())
+        .then((json: { rules?: BotRules }) => {
+          if (json.rules) {
+            setNotice("Voice, greetings, hours, keywords — is disk pe forever save ho gaye.");
+          }
+        })
+        .catch(() => {
+          // Manual Save still works if the auto-write misses.
+        });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [rules]);
 
   async function refreshInbox() {
     const inboxRes = await fetch("/api/inbox");
@@ -77,9 +102,7 @@ export function Dashboard({ initial }: { initial: DeskData }) {
       const json = (await response.json()) as { rules?: BotRules; error?: string };
       if (!response.ok) throw new Error(json.error ?? "Could not save rules.");
       setRules(json.rules ?? rules);
-      setNotice(
-        "Rules saved on this server. On Vercel, also paste the JSON into REPLY_RULES_JSON so every function uses the same replies.",
-      );
+      setNotice("Saved on this disk forever. Restart ke baad bhi yahi greetings aur voice.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed.");
     } finally {

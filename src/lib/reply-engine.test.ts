@@ -25,6 +25,23 @@ describe("decideReply", () => {
     }
   });
 
+  it("treats a plain hi as Tarik’s greeting", () => {
+    const decision = decideReply("hi", "Amina", defaultRules);
+    assert.equal(decision.action, "reply");
+    if (decision.action === "reply") {
+      assert.equal(decision.matchedRule, "greeting");
+      assert.match(decision.text, /Main Tarik hoon/);
+    }
+  });
+
+  it("treats assalamualaikum as a greeting", () => {
+    const decision = decideReply("Assalamualaikum", "Amina", defaultRules);
+    assert.equal(decision.action, "reply");
+    if (decision.action === "reply") {
+      assert.equal(decision.matchedRule, "greeting");
+    }
+  });
+
   it("matches a keyword before the default reply", () => {
     const decision = decideReply("What is the price?", "Sam", defaultRules);
     assert.equal(decision.action, "reply");

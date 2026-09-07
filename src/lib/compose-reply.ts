@@ -5,7 +5,7 @@ import {
   writeHinglishReply,
 } from "@/lib/hinglish-brain";
 import { generateLocalReply } from "@/lib/local-llm";
-import { decideReply, type ReplyDecision } from "@/lib/reply-engine";
+import { decideReply, isGreetingMessage, type ReplyDecision } from "@/lib/reply-engine";
 import { inspectIncoming, isRateLimited, sanitizeOutgoing } from "@/lib/safety";
 import type { BotRules } from "@/lib/types";
 import { applyVoice } from "@/lib/voice";
@@ -52,7 +52,9 @@ export async function composeReply(options: {
 
   const hint = fallback.matchedRule;
 
-  if (rules.replyMode === "greetings" && hint !== "greeting") {
+  const greeting = hint === "greeting" || isGreetingMessage(text);
+
+  if (rules.replyMode === "greetings" && !greeting) {
     return { action: "skip", reason: "Only greetings are set to auto-reply.", engine: "mode" };
   }
   if (rules.replyMode === "keywords") {
@@ -62,11 +64,13 @@ export async function composeReply(options: {
     }
   }
 
-  if (hint === "greeting" || hint === "after-hours" || isOwnerFactQuestion(text)) {
+  if (greeting || hint === "after-hours" || isOwnerFactQuestion(text)) {
     return {
       action: "reply",
-      text: sanitizeOutgoing(applyVoice(writeHinglishReply(text, fromName, rules, hint), rules)),
-      matchedRule: hint,
+      text: sanitizeOutgoing(
+        applyVoice(writeHinglishReply(text, fromName, rules, greeting ? "greeting" : hint), rules),
+      ),
+      matchedRule: greeting ? "greeting" : hint,
       engine: "tarik-live",
     };
   }

@@ -1,6 +1,7 @@
 import { discoverLocalLlms, warmLocalModel } from "@/lib/local-llm";
 import { hydrateScanSnapshot, startScanSession } from "@/lib/scan-session";
-import { hasSavedSession } from "@/lib/session-persist";
+import { hasSavedSession, writeHeartbeat } from "@/lib/session-persist";
+import { flushStore } from "@/lib/store";
 import { refreshTarikProfile } from "@/lib/tarik-profile";
 import type { LiveStatus } from "@/lib/types";
 
@@ -16,8 +17,12 @@ export async function getLiveStatus(): Promise<LiveStatus> {
 }
 
 export async function keepAliveTick() {
+  await writeHeartbeat();
+  await flushStore();
   const snapshot = await hydrateScanSnapshot();
-  if ((await hasSavedSession()) && snapshot.phase !== "ready" && snapshot.phase !== "qr") {
+  const saved = await hasSavedSession();
+  if (saved && snapshot.phase !== "ready") {
+    if (snapshot.phase === "qr") return;
     await startScanSession();
   }
 }
@@ -31,7 +36,7 @@ export function startLiveLoop() {
   warmLocalModel();
   setInterval(() => {
     void keepAliveTick();
-  }, 15_000);
+  }, 8_000);
   setInterval(() => {
     void refreshTarikProfile();
   }, 15 * 60 * 1000);

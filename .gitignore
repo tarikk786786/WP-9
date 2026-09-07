@@ -38,6 +38,7 @@ yarn-error.log*
 /data/store.json
 /data/baileys-auth
 /data/whatsapp-session.json
+/data/heartbeat.json
 /data/models
 
 # vercel

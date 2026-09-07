@@ -1,18 +1,18 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { defaultRules } from "@/lib/default-rules";
 import { getDeployedRules, parseRules } from "@/lib/rules";
 import type { BotRules, InboxMessage } from "@/lib/types";
-import { writablePath } from "@/lib/writable-dir";
+import { persistRoots, readFirstExisting, writeToAllRoots } from "@/lib/writable-dir";
 
 type StoreShape = {
   rules: BotRules;
   inbox: InboxMessage[];
   processedIds: string[];
+  savedAt?: string;
 };
 
 const MAX_INBOX = 80;
 const MAX_PROCESSED = 400;
+const STORE_REL = "store.json";
 
 const memory: StoreShape = {
   rules: getDeployedRules(),
@@ -20,14 +20,18 @@ const memory: StoreShape = {
   processedIds: [],
 };
 
-const storePath = writablePath("store.json");
 let loaded = false;
 
 async function ensureLoaded() {
   if (loaded) return;
   loaded = true;
   try {
-    const raw = await readFile(storePath, "utf8");
+    const raw = await readFirstExisting(STORE_REL);
+    if (!raw) {
+      memory.rules = getDeployedRules();
+      await persist();
+      return;
+    }
     const parsed = JSON.parse(raw) as Partial<StoreShape>;
     const rules = parseRules(parsed.rules);
     if (rules) memory.rules = rules;
@@ -35,18 +39,25 @@ async function ensureLoaded() {
     if (Array.isArray(parsed.processedIds)) {
       memory.processedIds = parsed.processedIds.slice(0, MAX_PROCESSED);
     }
+    memory.savedAt = parsed.savedAt;
   } catch {
     memory.rules = getDeployedRules();
   }
 }
 
 async function persist() {
+  memory.savedAt = new Date().toISOString();
   try {
-    await mkdir(path.dirname(storePath), { recursive: true });
-    await writeFile(storePath, JSON.stringify(memory, null, 2), "utf8");
+    await writeToAllRoots(STORE_REL, JSON.stringify(memory, null, 2));
   } catch {
-    // Vercel functions cannot keep a durable local file. Env rules still apply.
+    // Serverless may reject cwd; other roots still tried.
   }
+}
+
+export async function flushStore() {
+  await ensureLoaded();
+  await persist();
+  return { savedAt: memory.savedAt ?? null, roots: persistRoots() };
 }
 
 export async function getRules(): Promise<BotRules> {
