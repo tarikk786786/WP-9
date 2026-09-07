@@ -1,4 +1,9 @@
-import { isLowQualityReply, polishToHinglish, writeHinglishReply } from "@/lib/hinglish-brain";
+import {
+  isLowQualityReply,
+  isOwnerFactQuestion,
+  polishToHinglish,
+  writeHinglishReply,
+} from "@/lib/hinglish-brain";
 import { generateLocalReply } from "@/lib/local-llm";
 import { decideReply, type ReplyDecision } from "@/lib/reply-engine";
 import { inspectIncoming, isRateLimited, sanitizeOutgoing } from "@/lib/safety";
@@ -46,7 +51,7 @@ export async function composeReply(options: {
 
   const hint = fallback.matchedRule;
 
-  if (hint === "greeting" || hint === "after-hours") {
+  if (hint === "greeting" || hint === "after-hours" || isOwnerFactQuestion(text)) {
     return {
       action: "reply",
       text: sanitizeOutgoing(writeHinglishReply(text, fromName, rules, hint)),

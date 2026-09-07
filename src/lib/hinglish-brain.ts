@@ -119,9 +119,16 @@ function softenFact(fact: string) {
   return `${trimmed} Tension mat lena, Tarik yahin hai.`;
 }
 
+export function isOwnerFactQuestion(text: string) {
+  return /\b(who are you|your name|aap kaun|hire|hiring|website|site|portfolio|dezo|forensic|cyber|resume|cv|tarik|price|hours|available)\b/i.test(
+    text,
+  );
+}
+
 export function isLowQualityReply(text: string) {
   const words = text.trim().split(/\s+/);
   if (words.length === 0) return true;
+  if (/if they mention|known facts|system prompt|keyword hints/i.test(text)) return true;
   const helloHits = (text.match(/\bhello\b/gi) ?? []).length;
   if (helloHits >= 3) return true;
   const unique = new Set(words.map((word) => word.toLowerCase().replace(/[^a-z]/g, "")));
