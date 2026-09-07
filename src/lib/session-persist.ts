@@ -41,13 +41,23 @@ async function walkFiles(dir: string, prefix = ""): Promise<string[]> {
   return files;
 }
 
-function parseArchive(raw: string): SessionArchive | null {
+export function parseSessionArchive(raw: unknown): SessionArchive | null {
   try {
-    const parsed = JSON.parse(raw) as Partial<SessionArchive>;
-    if (!parsed.files || typeof parsed.files !== "object") return null;
-    if (!parsed.files["creds.json"]) return null;
+    const parsed = (
+      typeof raw === "string" ? JSON.parse(raw) : raw
+    ) as Partial<SessionArchive>;
+    if (!parsed?.files || typeof parsed.files !== "object") return null;
+    if (typeof parsed.files["creds.json"] !== "string" || !parsed.files["creds.json"]) {
+      return null;
+    }
+    const files: Record<string, string> = {};
+    for (const [rel, encoded] of Object.entries(parsed.files)) {
+      if (!isSafeRelPath(rel) || typeof encoded !== "string") continue;
+      files[rel] = encoded;
+    }
+    if (!files["creds.json"]) return null;
     return {
-      files: parsed.files,
+      files,
       phone: typeof parsed.phone === "string" ? parsed.phone : null,
       savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : new Date().toISOString(),
     };
@@ -59,13 +69,13 @@ function parseArchive(raw: string): SessionArchive | null {
 function parseEnvArchive(): SessionArchive | null {
   const fromEnv = process.env.WHATSAPP_AUTH_JSON;
   if (!fromEnv) return null;
-  return parseArchive(fromEnv);
+  return parseSessionArchive(fromEnv);
 }
 
 export async function readSessionArchive(): Promise<SessionArchive | null> {
   const disk = await readFirstExisting(ARCHIVE_REL);
   if (disk) {
-    const parsed = parseArchive(disk);
+    const parsed = parseSessionArchive(disk);
     if (parsed) return parsed;
   }
   return parseEnvArchive();
@@ -134,14 +144,14 @@ export async function restoreSavedSession(): Promise<boolean> {
   return existsSync(path.join(getAuthDir(), "creds.json"));
 }
 
-export async function persistSavedSession(phone: string | null): Promise<void> {
+export async function persistSavedSession(phone: string | null): Promise<SessionArchive | null> {
   let sourceDir = getAuthDir();
   if (!existsSync(path.join(sourceDir, "creds.json"))) {
     const found = firstExistingPath("baileys-auth", "creds.json");
     if (existsSync(found)) sourceDir = path.dirname(found);
   }
   const names = await walkFiles(sourceDir);
-  if (!names.includes("creds.json")) return;
+  if (!names.includes("creds.json")) return readSessionArchive();
   const files: Record<string, string> = {};
   for (const rel of names) {
     const buf = await readFile(path.join(sourceDir, rel));
@@ -149,11 +159,26 @@ export async function persistSavedSession(phone: string | null): Promise<void> {
   }
   const archive: SessionArchive = {
     files,
-    phone,
+    phone: phone ?? (await phoneFromCreds()),
     savedAt: new Date().toISOString(),
   };
   await writeToAllRoots(ARCHIVE_REL, JSON.stringify(archive));
   await writeAuthFiles(files);
+  return archive;
+}
+
+export async function exportSessionArchive(): Promise<SessionArchive | null> {
+  const phone = (await getSavedPhone()).phone;
+  const fresh = await persistSavedSession(phone);
+  return fresh ?? readSessionArchive();
+}
+
+export async function importSessionArchive(raw: unknown): Promise<boolean> {
+  const archive = parseSessionArchive(raw);
+  if (!archive) return false;
+  await writeAuthFiles(archive.files);
+  await writeToAllRoots(ARCHIVE_REL, JSON.stringify(archive));
+  return existsSync(path.join(getAuthDir(), "creds.json"));
 }
 
 export async function clearSavedSession(): Promise<void> {

@@ -192,6 +192,7 @@ export function Dashboard({ initial }: { initial: DeskData }) {
         />
         <ScanLogin
           hostedOnVercel={initial.live.whatsapp.serverless}
+          initial={initial.live.whatsapp}
           onInbox={mergeInbox}
         />
 

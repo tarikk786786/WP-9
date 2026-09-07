@@ -265,6 +265,14 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
         phone,
         error: null,
       });
+      setTimeout(() => {
+        void persistSavedSession(phone).then(async () => {
+          manager.snapshot = await snapshotWithSave(manager.snapshot);
+        });
+      }, 750);
+      setTimeout(() => {
+        void persistSavedSession(phone);
+      }, 2500);
     }
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)

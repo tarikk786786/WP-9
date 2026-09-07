@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ScanSnapshot } from "@/lib/types";
+
+const STORAGE_KEY = "tarik.whatsapp.session.v1";
 
 function emptyScan(serverless = false): ScanSnapshot {
   return {
@@ -28,31 +30,75 @@ function emptyScan(serverless = false): ScanSnapshot {
 }
 
 function phaseLabel(scan: ScanSnapshot) {
-  if (scan.phase === "ready") return "Linked";
+  if (scan.phase === "ready") return "Linked · saved";
   if (scan.qrDataUrl) return "Scan QR";
   if (scan.pairingCode) return "Enter code";
   if (scan.phase === "connecting") return "Connecting";
+  if (scan.persisted) return "Saved login";
   if (scan.phase === "logged_out") return "Logged out";
   return "Not linked";
 }
 
+function readLocalArchive(): unknown | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as unknown) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalArchive(archive: unknown) {
+  const files = (archive as { files?: { ["creds.json"]?: string } } | null)?.files;
+  if (!files?.["creds.json"]) return false;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(archive));
+  return true;
+}
+
+function clearLocalArchive() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // private mode
+  }
+}
+
 export function ScanLogin({
   hostedOnVercel = false,
+  initial,
   onInbox,
 }: {
   hostedOnVercel?: boolean;
+  initial?: ScanSnapshot;
   onInbox?: (messages: import("@/lib/types").InboxMessage[]) => void;
 }) {
-  const [scan, setScan] = useState<ScanSnapshot>(() => emptyScan(hostedOnVercel));
+  const [scan, setScan] = useState<ScanSnapshot>(() => initial ?? emptyScan(hostedOnVercel));
   const [busy, setBusy] = useState(false);
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [savedHere, setSavedHere] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const phaseRef = useRef(scan.phase);
+  const booted = useRef(false);
   phaseRef.current = scan.phase;
 
   function stopLogin() {
     abortRef.current?.abort();
     abortRef.current = null;
+  }
+
+  async function pullAndSaveLogin() {
+    try {
+      const response = await fetch("/api/scan/session", { cache: "no-store" });
+      if (!response.ok) return;
+      const json = (await response.json()) as {
+        archive?: unknown;
+        snapshot?: ScanSnapshot;
+      };
+      if (json.snapshot) setScan(json.snapshot);
+      if (writeLocalArchive(json.archive)) setSavedHere(true);
+    } catch {
+      // disk or /tmp may still hold it
+    }
   }
 
   async function readStream(pair?: string, silent = false) {
@@ -106,8 +152,13 @@ export function ScanLogin({
           if (snapshot.qrDataUrl || snapshot.pairingCode || snapshot.phase === "ready") {
             setBusy(false);
           }
+          if (snapshot.phase === "ready" && snapshot.persisted) {
+            void pullAndSaveLogin();
+          }
           if (snapshot.phase === "logged_out") {
             setBusy(false);
+            clearLocalArchive();
+            setSavedHere(false);
             stopLogin();
             return;
           }
@@ -117,7 +168,7 @@ export function ScanLogin({
       if (controller.signal.aborted) return;
       setScan((current) => ({
         ...current,
-        phase: "idle",
+        phase: current.persisted ? "connecting" : "idle",
         error: error instanceof Error ? error.message : "Login fail ho gaya.",
       }));
     } finally {
@@ -138,16 +189,68 @@ export function ScanLogin({
     }
   }
 
+  useEffect(() => {
+    if (booted.current) return;
+    booted.current = true;
+    if (typeof window !== "undefined") {
+      setSavedHere(Boolean(readLocalArchive()));
+    }
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/scan", { cache: "no-store" });
+        const server = (await response.json()) as ScanSnapshot;
+        if (server.phase === "ready" || server.persisted) {
+          setScan(server);
+          if (server.phone) setPhone(server.phone);
+          void readStream(undefined, true);
+          void pullAndSaveLogin();
+          return;
+        }
+
+        const archive = readLocalArchive();
+        if (!archive) return;
+        const restore = await fetch("/api/scan/restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(archive),
+        });
+        const snap = (await restore.json()) as ScanSnapshot & { error?: string };
+        if (!restore.ok) {
+          clearLocalArchive();
+          setSavedHere(false);
+          setScan((current) => ({
+            ...current,
+            error: snap.error ?? "Saved login restore nahi hua. Naya QR.",
+          }));
+          return;
+        }
+        setScan(snap);
+        setSavedHere(true);
+        if (snap.phone) setPhone(snap.phone);
+        void readStream(undefined, true);
+      } catch {
+        // First visit — user can Show QR.
+      }
+    })();
+    // Boot once on mount; readStream is stable enough for this desk.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function logout() {
     stopLogin();
     setBusy(true);
     try {
+      clearLocalArchive();
+      setSavedHere(false);
       const response = await fetch("/api/scan", { method: "DELETE" });
       setScan((await response.json()) as ScanSnapshot);
     } finally {
       setBusy(false);
     }
   }
+
+  const remembered = scan.persisted || savedHere;
 
   return (
     <Card className="lg:col-span-2">
@@ -156,11 +259,11 @@ export function ScanLogin({
           <div>
             <CardTitle>WhatsApp login</CardTitle>
             <CardDescription>
-              QR scan karo, ya number daal ke pairing code lo. Tab tab tak khula
-              rakho jab tak Linked na ho.
+              Ek baar QR / pairing. Login is device pe save hota hai — refresh
+              ke baad wapas connect. Log out se hi bhoolta hai.
             </CardDescription>
           </div>
-          <Badge variant={scan.phase === "ready" ? "default" : "secondary"}>
+          <Badge variant={scan.phase === "ready" || remembered ? "default" : "secondary"}>
             {phaseLabel(scan)}
           </Badge>
         </div>
@@ -183,14 +286,19 @@ export function ScanLogin({
             </div>
           ) : scan.phase === "ready" ? (
             <p className="px-4 text-center text-sm font-medium text-primary">
-              Linked{scan.phone ? ` as ${scan.phone}` : ""}. Tab khula rakho —
-              main chats sun raha hoon.
+              Linked{scan.phone ? ` as ${scan.phone}` : ""}. Login saved
+              {scan.savedAt ? ` · ${scan.savedAt.slice(0, 16).replace("T", " ")} UTC` : ""}.
+            </p>
+          ) : remembered ? (
+            <p className="px-4 text-center text-sm font-medium">
+              Saved login mil gaya{scan.phone ? ` (${scan.phone})` : ""}. Reconnect
+              ho raha hai — naya QR nahi.
             </p>
           ) : (
             <p className="px-4 text-center text-sm text-muted-foreground">
               {busy || scan.phase === "connecting"
                 ? "WhatsApp se login maang raha hoon…"
-                : "QR ya pairing se login karo."}
+                : "QR ya pairing se login karo. Phir yeh save ho jayega."}
             </p>
           )}
         </div>
@@ -198,7 +306,7 @@ export function ScanLogin({
           <ol className="list-decimal space-y-1 pl-5">
             <li>Show QR — 20 second mein code box mein aana chahiye.</li>
             <li>Phone: Linked devices → Link a device → QR scan.</li>
-            <li>QR na aaye to neeche number (country code ke sath) daal ke pairing lo.</li>
+            <li>Linked ke baad login disk + is browser mein save. Refresh allowed.</li>
           </ol>
           <div className="space-y-2">
             <Label htmlFor="wa-phone">Phone with country code</Label>
@@ -211,9 +319,18 @@ export function ScanLogin({
             />
           </div>
           {scan.error ? <p className="text-destructive">{scan.error}</p> : null}
+          {remembered ? (
+            <p className="text-xs text-muted-foreground">
+              Saved on this device. Vercel tab band ho to yahi browser wapas
+              restore karega. Laptop pe `npm run live` + `data/` folder forever hai.
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void readStream()} disabled={busy || scan.phase === "ready"}>
-              {busy && !phone ? "QR aa raha hai…" : "Show QR"}
+            <Button
+              onClick={() => void readStream()}
+              disabled={busy || scan.phase === "ready"}
+            >
+              {busy && !phone ? "QR aa raha hai…" : remembered ? "Reconnect" : "Show QR"}
             </Button>
             <Button
               variant="outline"
@@ -225,7 +342,7 @@ export function ScanLogin({
             <Button
               variant="ghost"
               onClick={() => void logout()}
-              disabled={busy || (scan.phase === "idle" && !scan.persisted)}
+              disabled={busy || (scan.phase === "idle" && !remembered)}
             >
               Log out
             </Button>
