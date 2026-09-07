@@ -40,8 +40,11 @@ function phaseLabel(scan: ScanSnapshot) {
   }
 }
 
-export function ScanLogin() {
-  const [scan, setScan] = useState<ScanSnapshot>(emptyScan);
+export function ScanLogin({ hostedOnVercel = false }: { hostedOnVercel?: boolean }) {
+  const [scan, setScan] = useState<ScanSnapshot>(() => ({
+    ...emptyScan(),
+    serverless: hostedOnVercel,
+  }));
   const [busy, setBusy] = useState(false);
   const [pollId, setPollId] = useState<number | null>(null);
 
@@ -135,8 +138,9 @@ export function ScanLogin() {
           <div>
             <CardTitle>Tarik ka WhatsApp link</CardTitle>
             <CardDescription>
-              QR sirf us machine pe aata hai jahan <code>npm run live</code>{" "}
-              chal raha ho. Vercel pe Show QR kaam nahi karta.
+              {scan.serverless
+                ? "Yeh Vercel URL hai. Yahan QR box hamesha khali rahega — serverless WhatsApp Web nahi chala sakta."
+                : "Is machine pe npm run live chal raha ho to Show QR se code aata hai."}
             </CardDescription>
           </div>
           <Badge variant={scan.phase === "ready" ? "default" : "secondary"}>
@@ -169,14 +173,22 @@ export function ScanLogin() {
         </div>
         <div className="space-y-3 text-sm leading-6">
           <ol className="list-decimal space-y-1 pl-5">
-            <li>
-              Apne laptop pe project folder mein <code>npm run live</code> chalao.
-            </li>
-            <li>
-              Browser mein <code>http://127.0.0.1:43217</code> kholo — yeh Vercel URL nahi.
-            </li>
-            <li>Show QR dabao. Code yahi box mein aayega.</li>
-            <li>Phone: WhatsApp → Linked devices → Link a device → scan.</li>
+            {scan.serverless ? (
+              <>
+                <li>Is page pe QR nahi aayega. Yeh expected hai.</li>
+                <li>WhatsApp yahan chalane ke liye upar/neeche Cloud API card use karo (Meta Business number).</li>
+                <li>
+                  Personal phone ka QR chahiye to repo apne laptop pe clone karke{" "}
+                  <code>npm run live</code> chalao — phir us machine ke browser mein kholo.
+                </li>
+              </>
+            ) : (
+              <>
+                <li>Show QR dabao. Code is white box mein aayega.</li>
+                <li>Phone: WhatsApp → Linked devices → Link a device → scan.</li>
+                <li>Scan ke baad login is disk pe save ho jaata hai.</li>
+              </>
+            )}
           </ol>
           {scan.persisted ? (
             <p className="text-xs text-primary">

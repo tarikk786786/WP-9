@@ -162,7 +162,9 @@ export function Dashboard({ initial }: { initial: DeskData }) {
 
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1.15fr_0.85fr]">
         <LocalBrain initial={initial.live} />
-        <ScanLogin />
+        {initial.live.whatsapp.serverless ? null : (
+          <ScanLogin hostedOnVercel={false} />
+        )}
 
         {(notice || error) && (
           <div className="lg:col-span-2">
@@ -180,12 +182,17 @@ export function Dashboard({ initial }: { initial: DeskData }) {
           </div>
         )}
 
-        <Card>
+        <Card className={initial.live.whatsapp.serverless ? "lg:col-span-2" : undefined}>
           <CardHeader>
-            <CardTitle>Or use WhatsApp Cloud API on Vercel</CardTitle>
+            <CardTitle>
+              {initial.live.whatsapp.serverless
+                ? "This Vercel site links WhatsApp only through Cloud API"
+                : "Or use WhatsApp Cloud API on Vercel"}
+            </CardTitle>
             <CardDescription>
-              Official Meta webhook path for serverless hosting. Use scan login
-              above if you want to link the WhatsApp already on your phone.
+              {initial.live.whatsapp.serverless
+                ? "Personal QR login cannot run here. Meta Cloud API is the path that stays up on this URL."
+                : "Official Meta webhook for serverless. QR scan is only on a laptop running npm run live."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -231,6 +238,10 @@ export function Dashboard({ initial }: { initial: DeskData }) {
             </p>
           </CardContent>
         </Card>
+
+        {initial.live.whatsapp.serverless ? (
+          <ScanLogin hostedOnVercel />
+        ) : null}
 
         <Card>
           <CardHeader>
