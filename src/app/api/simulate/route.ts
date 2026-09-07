@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { decideReply } from "@/lib/reply-engine";
-import { addInboxMessage, getRules } from "@/lib/store";
+import { composeReply } from "@/lib/compose-reply";
+import { recordReply } from "@/lib/record-reply";
+import { getRules } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { fromName?: string; text?: string };
@@ -14,17 +16,23 @@ export async function POST(request: Request) {
   }
 
   const rules = await getRules();
-  const decision = decideReply(text, fromName, rules);
-  const message = await addInboxMessage({
-    id: `sim_${Date.now()}`,
-    from: "simulator",
+  const decision = await composeReply({
+    text,
     fromName,
-    body: text,
-    reply: decision.action === "reply" ? decision.text : null,
-    skippedReason: decision.action === "skip" ? decision.reason : null,
-    source: "simulator",
-    createdAt: new Date().toISOString(),
+    fromId: `sim:${fromName}`,
+    rules,
   });
+  const message = await recordReply(
+    {
+      id: `sim_${Date.now()}`,
+      from: "simulator",
+      fromName,
+      body: text,
+      source: "simulator",
+      createdAt: new Date().toISOString(),
+    },
+    decision,
+  );
 
   return NextResponse.json({ message, decision });
 }

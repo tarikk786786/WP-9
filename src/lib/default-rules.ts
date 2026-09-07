@@ -8,6 +8,8 @@ export const defaultRules: BotRules = {
   greetingReply:
     "Hi — thanks for writing. This inbox is watched by my auto-reply. Tell me what you need and I will follow up.",
   includeName: true,
+  useLocalLlm: true,
+  preferredModel: "",
   businessHoursEnabled: false,
   timezone: "UTC",
   openHour: 9,

@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { LocalBrain } from "@/components/local-brain";
 import { ScanLogin } from "@/components/scan-login";
 import type { DeskData } from "@/lib/load-desk";
 import type { BotRules, InboxMessage, KeywordRule } from "@/lib/types";
@@ -97,7 +98,7 @@ export function Dashboard({ initial }: { initial: DeskData }) {
       const json = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(json.error ?? "Simulation failed.");
       await refreshInbox();
-      setNotice("Simulator replied using the current rules. No WhatsApp message was sent.");
+      setNotice("Simulator replied with the local brain. No WhatsApp message was sent.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Simulation failed.");
     } finally {
@@ -118,23 +119,24 @@ export function Dashboard({ initial }: { initial: DeskData }) {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium tracking-[0.18em] text-primary uppercase">
-              Vercel · WhatsApp Cloud API
+              Local LLM · always live · safety first
             </p>
             <h1 className="font-heading mt-1 text-2xl font-semibold tracking-tight">
-              {rules.botName} reply desk
+              {rules.botName} is watching the chat
             </h1>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Incoming WhatsApp Business messages hit your Vercel webhook. Relay
-              answers with your rules while you are away.
+              Scan your phone, keep this server running, and every free local
+              model on this machine writes a careful reply for you.
             </p>
           </div>
           <Badge variant={status.configured ? "default" : "secondary"} className="w-fit">
-            {status.configured ? "Cloud API connected" : "Simulator mode"}
+            {status.configured ? "Cloud API + local brain" : "Local brain ready"}
           </Badge>
         </div>
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <LocalBrain initial={initial.live} />
         <ScanLogin />
 
         {(notice || error) && (
@@ -266,6 +268,21 @@ export function Dashboard({ initial }: { initial: DeskData }) {
                     checked={rules.enabled}
                     onCheckedChange={(checked) =>
                       setRules({ ...rules, enabled: checked })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                  <div>
+                    <p className="font-medium">Local LLM replies</p>
+                    <p className="text-sm text-muted-foreground">
+                      Use free local models first. If they are offline, keyword
+                      and default rules still answer.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={rules.useLocalLlm}
+                    onCheckedChange={(checked) =>
+                      setRules({ ...rules, useLocalLlm: checked })
                     }
                   />
                 </div>
@@ -459,6 +476,9 @@ export function Dashboard({ initial }: { initial: DeskData }) {
                           <p className="font-medium">{message.fromName}</p>
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary">{message.source}</Badge>
+                            {message.engine ? (
+                              <Badge variant="outline">{message.engine}</Badge>
+                            ) : null}
                             <span className="text-xs text-muted-foreground">
                               {formatTime(message.createdAt)}
                             </span>

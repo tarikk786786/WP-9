@@ -1,28 +1,38 @@
-# Relay — WhatsApp auto-reply on Vercel
+# Relay — always-live local LLM WhatsApp replies
 
-Relay is a Next.js app with two ways to answer chats:
+Relay answers WhatsApp for you with **free local models** and a safety layer.
 
-1. **Login by scan** — show a QR, link the WhatsApp already on your phone (WhatsApp Web style), and auto-reply from this running Node process.
-2. **WhatsApp Cloud API** — Meta posts incoming Business messages to `/api/whatsapp/webhook` on Vercel.
+1. **Login by scan** — QR-link the WhatsApp on your phone and keep this Node process running.
+2. **Local brain** — tries Ollama, LM Studio, Jan, llama.cpp, and Kobold on localhost, then an on-device Flan-T5 model. Keyword rules are the fallback.
+3. **Safety** — skips OTPs, money/transfer asks, secrets, and jailbreaks. Rate-limits each contact.
+4. **Cloud API** — optional Meta webhook if you later move the Business number to Vercel.
 
-Scan login needs the server to stay online (`npm run dev` or `npm start` on a machine/VPS). Vercel serverless will drop that socket when the function sleeps. WhatsApp can also disconnect unofficial linked devices.
+`npm run live` (or `npm run dev`) stays up, reconnects a saved WhatsApp session, and warms the on-device model. Vercel serverless cannot keep a scan session or a local LLM socket alive.
 
 ## What you get
 
-- QR login on the desk: Settings → Linked devices → Link a device on your phone
-- A control desk to write keyword, greeting, default, and after-hours replies
-- A simulator that uses the same reply engine without any WhatsApp connection
-- A production Cloud API webhook with hub challenge and optional `X-Hub-Signature-256`
+- Always-live desk with detected local engines
+- QR login: WhatsApp → Linked devices → Link a device
+- Safety filters before any model runs
+- Simulator that uses the same compose path
+- Cloud API webhook with hub challenge and optional signature checks
 
 ## Run locally
 
 ```bash
 npm install
 cp .env.example .env.local
-npm run dev
+npm run live
 ```
 
-Open [http://127.0.0.1:43217](http://127.0.0.1:43217). Click **Show QR**, then scan it from WhatsApp → Linked devices. Use **Generate reply** to test rules without your phone.
+Optional stronger free model:
+
+```bash
+# https://ollama.com
+ollama pull llama3.2
+```
+
+Open [http://127.0.0.1:43217](http://127.0.0.1:43217). Click **Show QR**, scan from Linked devices, then use **Generate reply** to hear the local brain.
 
 ## Connect WhatsApp Business
 

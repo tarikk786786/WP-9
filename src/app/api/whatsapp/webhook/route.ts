@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { decideReply } from "@/lib/reply-engine";
-import { addInboxMessage, getRules, markProcessed, wasProcessed } from "@/lib/store";
+import { composeReply } from "@/lib/compose-reply";
+import { recordReply } from "@/lib/record-reply";
+import { getRules, markProcessed, wasProcessed } from "@/lib/store";
 import {
   extractIncomingTexts,
   getWhatsAppConfig,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -44,43 +46,35 @@ export async function POST(request: NextRequest) {
     if (await wasProcessed(message.id)) continue;
     await markProcessed(message.id);
 
-    const decision = decideReply(message.body, message.fromName, rules);
+    const decision = await composeReply({
+      text: message.body,
+      fromName: message.fromName,
+      fromId: message.from,
+      rules,
+    });
+
+    const base = {
+      id: message.id,
+      from: message.from,
+      fromName: message.fromName,
+      body: message.body,
+      source: "whatsapp" as const,
+      createdAt: new Date().toISOString(),
+    };
+
     if (decision.action === "skip") {
-      await addInboxMessage({
-        id: message.id,
-        from: message.from,
-        fromName: message.fromName,
-        body: message.body,
-        reply: null,
-        skippedReason: decision.reason,
-        source: "whatsapp",
-        createdAt: new Date().toISOString(),
-      });
+      await recordReply(base, decision);
       continue;
     }
 
     try {
       await sendWhatsAppText(message.from, decision.text);
-      await addInboxMessage({
-        id: message.id,
-        from: message.from,
-        fromName: message.fromName,
-        body: message.body,
-        reply: decision.text,
-        skippedReason: null,
-        source: "whatsapp",
-        createdAt: new Date().toISOString(),
-      });
+      await recordReply(base, decision);
     } catch (error) {
-      await addInboxMessage({
-        id: message.id,
-        from: message.from,
-        fromName: message.fromName,
-        body: message.body,
-        reply: null,
-        skippedReason: error instanceof Error ? error.message : "Send failed.",
-        source: "whatsapp",
-        createdAt: new Date().toISOString(),
+      await recordReply(base, {
+        action: "skip",
+        reason: error instanceof Error ? error.message : "Send failed.",
+        engine: decision.engine,
       });
     }
   }

@@ -11,6 +11,8 @@ export type BotRules = {
   defaultReply: string;
   greetingReply: string;
   includeName: boolean;
+  useLocalLlm: boolean;
+  preferredModel: string;
   businessHoursEnabled: boolean;
   timezone: string;
   openHour: number;
@@ -27,6 +29,7 @@ export type InboxMessage = {
   reply: string | null;
   skippedReason: string | null;
   source: "whatsapp" | "simulator" | "scan";
+  engine?: string;
   createdAt: string;
 };
 
@@ -37,6 +40,22 @@ export type ScanSnapshot = {
   qrDataUrl: string | null;
   phone: string | null;
   error: string | null;
+};
+
+export type LlmEndpoint = {
+  id: string;
+  name: string;
+  kind: "ollama" | "openai-compatible" | "transformers";
+  baseUrl?: string;
+  online: boolean;
+  models: string[];
+};
+
+export type LiveStatus = {
+  alive: boolean;
+  startedAt: string;
+  whatsapp: ScanSnapshot;
+  llms: LlmEndpoint[];
 };
 
 export type ConnectionStatus = {

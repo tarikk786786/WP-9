@@ -1,8 +1,9 @@
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import QRCode from "qrcode";
-import { decideReply } from "@/lib/reply-engine";
-import { addInboxMessage, getRules, markProcessed, wasProcessed } from "@/lib/store";
+import { composeReply } from "@/lib/compose-reply";
+import { recordReply } from "@/lib/record-reply";
+import { getRules, markProcessed, wasProcessed } from "@/lib/store";
 import type { ScanSnapshot } from "@/lib/types";
 
 type BaileysModule = typeof import("@whiskeysockets/baileys");
@@ -196,45 +197,57 @@ async function openSocket(manager: Manager) {
       const fromName =
         message.pushName ||
         (typeof jid === "string" ? jid.replace(/@s\.whatsapp\.net$/, "") : "Contact");
-      const decision = decideReply(body, fromName, rules);
+      const decision = await composeReply({
+        text: body,
+        fromName,
+        fromId: jid,
+        rules,
+      });
 
       if (decision.action === "skip") {
-        await addInboxMessage({
-          id: `scan_${id}`,
-          from: jid,
-          fromName,
-          body,
-          reply: null,
-          skippedReason: decision.reason,
-          source: "scan",
-          createdAt: new Date().toISOString(),
-        });
+        await recordReply(
+          {
+            id: `scan_${id}`,
+            from: jid,
+            fromName,
+            body,
+            source: "scan",
+            createdAt: new Date().toISOString(),
+          },
+          decision,
+        );
         continue;
       }
 
       try {
         await sock.sendMessage(jid, { text: decision.text });
-        await addInboxMessage({
-          id: `scan_${id}`,
-          from: jid,
-          fromName,
-          body,
-          reply: decision.text,
-          skippedReason: null,
-          source: "scan",
-          createdAt: new Date().toISOString(),
-        });
+        await recordReply(
+          {
+            id: `scan_${id}`,
+            from: jid,
+            fromName,
+            body,
+            source: "scan",
+            createdAt: new Date().toISOString(),
+          },
+          decision,
+        );
       } catch (error) {
-        await addInboxMessage({
-          id: `scan_${id}`,
-          from: jid,
-          fromName,
-          body,
-          reply: null,
-          skippedReason: error instanceof Error ? error.message : "Send failed.",
-          source: "scan",
-          createdAt: new Date().toISOString(),
-        });
+        await recordReply(
+          {
+            id: `scan_${id}`,
+            from: jid,
+            fromName,
+            body,
+            source: "scan",
+            createdAt: new Date().toISOString(),
+          },
+          {
+            action: "skip",
+            reason: error instanceof Error ? error.message : "Send failed.",
+            engine: decision.engine,
+          },
+        );
       }
     }
   });

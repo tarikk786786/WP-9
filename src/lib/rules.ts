@@ -33,6 +33,10 @@ export function parseRules(value: unknown): BotRules | null {
       typeof raw.includeName === "boolean"
         ? raw.includeName
         : defaultRules.includeName,
+    useLocalLlm:
+      typeof raw.useLocalLlm === "boolean" ? raw.useLocalLlm : defaultRules.useLocalLlm,
+    preferredModel:
+      typeof raw.preferredModel === "string" ? raw.preferredModel : defaultRules.preferredModel,
     businessHoursEnabled:
       typeof raw.businessHoursEnabled === "boolean"
         ? raw.businessHoursEnabled
