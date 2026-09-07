@@ -7,11 +7,17 @@ describe("writeHinglishReply", () => {
   it("greets in soft Hinglish", () => {
     const text = writeHinglishReply("hi", "Amina", defaultRules, "greeting");
     assert.match(text, /Amina/);
-    assert.match(text.toLowerCase(), /kaise ho|yahin/);
+    assert.match(text.toLowerCase(), /kaise ho|tarik/);
   });
 
   it("rejects hello loops", () => {
     assert.equal(isLowQualityReply("Hello, Hello! Hello, Hello! Hello, Hello!"), true);
+  });
+
+  it("points who-are-you to tarikislam.in", () => {
+    const text = writeHinglishReply("who are you", "Amina", defaultRules);
+    assert.match(text, /Tarik Islam/);
+    assert.match(text, /tarikislam\.in/);
   });
 
   it("answers hours without stiff english", () => {

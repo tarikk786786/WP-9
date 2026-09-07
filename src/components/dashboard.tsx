@@ -120,14 +120,17 @@ export function Dashboard({ initial }: { initial: DeskData }) {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium tracking-[0.18em] text-primary uppercase">
-              Soft Hinglish · all brains live
+              Tarik Islam · always live
             </p>
             <h1 className="font-heading mt-1 text-2xl font-semibold tracking-tight">
-              {rules.botName} narmi se baat karega
+              {rules.botName} ke WhatsApp pe narm jawab
             </h1>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Har reply calm, friendly Hinglish mein. Scan your phone, keep this
-              server on, aur chats pe ek soft dost jaisa jawab jaayega.
+              Owner Tarik hai. Har fact pehle{" "}
+              <a className="underline" href="https://tarikislam.in" target="_blank" rel="noreferrer">
+                tarikislam.in
+              </a>{" "}
+              se aati hai. Reply Hinglish, calm, friendly — server on rakho.
             </p>
           </div>
           <Badge variant={status.configured ? "default" : "secondary"} className="w-fit">

@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { discoverLocalLlms, warmLocalModel } from "@/lib/local-llm";
 import { getScanSnapshot, startScanSession } from "@/lib/scan-session";
+import { refreshTarikProfile } from "@/lib/tarik-profile";
 import type { LiveStatus } from "@/lib/types";
 
 const AUTH_DIR = path.join(process.cwd(), "data", "baileys-auth");
@@ -30,8 +31,12 @@ export function startLiveLoop() {
   if (globalRef.__relayLive) return;
   globalRef.__relayLive = true;
   void keepAliveTick();
+  void refreshTarikProfile();
   warmLocalModel();
   setInterval(() => {
     void keepAliveTick();
   }, 15_000);
+  setInterval(() => {
+    void refreshTarikProfile();
+  }, 15 * 60 * 1000);
 }

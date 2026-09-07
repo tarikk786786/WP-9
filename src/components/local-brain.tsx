@@ -28,9 +28,9 @@ export function LocalBrain({ initial }: { initial: LiveStatus }) {
           <div>
             <CardTitle>Saari brains live hain</CardTitle>
             <CardDescription>
-              Har reply ek narm, calm Hinglish voice se jaati hai — jaise ek
-              dost quietly baat kar raha ho. Extra local apps join kar leti
-              hain jab aap unhe start karte ho.
+              Yeh Tarik Islam ki live messaging brain hai. Facts
+              tarikislam.in se aate hain. Extra local models tab join
+              karte hain jab woh on hon.
             </CardDescription>
           </div>
           <Badge className="gap-1.5">

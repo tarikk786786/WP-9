@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Relay · WhatsApp auto-reply",
+  title: "Tarik · WhatsApp desk",
   description:
-    "Host a WhatsApp Cloud API auto-reply bot on Vercel and answer incoming chats with your rules.",
+    "Always-live Hinglish replies as Tarik Islam. Facts come from tarikislam.in.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

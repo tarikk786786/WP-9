@@ -92,11 +92,11 @@ export function ScanLogin() {
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle>Login by scan</CardTitle>
+            <CardTitle>Tarik ka WhatsApp link</CardTitle>
             <CardDescription>
-              Open WhatsApp on your phone, go to Settings → Linked devices →
-              Link a device, then scan this QR. Relay stays on this running
-              server and replies with your rules.
+              Phone pe WhatsApp → Settings → Linked devices → Link a device,
+              phir yeh QR scan. Server on rahe to Tarik ke naam se narm
+              Hinglish replies chalte rehte hain. Facts tarikislam.in se.
             </CardDescription>
           </div>
           <Badge variant={scan.phase === "ready" ? "default" : "secondary"}>
