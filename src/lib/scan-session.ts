@@ -1,10 +1,10 @@
 import { mkdir, rm } from "node:fs/promises";
-import path from "node:path";
 import QRCode from "qrcode";
 import { composeReply } from "@/lib/compose-reply";
 import { recordReply } from "@/lib/record-reply";
 import { getRules, markProcessed, wasProcessed } from "@/lib/store";
 import type { ScanSnapshot } from "@/lib/types";
+import { writablePath } from "@/lib/writable-dir";
 
 type BaileysModule = typeof import("@whiskeysockets/baileys");
 
@@ -18,7 +18,7 @@ type Manager = {
   logout: () => Promise<ScanSnapshot>;
 };
 
-const AUTH_DIR = path.join(process.cwd(), "data", "baileys-auth");
+const AUTH_DIR = writablePath("baileys-auth");
 
 const emptySnapshot = (): ScanSnapshot => ({
   phase: "idle",

@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
-import path from "node:path";
 import { profileBrief } from "@/lib/tarik-profile";
 import type { BotRules, LlmEndpoint } from "@/lib/types";
+import { writablePath } from "@/lib/writable-dir";
 
 export type LlmGeneration = {
   text: string;
@@ -150,7 +150,7 @@ async function getTransformers(): Promise<Text2Text> {
   if (transformersPipeline) return transformersPipeline;
   if (!transformersLoading) {
     transformersLoading = (async () => {
-      const cacheDir = path.join(process.cwd(), "data", "models");
+      const cacheDir = writablePath("models");
       await mkdir(cacheDir, { recursive: true });
       process.env.TRANSFORMERS_CACHE = cacheDir;
       const { pipeline } = await import("@huggingface/transformers");

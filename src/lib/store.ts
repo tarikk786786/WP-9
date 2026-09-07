@@ -3,6 +3,7 @@ import path from "node:path";
 import { defaultRules } from "@/lib/default-rules";
 import { getDeployedRules, parseRules } from "@/lib/rules";
 import type { BotRules, InboxMessage } from "@/lib/types";
+import { writablePath } from "@/lib/writable-dir";
 
 type StoreShape = {
   rules: BotRules;
@@ -19,7 +20,7 @@ const memory: StoreShape = {
   processedIds: [],
 };
 
-const storePath = path.join(process.cwd(), "data", "store.json");
+const storePath = writablePath("store.json");
 let loaded = false;
 
 async function ensureLoaded() {
