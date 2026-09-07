@@ -56,6 +56,7 @@ export type ScanSnapshot = {
   persisted: boolean;
   savedAt: string | null;
   serverless: boolean;
+  pairingCode: string | null;
 };
 
 export type LlmEndpoint = {

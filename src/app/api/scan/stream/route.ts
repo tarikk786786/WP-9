@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-export async function GET() {
+async function streamLogin(pairingPhone?: string) {
   const encoder = new TextEncoder();
   let closed = false;
 
@@ -20,10 +20,11 @@ export async function GET() {
       };
 
       try {
-        send(await startScanSession());
+        send(getScanSnapshot());
+        void startScanSession(pairingPhone);
         const deadline = Date.now() + 240_000;
         while (!closed && Date.now() < deadline) {
-          await new Promise((resolve) => setTimeout(resolve, 800));
+          await new Promise((resolve) => setTimeout(resolve, 600));
           const snapshot = getScanSnapshot();
           send(snapshot);
           if (snapshot.phase === "ready" || snapshot.phase === "logged_out") {
@@ -34,11 +35,12 @@ export async function GET() {
         send({
           phase: "idle",
           qrDataUrl: null,
+          pairingCode: null,
           phone: null,
           persisted: false,
           savedAt: null,
           serverless: true,
-          error: error instanceof Error ? error.message : "QR stream failed.",
+          error: error instanceof Error ? error.message : "Login stream failed.",
         });
       } finally {
         try {
@@ -61,4 +63,20 @@ export async function GET() {
       "X-Accel-Buffering": "no",
     },
   });
+}
+
+export async function GET(request: Request) {
+  const pair = new URL(request.url).searchParams.get("pair") ?? undefined;
+  return streamLogin(pair);
+}
+
+export async function POST(request: Request) {
+  let pair: string | undefined;
+  try {
+    const body = (await request.json()) as { pair?: string };
+    pair = body.pair;
+  } catch {
+    pair = undefined;
+  }
+  return streamLogin(pair);
 }

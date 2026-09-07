@@ -22,6 +22,7 @@ function emptyLive(): LiveStatus {
       persisted: false,
       savedAt: null,
       serverless: false,
+      pairingCode: null,
     },
     llms: [],
   };

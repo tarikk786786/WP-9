@@ -24,7 +24,7 @@ type Manager = {
   sock: Socket | null;
   starting: boolean;
   reconnectDelay: number;
-  start: () => Promise<ScanSnapshot>;
+  start: (pairingPhone?: string) => Promise<ScanSnapshot>;
   logout: () => Promise<ScanSnapshot>;
 };
 
@@ -44,6 +44,7 @@ const emptySnapshot = (): ScanSnapshot => ({
   persisted: false,
   savedAt: null,
   serverless: isServerlessDisk(),
+  pairingCode: null,
 });
 
 async function snapshotWithSave(
@@ -66,7 +67,7 @@ function waitForQrOrReady(manager: Manager, ms: number) {
     const started = Date.now();
     const timer = setInterval(() => {
       const snap = manager.snapshot;
-      if (snap.qrDataUrl || snap.phase === "ready" || snap.phase === "logged_out") {
+      if (snap.qrDataUrl || snap.pairingCode || snap.phase === "ready" || snap.phase === "logged_out") {
         clearInterval(timer);
         resolve(snap);
         return;
@@ -78,7 +79,7 @@ function waitForQrOrReady(manager: Manager, ms: number) {
           phase: snap.qrDataUrl ? "qr" : "idle",
           error:
             snap.error ||
-            "QR nahi aaya. Yeh page Vercel pe ho to laptop pe npm run live chalao — serverless QR nahi nikalta.",
+            "WhatsApp ne code late bheja. Show QR ya pairing dubara try karo.",
         }).then(resolve);
       }
     }, 200);
@@ -121,7 +122,7 @@ function createManager(): Manager {
     sock: null,
     starting: false,
     reconnectDelay: 2000,
-    async start() {
+    async start(pairingPhone?: string) {
       if (manager.snapshot.phase === "ready" && manager.sock) {
         return manager.snapshot;
       }
@@ -133,11 +134,12 @@ function createManager(): Manager {
         phase: manager.snapshot.qrDataUrl ? "qr" : "connecting",
         qrDataUrl: manager.snapshot.qrDataUrl,
         phone: saved.phone,
-        error: restored ? "Saved login mil gaya. Reconnect ho raha hai…" : null,
+        pairingCode: null,
+        error: restored ? "Saved login se reconnect ho raha hai…" : null,
       });
       try {
-        await openSocket(manager);
-        manager.snapshot = await waitForQrOrReady(manager, restored ? 12_000 : 22_000);
+        await openSocket(manager, pairingPhone);
+        manager.snapshot = await waitForQrOrReady(manager, pairingPhone ? 45_000 : 25_000);
       } catch (error) {
         manager.snapshot = await snapshotWithSave({
           phase: restored ? "connecting" : "idle",
@@ -171,7 +173,7 @@ function createManager(): Manager {
   return manager;
 }
 
-async function openSocket(manager: Manager) {
+async function openSocket(manager: Manager, pairingPhone?: string) {
   const baileys: BaileysModule = await import("@whiskeysockets/baileys");
   const {
     default: makeWASocket,
@@ -202,12 +204,31 @@ async function openSocket(manager: Manager) {
   const sock = makeWASocket({
     ...(version ? { version } : {}),
     auth: state,
-    printQRInTerminal: false,
     browser: Browsers.ubuntu("Chrome"),
     syncFullHistory: false,
     markOnlineOnConnect: false,
+    connectTimeoutMs: 30_000,
+    qrTimeout: 40_000,
   });
   manager.sock = sock;
+
+  const digits = pairingPhone?.replace(/\D/g, "") ?? "";
+  if (digits.length >= 10 && !state.creds.registered) {
+    try {
+      const pairingCode = await sock.requestPairingCode(digits);
+      manager.snapshot = await snapshotWithSave({
+        phase: "connecting",
+        pairingCode,
+        phone: digits,
+        error: null,
+      });
+    } catch (error) {
+      manager.snapshot = await snapshotWithSave({
+        phase: "connecting",
+        error: error instanceof Error ? error.message : "Pairing code nahi mila.",
+      });
+    }
+  }
 
   sock.ev.on("creds.update", async () => {
     await saveCreds();
@@ -221,7 +242,8 @@ async function openSocket(manager: Manager) {
       manager.snapshot = await snapshotWithSave({
         phase: "qr",
         qrDataUrl: await QRCode.toDataURL(qr, { width: 280, margin: 1 }),
-        phone: null,
+        pairingCode: manager.snapshot.pairingCode,
+        phone: manager.snapshot.phone,
         error: null,
       });
     }
@@ -396,8 +418,8 @@ export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
   return manager.snapshot;
 }
 
-export async function startScanSession(): Promise<ScanSnapshot> {
-  return getManager().start();
+export async function startScanSession(pairingPhone?: string): Promise<ScanSnapshot> {
+  return getManager().start(pairingPhone);
 }
 
 export async function logoutScanSession(): Promise<ScanSnapshot> {
