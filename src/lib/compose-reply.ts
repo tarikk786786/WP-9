@@ -1,3 +1,4 @@
+import { polishToHinglish, writeHinglishReply } from "@/lib/hinglish-brain";
 import { generateLocalReply } from "@/lib/local-llm";
 import { decideReply, type ReplyDecision } from "@/lib/reply-engine";
 import { inspectIncoming, isRateLimited, sanitizeOutgoing } from "@/lib/safety";
@@ -42,31 +43,30 @@ export async function composeReply(options: {
   if (fallback.action === "skip") {
     return { ...fallback, engine: "rules" };
   }
-  if (fallback.action === "reply" && fallback.matchedRule === "after-hours") {
-    return { ...fallback, engine: "rules" };
-  }
+
+  const hint = fallback.matchedRule;
 
   if (rules.useLocalLlm !== false) {
     try {
       const generated = await generateLocalReply(text, fromName, rules);
-      const clean = sanitizeOutgoing(generated.text);
+      const clean = sanitizeOutgoing(polishToHinglish(generated.text, fromName));
       if (clean) {
         return {
           action: "reply",
           text: clean,
-          matchedRule: fallback.action === "reply" ? fallback.matchedRule : "llm",
-          engine: generated.engine,
+          matchedRule: hint,
+          engine: `${generated.engine} · hinglish`,
         };
       }
     } catch {
-      // Fall through to deterministic rules so the chat still gets an answer.
+      // Always-live Hinglish voice still answers.
     }
   }
 
   return {
     action: "reply",
-    text: sanitizeOutgoing(fallback.text),
-    matchedRule: fallback.matchedRule,
-    engine: "rules",
+    text: sanitizeOutgoing(writeHinglishReply(text, fromName, rules, hint)),
+    matchedRule: hint,
+    engine: "hinglish-live",
   };
 }

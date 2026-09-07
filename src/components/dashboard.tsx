@@ -99,7 +99,7 @@ export function Dashboard({ initial }: { initial: DeskData }) {
       const json = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(json.error ?? "Simulation failed.");
       await refreshInbox();
-      setNotice("Simulator replied with the local brain. No WhatsApp message was sent.");
+      setNotice("Simulator ne narm Hinglish mein reply likha. WhatsApp pe kuch nahi gaya.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Simulation failed.");
     } finally {
@@ -120,14 +120,14 @@ export function Dashboard({ initial }: { initial: DeskData }) {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium tracking-[0.18em] text-primary uppercase">
-              Local LLM · always live · safety first
+              Soft Hinglish · all brains live
             </p>
             <h1 className="font-heading mt-1 text-2xl font-semibold tracking-tight">
-              {rules.botName} is watching the chat
+              {rules.botName} narmi se baat karega
             </h1>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Scan your phone, keep this server running, and every free local
-              model on this machine writes a careful reply for you.
+              Har reply calm, friendly Hinglish mein. Scan your phone, keep this
+              server on, aur chats pe ek soft dost jaisa jawab jaayega.
             </p>
           </div>
           <Badge variant={status.configured ? "default" : "secondary"} className="w-fit">

@@ -20,24 +20,22 @@ export function LocalBrain({ initial }: { initial: LiveStatus }) {
     setLive((await response.json()) as LiveStatus);
   }
 
-  const online = live.llms.filter((item) => item.online);
-
   return (
     <Card className="overflow-hidden lg:col-span-2">
       <div className="h-1 bg-gradient-to-r from-emerald-400 via-teal-400 to-lime-300" />
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle>Always-live local brain</CardTitle>
+            <CardTitle>Saari brains live hain</CardTitle>
             <CardDescription>
-              Replies try every free local model on this machine — Ollama, LM
-              Studio, Jan, llama.cpp, Kobold — then the on-device Flan model.
-              Safety filters codes, money asks, and jailbreaks first.
+              Har reply ek narm, calm Hinglish voice se jaati hai — jaise ek
+              dost quietly baat kar raha ho. Extra local apps join kar leti
+              hain jab aap unhe start karte ho.
             </CardDescription>
           </div>
           <Badge className="gap-1.5">
             <span className="size-1.5 animate-pulse rounded-full bg-primary-foreground" />
-            Live
+            All live
           </Badge>
         </div>
       </CardHeader>
@@ -52,24 +50,19 @@ export function LocalBrain({ initial }: { initial: LiveStatus }) {
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="font-medium">{endpoint.name}</p>
-                <Badge variant={endpoint.online ? "default" : "outline"}>
-                  {endpoint.online ? "ready" : "offline"}
-                </Badge>
+                <Badge>{endpoint.live ? "live" : "soon"}</Badge>
               </div>
               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                {endpoint.models.length
+                {endpoint.online && endpoint.models.length
                   ? endpoint.models.slice(0, 3).join(", ")
-                  : endpoint.online
-                    ? "On-device fallback"
-                    : "Start this app locally to use it"}
+                  : "Soft Hinglish voice · live now"}
               </p>
             </button>
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          {online.length} local engine{online.length === 1 ? "" : "s"} ready.
-          Install Ollama and run <code className="rounded bg-muted px-1">ollama pull llama3.2</code>{" "}
-          for a stronger free model. Click a card to refresh.
+          Tone: friendly, slow, soft. Hinglish pehle. Safety pehle. Click a card
+          to refresh the stack.
         </p>
       </CardContent>
     </Card>

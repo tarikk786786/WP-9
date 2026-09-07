@@ -45,9 +45,10 @@ export type ScanSnapshot = {
 export type LlmEndpoint = {
   id: string;
   name: string;
-  kind: "ollama" | "openai-compatible" | "transformers";
+  kind: "ollama" | "openai-compatible" | "transformers" | "hinglish";
   baseUrl?: string;
   online: boolean;
+  live: boolean;
   models: string[];
 };
 

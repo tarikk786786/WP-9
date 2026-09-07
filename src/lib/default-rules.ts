@@ -4,9 +4,8 @@ export const defaultRules: BotRules = {
   enabled: true,
   botName: "Relay",
   defaultReply:
-    "Thanks for your message. I got it and will reply here as soon as I can.",
-  greetingReply:
-    "Hi — thanks for writing. This inbox is watched by my auto-reply. Tell me what you need and I will follow up.",
+    "Message mil gaya, thank you. Main ise shaanti se dekh raha hoon — aap kuch aur likhna chaho to likh do, main jaldi wapas aaunga.",
+  greetingReply: "Hey, kaise ho? Main yahin hoon. Aaram se bolo kya chal raha hai.",
   includeName: true,
   useLocalLlm: true,
   preferredModel: "",
@@ -15,30 +14,30 @@ export const defaultRules: BotRules = {
   openHour: 9,
   closeHour: 18,
   afterHoursReply:
-    "I am away from this chat right now. I will reply during business hours (9:00–18:00).",
+    "Abhi thoda late ho gaya hai. Main 9 se 6 ke beech calmly reply karta hoon — message chhod do, main aake dekh lunga.",
   keywordRules: [
     {
       id: "hello",
       keyword: "hello",
-      reply: "Hello! How can I help you today?",
+      reply: "Hey, kaise ho? Main yahin hoon, bilkul calmly. Bolo kya haal hai.",
       enabled: true,
     },
     {
       id: "hi",
       keyword: "hi",
-      reply: "Hi there — what can I help with?",
+      reply: "Hi… aaram se. Main sun raha hoon. Kya chal raha hai?",
       enabled: true,
     },
     {
       id: "hours",
       keyword: "hours",
-      reply: "I usually reply between 9:00 and 18:00. Leave a note and I will get back to you.",
+      reply: "Main usually 9 se 6 tak yahin hota hoon. Tension mat lo, note chhod do.",
       enabled: true,
     },
     {
       id: "price",
       keyword: "price",
-      reply: "Thanks for asking about pricing. Share what you need and I will send details shortly.",
+      reply: "Price wali baat samajh gaya. Batao kya chahiye, main detail narmi se bhej dunga.",
       enabled: true,
     },
   ],
