@@ -1,4 +1,4 @@
-import { polishToHinglish, writeHinglishReply } from "@/lib/hinglish-brain";
+import { isLowQualityReply, polishToHinglish, writeHinglishReply } from "@/lib/hinglish-brain";
 import { generateLocalReply } from "@/lib/local-llm";
 import { decideReply, type ReplyDecision } from "@/lib/reply-engine";
 import { inspectIncoming, isRateLimited, sanitizeOutgoing } from "@/lib/safety";
@@ -46,11 +46,21 @@ export async function composeReply(options: {
 
   const hint = fallback.matchedRule;
 
+  if (hint === "greeting" || hint === "after-hours") {
+    return {
+      action: "reply",
+      text: sanitizeOutgoing(writeHinglishReply(text, fromName, rules, hint)),
+      matchedRule: hint,
+      engine: "hinglish-live",
+    };
+  }
+
   if (rules.useLocalLlm !== false) {
     try {
       const generated = await generateLocalReply(text, fromName, rules);
-      const clean = sanitizeOutgoing(polishToHinglish(generated.text, fromName));
-      if (clean) {
+      const polished = polishToHinglish(generated.text, fromName);
+      const clean = sanitizeOutgoing(polished);
+      if (clean && !isLowQualityReply(clean)) {
         return {
           action: "reply",
           text: clean,

@@ -4,7 +4,19 @@ export type ReplyDecision =
   | { action: "skip"; reason: string }
   | { action: "reply"; text: string; matchedRule: string };
 
-const GREETING_WORDS = new Set(["hi", "hello", "hey", "hola", "salam", "yo"]);
+const GREETING_WORDS = new Set([
+  "hi",
+  "hello",
+  "hey",
+  "hola",
+  "salam",
+  "salaam",
+  "yo",
+  "namaste",
+  "namaskar",
+  "hii",
+  "helo",
+]);
 
 function hourInTimezone(date: Date, timezone: string): number | null {
   try {
@@ -85,7 +97,11 @@ export function decideReply(
     };
   }
 
-  if (words.length <= 3 && words.every((word) => GREETING_WORDS.has(word.replace(/[!?.,]/g, "")))) {
+  if (
+    /^(kaise ho|kya haal|kya haal hai|whats? ?up)\b/i.test(lower) ||
+    (words.length <= 4 &&
+      words.every((word) => GREETING_WORDS.has(word.replace(/[!?.,]/g, ""))))
+  ) {
     return {
       action: "reply",
       text: personalize(rules.greetingReply, fromName, rules.includeName),

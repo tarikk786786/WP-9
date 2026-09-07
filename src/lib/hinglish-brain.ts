@@ -86,6 +86,16 @@ function softenFact(fact: string) {
   return `${trimmed} Aap tension mat lena, main yahin hoon.`;
 }
 
+export function isLowQualityReply(text: string) {
+  const words = text.trim().split(/\s+/);
+  if (words.length === 0) return true;
+  const helloHits = (text.match(/\bhello\b/gi) ?? []).length;
+  if (helloHits >= 3) return true;
+  const unique = new Set(words.map((word) => word.toLowerCase().replace(/[^a-z]/g, "")));
+  if (words.length > 8 && unique.size <= 3) return true;
+  return false;
+}
+
 export function polishToHinglish(text: string, fromName: string) {
   const name = softName(fromName);
   let clean = text.replace(/\s+/g, " ").trim();
