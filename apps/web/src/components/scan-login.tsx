@@ -129,7 +129,9 @@ export function ScanLogin({
         signal: controller.signal,
       });
       if (!response.ok || !response.body) {
-        throw new Error("Login start nahi hua. Dubara try karo.");
+        throw new Error(
+          "WhatsApp worker reach nahi ho raha. npm run worker chalao, ya Vercel pe WORKER_API_URL set karo.",
+        );
       }
 
       const reader = response.body.getReader();
