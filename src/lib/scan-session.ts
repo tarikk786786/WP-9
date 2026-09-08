@@ -325,22 +325,30 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
         ?.output?.statusCode;
-      const loggedOut =
+      if (manager.sock === sock) manager.sock = null;
+
+      const deadCreds =
         statusCode === DisconnectReason.loggedOut ||
         statusCode === DisconnectReason.forbidden ||
         statusCode === DisconnectReason.badSession ||
         statusCode === DisconnectReason.multideviceMismatch;
-      if (manager.sock === sock) manager.sock = null;
-      if (loggedOut) {
+
+      if (deadCreds) {
         cancelReconnect(manager);
         await clearSavedSession();
-        manager.snapshot = {
-          ...emptySnapshot(),
-          phase: "logged_out",
-          error: "WhatsApp ne is device ko logout kar diya. Naya QR scan karo.",
-        };
+        manager.snapshot = await snapshotWithSave({
+          phase: "connecting",
+          qrDataUrl: null,
+          pairingCode: null,
+          phone: null,
+          error:
+            "Pehle wala QR/login band ho gaya. Naya QR aa raha hai — usi ko scan karo.",
+        });
+        manager.reconnectDelay = 800;
+        scheduleReconnect(manager);
         return;
       }
+
       const linked = await hasSavedSession();
       const replaced = statusCode === DisconnectReason.connectionReplaced;
       if (linked) {
@@ -361,6 +369,7 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
           pairingCode: null,
           error: "QR expire / drop. Naya QR aa raha hai — wahi scan karo.",
         });
+        manager.reconnectDelay = 800;
       }
       scheduleReconnect(manager);
     }

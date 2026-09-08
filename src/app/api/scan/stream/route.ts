@@ -29,7 +29,8 @@ async function streamLogin(pairingPhone?: string) {
           const snapshot = getScanSnapshot();
           send({ snapshot, inbox: await getInbox() });
           if (snapshot.phase === "logged_out") {
-            break;
+            await new Promise((resolve) => setTimeout(resolve, 800));
+            void startScanSession(pairingPhone);
           }
         }
       } catch (error) {

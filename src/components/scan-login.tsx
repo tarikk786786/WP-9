@@ -166,8 +166,7 @@ export function ScanLogin({
             setBusy(false);
             clearLocalArchive();
             setSavedHere(false);
-            stopLogin();
-            return;
+            continue;
           }
         }
       }
@@ -392,7 +391,13 @@ export function ScanLogin({
               onClick={() => void readStream()}
               disabled={busy || scan.phase === "ready"}
             >
-              {busy && !phone ? "QR aa raha hai…" : remembered ? "Reconnect" : "Show QR"}
+              {busy && !phone
+                ? "QR aa raha hai…"
+                : scan.error
+                  ? "Naya QR"
+                  : remembered
+                    ? "Reconnect"
+                    : "Show QR"}
             </Button>
             <Button
               variant="outline"
