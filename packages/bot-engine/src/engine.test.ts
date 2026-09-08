@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { defaultAutomationRules, defaultBotSettings, defaultFaqs } from "@bot/shared";
 import { isDuplicate, normalizeIncoming, resetDuplicates } from "./parser.ts";
 import { isWithinBusinessHours, matchFaq, matchRule, routeMessage } from "./router.ts";
-import { buildPrompt } from "./ai/provider.ts";
+import { analyzeMessage, buildPrompt, planReplyEngines, scoreReplyCompleteness, writeCompleteFallback } from "./ai/provider.ts";
 
 describe("parser", () => {
   it("normalizes a text message and skips fromMe", () => {
@@ -106,5 +106,64 @@ describe("router", () => {
     });
     assert.match(prompt.system, /real person/i);
     assert.match(prompt.user, /Amina/);
+  });
+
+  it("does not lock a multi-ask first message onto a single FAQ", () => {
+    const decision = routeMessage({
+      ...base,
+      message: {
+        ...base.message,
+        text: "hey, dezo se website banana hai. process kya hai, price kaise decide hota hai, aur site kahan dekhun?",
+      },
+    });
+    assert.notEqual(decision.source, "faq");
+    assert.notEqual(decision.source, "rule");
+  });
+});
+
+describe("message analysis and engine pick", () => {
+  it("extracts every ask on a first lead message", () => {
+    const analysis = analyzeMessage(
+      "hey tarik, dezo se website banana hai. process kya hai? price kaise decide hota hai? portfolio kahan hai?",
+      { isFirstMessage: true },
+    );
+    assert.equal(analysis.isFirstMessage, true);
+    assert.ok(analysis.wantsAllAnswers);
+    assert.ok(analysis.questions.length >= 2);
+    assert.ok(analysis.intents.includes("studio"));
+    assert.ok(analysis.intents.includes("website") || analysis.intents.includes("project"));
+    assert.ok(analysis.intents.includes("process"));
+    assert.ok(analysis.intents.includes("pricing"));
+    assert.equal(analysis.preferredStyle, "complete");
+  });
+
+  it("keeps a lone greeting short", () => {
+    const analysis = analyzeMessage("hey", { isFirstMessage: true });
+    assert.equal(analysis.complexity, "simple");
+    assert.equal(analysis.intents[0], "greeting");
+  });
+
+  it("picks gpt-4o first for a complete lead when OpenAI is available", () => {
+    const previous = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "sk-test";
+    delete process.env.GROQ_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    const analysis = analyzeMessage("website banana hai, process aur rate dono bata, dezo ke through", {
+      isFirstMessage: true,
+    });
+    const plans = planReplyEngines(analysis);
+    assert.equal(plans[0]?.engine, "gpt-4o");
+    assert.ok((plans[0]?.maxTokens ?? 0) >= 300);
+    if (previous) process.env.OPENAI_API_KEY = previous;
+    else delete process.env.OPENAI_API_KEY;
+  });
+
+  it("writes a fallback that answers more than one topic", () => {
+    const analysis = analyzeMessage("dezo studio hai kya, website kahan hai, rate kaise?", { isFirstMessage: true });
+    const text = writeCompleteFallback(analysis);
+    assert.match(text, /dezo/i);
+    assert.match(text, /tarikislam\.in/i);
+    assert.match(text, /rate|scope|number/i);
+    assert.ok(scoreReplyCompleteness(text, analysis) >= 0.5);
   });
 });

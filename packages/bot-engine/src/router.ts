@@ -1,5 +1,6 @@
 import type { AutomationRule, BotSettings, Faq, NormalizedMessage } from "@bot/shared";
 import type { BotDecision } from "@bot/shared";
+import { analyzeMessage } from "./ai/analyze.ts";
 
 const COMMANDS = /^(help|stop|start|menu)$/i;
 const HANDOFF = /\b(agent|human|person|staff|talk to (a )?human)\b/i;
@@ -68,13 +69,41 @@ export function matchRule(text: string, rules: AutomationRule[]): AutomationRule
 }
 
 export function matchFaq(text: string, faqs: Faq[]): Faq | null {
+  return matchAllFaqs(text, faqs)[0] ?? null;
+}
+
+export function matchAllFaqs(text: string, faqs: Faq[]): Faq[] {
   const lower = text.toLowerCase();
-  const enabled = faqs.filter((f) => f.enabled).sort((a, b) => a.priority - b.priority);
-  for (const faq of enabled) {
-    if (lower.includes(faq.question.toLowerCase())) return faq;
-    if (faq.keywords.some((k) => k && lower.includes(k.toLowerCase()))) return faq;
+  return faqs
+    .filter((f) => f.enabled)
+    .sort((a, b) => a.priority - b.priority)
+    .filter((faq) => {
+      if (lower.includes(faq.question.toLowerCase())) return true;
+      return faq.keywords.some((k) => k && lower.includes(k.toLowerCase()));
+    });
+}
+
+export function matchAllRules(text: string, rules: AutomationRule[]): AutomationRule[] {
+  const lower = text.toLowerCase();
+  const enabled = rules.filter((r) => r.enabled).sort((a, b) => a.priority - b.priority);
+  const hits: AutomationRule[] = [];
+  for (const rule of enabled) {
+    const needle = rule.triggerValue.trim();
+    if (!needle) continue;
+    if (rule.triggerType === "exact" && lower === needle.toLowerCase()) hits.push(rule);
+    else if (rule.triggerType === "contains" && lower.includes(needle.toLowerCase())) hits.push(rule);
+    else if (rule.triggerType === "keyword") {
+      const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegExp(needle)}([^a-z0-9]|$)`, "i");
+      if (pattern.test(lower)) hits.push(rule);
+    } else if (rule.triggerType === "regex") {
+      try {
+        if (new RegExp(needle, "i").test(text) && needle.length < 80) hits.push(rule);
+      } catch {
+        continue;
+      }
+    }
   }
-  return null;
+  return hits;
 }
 
 export function routeMessage(input: {
@@ -123,20 +152,23 @@ export function routeMessage(input: {
     return { action: "reply", text: "dekh liya. text mein likh do kya chahiye", source: "fallback" };
   }
 
+  const analysis = analyzeMessage(text, { isFirstMessage: true });
+  const exclusiveCanned = !analysis.wantsAllAnswers && analysis.complexity !== "lead";
+
   const rule = matchRule(text, rules);
-  if (rule) {
+  if (rule && exclusiveCanned) {
     if (/agent|human/.test(rule.triggerValue)) {
       return { action: "handoff", text: settings.humanHandoffMessage, source: "handoff" };
     }
     return { action: "reply", text: rule.response, source: "rule", intent: rule.id };
   }
 
-  if (settings.faqEnabled) {
+  if (settings.faqEnabled && exclusiveCanned) {
     const faq = matchFaq(text, faqs);
     if (faq) return { action: "reply", text: faq.answer, source: "faq", intent: faq.id };
   }
 
-  if (knowledgeHits?.length) {
+  if (knowledgeHits?.length && exclusiveCanned) {
     return {
       action: "reply",
       text: knowledgeHits[0].slice(0, 220),

@@ -21,7 +21,8 @@ export function speakAsTarik(text: string) {
     .replace(/\bpublic facts[^.]*\.\s*/gi, "")
     .replace(/\bcalmly wapas aaunga\.?\s*/gi, "")
     .replace(/\bExtra detail ho to likh dena[^.]*\.\s*/gi, "")
-    .replace(/\s+/g, " ")
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 

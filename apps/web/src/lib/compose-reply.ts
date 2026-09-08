@@ -1,4 +1,4 @@
-import { generateBestHumanReply } from "@bot/engine";
+import { analyzeMessage, generateBestHumanReply, writeCompleteFallback } from "@bot/engine";
 import { defaultBotSettings } from "@bot/shared";
 import {
   isLowQualityReply,
@@ -83,7 +83,15 @@ export async function composeReply(options: {
   }
 
   const matched = greeting ? "greeting" : hint;
-  const suggested = fallback.action === "reply" ? fallback.text : writeHinglishReply(text, fromName, rules, matched);
+  const analysis = analyzeMessage(text, { isFirstMessage: true });
+  const keywordFacts = rules.keywordRules
+    .filter((rule) => rule.enabled)
+    .map((rule) => `${rule.keyword}: ${rule.reply}`);
+  const suggested = analysis.wantsAllAnswers
+    ? writeCompleteFallback(analysis, [...keywordFacts, rules.customFacts].filter(Boolean))
+    : fallback.action === "reply"
+      ? fallback.text
+      : writeHinglishReply(text, fromName, rules, matched);
 
   if (rules.useLocalLlm !== false) {
     const settings = defaultBotSettings();
@@ -106,10 +114,12 @@ export async function composeReply(options: {
           settings,
           customerName: fromName,
           recent: [],
-          faqs: [],
+          faqs: keywordFacts,
           knowledge: rules.customFacts ? [rules.customFacts] : [],
-          intent: matched,
+          intent: analysis.intents.join(","),
           suggested,
+          analysis,
+          isFirstMessage: true,
         },
       );
       if (cloud?.text) {
@@ -127,5 +137,11 @@ export async function composeReply(options: {
     }
   }
 
-  return finish(writeHinglishReply(text, fromName, rules, matched), matched, "tarik-live");
+  return finish(
+    analysis.wantsAllAnswers
+      ? writeCompleteFallback(analysis, keywordFacts)
+      : writeHinglishReply(text, fromName, rules, matched),
+    matched,
+    analysis.wantsAllAnswers ? "complete-fallback" : "tarik-live",
+  );
 }

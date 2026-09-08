@@ -176,14 +176,14 @@ export function isLowQualityReply(text: string) {
   const helloHits = (text.match(/\bhello\b/gi) ?? []).length;
   if (helloHits >= 3) return true;
   if (isRepetitive(text)) return true;
-  if (text.length > 240) return true;
+  if (text.length > 900) return true;
   const unique = new Set(words.map((word) => word.toLowerCase().replace(/[^a-z]/g, "")));
   if (words.length > 8 && unique.size <= 3) return true;
   return false;
 }
 
 export function polishToHinglish(text: string) {
-  let clean = text.replace(/\s+/g, " ").trim();
+  let clean = text.replace(/[^\S\n]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
   clean = clean.replace(/^(hi|hello|hey)\s+[A-Z][a-z]+[,—–-]\s*/i, "");
   clean = clean.replace(/\bon behalf of (tarik|him|the owner)\b/gi, "");
   clean = clean.replace(/\bI will\b/gi, "main");

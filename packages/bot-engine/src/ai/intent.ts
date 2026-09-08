@@ -1,1 +1,1 @@
-export { detectIntent } from "./provider.ts";
+export { detectIntent, analyzeMessage } from "./provider.ts";

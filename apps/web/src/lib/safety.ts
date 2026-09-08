@@ -50,12 +50,12 @@ export function inspectIncoming(text: string): SafetyVerdict {
 }
 
 export function sanitizeOutgoing(text: string): string {
-  let clean = text.replace(/\s+/g, " ").trim();
+  let clean = text.replace(/[^\S\n]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
   clean = clean.replace(/^(as an ai|as a language model|i am an ai)[, ]*/i, "");
   clean = clean.replace(/<\/?[a-z][^>]*>/gi, "");
   clean = clean.replace(/Message Tarik tak pahunch gaya\.?\s*/gi, "");
-  if (clean.length > 220) {
-    clean = `${clean.slice(0, 217).trim()}…`;
+  if (clean.length > 900) {
+    clean = `${clean.slice(0, 897).trim()}…`;
   }
   return clean;
 }

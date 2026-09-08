@@ -18,7 +18,7 @@ import {
   upsertCustomer,
   wasProcessed,
 } from "@bot/database";
-import { generateBestHumanReply, isDuplicate, normalizeIncoming, routeMessage } from "@bot/engine";
+import { analyzeMessage, generateBestHumanReply, isDuplicate, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback } from "@bot/engine";
 
 type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
 
@@ -352,6 +352,11 @@ async function openSocket(pairingPhone?: string) {
         });
         const history = await recentMessages(convo.id);
         const knowledge = await knowledgeSearch(normalized.text);
+        const inboundCount = history.filter((m) => m.direction === "in").length;
+        const analysis = analyzeMessage(normalized.text, {
+          isFirstMessage: inboundCount <= 1,
+          inboundCount,
+        });
         const routed = routeMessage({
           message: normalized,
           settings,
@@ -366,6 +371,10 @@ async function openSocket(pairingPhone?: string) {
         }
         if (routed.action === "skip") continue;
         if (settings.enabled === false) continue;
+        const faqFacts = matchAllFaqs(normalized.text, faqs).map((f) => `${f.question}: ${f.answer}`);
+        const ruleFacts = matchAllRules(normalized.text, rules)
+          .filter((r) => !/agent|human/.test(r.triggerValue))
+          .map((r) => r.response);
         const ai =
           settings.aiEnabled !== false
             ? await generateBestHumanReply(normalized, {
@@ -375,13 +384,21 @@ async function openSocket(pairingPhone?: string) {
                   .slice()
                   .reverse()
                   .map((m) => ({ role: m.direction === "in" ? "user" : "assistant", text: m.text })),
-                faqs: faqs.map((f) => `${f.question}: ${f.answer}`),
-                knowledge,
-                intent: routed.intent ?? routed.source,
-                suggested: routed.text,
+                faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
+                knowledge: [...knowledge, ...ruleFacts],
+                intent: analysis.intents.join(","),
+                suggested: analysis.wantsAllAnswers
+                  ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge])
+                  : routed.text,
+                analysis,
+                isFirstMessage: inboundCount <= 1,
               })
             : null;
-        const text = ai?.text || routed.text;
+        const text =
+          ai?.text ||
+          (analysis.wantsAllAnswers
+            ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge])
+            : routed.text);
         if (!text) continue;
         await sock.sendMessage(jid, { text });
         manager.snapshot.lastMessageSentAt = new Date().toISOString();

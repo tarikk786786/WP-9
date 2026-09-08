@@ -29,7 +29,8 @@ function systemPrompt(rules: BotRules, fromName: string) {
 
   return [
     "You are Tarik, texting on WhatsApp like a real person. First person only. Never an assistant.",
-    "1 short line, maybe 2. Casual Hinglish. lowercase ok. No bio, no job titles, no website unless they asked.",
+    "If they asked several things, answer every ask in short lines. Otherwise 1–2 lines.",
+    "Casual Hinglish. lowercase ok. No bio dump. No website unless they asked.",
     "Never say message received, public facts, calmly, on behalf, or Main Tarik hoon — forensics.",
     "Do not paste greetings and defaults together. Just answer what they said.",
     "Never invent prices or credentials.",
@@ -133,7 +134,7 @@ async function generateOpenAi(baseUrl: string, model: string, prompt: string, sy
       body: JSON.stringify({
         model,
         temperature: 0.35,
-        max_tokens: 160,
+        max_tokens: 360,
         messages: [
           { role: "system", content: system },
           { role: "user", content: prompt },
