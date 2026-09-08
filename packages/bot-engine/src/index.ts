@@ -12,4 +12,5 @@ export {
   scoreReplyCompleteness,
 } from "./ai/provider.ts";
 export { analyzeTurn, planTurn, inferUserStyle } from "./orchestrate/intelligence.ts";
+export { readMessage, splitHumanAsks, inferMood } from "./orchestrate/read.ts";
 export { debounceChat, combineBurstText } from "./orchestrate/debounce.ts";

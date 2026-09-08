@@ -1,3 +1,5 @@
+import { readMessage, splitHumanAsks } from "../orchestrate/read.ts";
+
 export type MessageIntent =
   | "greeting"
   | "identity"
@@ -32,6 +34,9 @@ export type MessageAnalysis = {
   wantsAllAnswers: boolean;
   urgency: "low" | "normal" | "high";
   preferredStyle: "short" | "complete";
+  asks: string[];
+  meaning: string;
+  mood: "neutral" | "warm" | "stressed" | "casual" | "frustrated";
 };
 
 const INTENT_PATTERNS: Array<{ intent: MessageIntent; pattern: RegExp }> = [
@@ -67,27 +72,7 @@ const HINGLISH_MARKERS =
   /\b(kya|hai|haan|nahi|chahiye|bolo|kaam|thoda|mujhe|aap|tum|kaise|kitna|andaz|dekh|likh|bhej|scene)\b/i;
 
 export function splitAsks(text: string): string[] {
-  const trimmed = text.trim();
-  if (!trimmed) return [];
-  const numbered = trimmed
-    .split(/\n+|(?=\b\d+[.)]\s)/)
-    .map((part) => part.replace(/^\d+[.)]\s*/, "").trim())
-    .filter((part) => part.length > 8);
-  if (numbered.length > 1) return numbered;
-
-  const byQuestion = trimmed
-    .split(/(?<=[?؟])\s+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (byQuestion.length > 1) return byQuestion;
-
-  const byAnd = trimmed
-    .split(/\s+(?:aur|and|also|plus)\s+/i)
-    .map((part) => part.trim())
-    .filter((part) => part.length > 12);
-  if (byAnd.length > 1) return byAnd;
-
-  return [trimmed];
+  return splitHumanAsks(text);
 }
 
 function detectLanguage(text: string): MessageAnalysis["language"] {
@@ -102,8 +87,9 @@ export function analyzeMessage(
   options: { isFirstMessage?: boolean; inboundCount?: number } = {},
 ): MessageAnalysis {
   const body = text.trim();
+  const reading = readMessage(body);
   const isFirstMessage = options.isFirstMessage ?? (options.inboundCount ?? 0) <= 1;
-  const questions = splitAsks(body);
+  const questions = reading.asks.length ? reading.asks : splitAsks(body);
   const intents = INTENT_PATTERNS.filter((row) => row.pattern.test(body)).map((row) => row.intent);
   const unique = [...new Set(intents.length ? intents : (["general"] as MessageIntent[]))];
   if (isAskingIfMachine(body)) {
@@ -146,6 +132,9 @@ export function analyzeMessage(
     wantsAllAnswers,
     urgency,
     preferredStyle: wantsAllAnswers || (isFirstMessage && wordCount > 8) ? "complete" : "short",
+    asks: reading.asks,
+    meaning: reading.meaning,
+    mood: reading.mood,
   };
 }
 

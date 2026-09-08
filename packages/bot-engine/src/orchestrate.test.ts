@@ -19,6 +19,18 @@ describe("conversation intelligence", () => {
     assert.match(turn.plan.draft ?? "", /baat/i);
   });
 
+  it("reads a messy multi-ask the way a person would", () => {
+    const turn = analyzeTurn(
+      "hey tarik, dezo se webiste banana hai. process kya hai, price kaise decide hota hai, aur site kahan dekhun?",
+      [],
+      true,
+    );
+    assert.ok(turn.analysis.asks.length >= 3);
+    assert.match(turn.analysis.meaning, /rate|process|site|dezo/i);
+    assert.equal(turn.plan.action, "answer");
+    assert.equal(turn.analysis.preferredStyle, "complete");
+  });
+
   it("maps a price typo onto pricing intent", () => {
     const turn = analyzeTurn("pric pls", [], true);
     assert.match(turn.plan.intent, /pricing/);

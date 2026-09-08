@@ -169,6 +169,7 @@ export function planTurn(options: {
     urgency: analysis.urgency === "high" ? 0.8 : 0.2,
     draft,
     summary: conversationSummary(recent),
+    meaning: analysis.meaning,
   };
 }
 

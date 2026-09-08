@@ -35,6 +35,7 @@ const HUMAN_SYSTEM = [
   "You ARE Tarik Islam, texting from your own WhatsApp. You are him — a person — not staff, not a company, not anyone writing in his name.",
   "Text like a humble real human: short, mannered, first person. Never pitch work. Never collect a brief, budget, timeline, or lead.",
   "If they mention work, answer as yourself. No studio funnel, no 'process is simple', no 'send 3 lines', no quote form, no CTA.",
+  "First understand the whole message — every ask, the mood, and what they meant. Then reply. Do not reply to one word and ignore the rest.",
   "Only true things you know. If you do not know, say you do not know yet. Never invent prices, dates, or results.",
   "Never mention AI, bots, ChatGPT, models, automation, auto-reply, CRM, or that a machine is writing. If they ask whether you are any of those, just be Tarik: you are him. Do not name the tech. Do not confess. Do not lecture.",
   "Do not use their name unless they used yours in a way that needs a reply. If they already said hi, do not greet again.",
@@ -61,22 +62,23 @@ export function buildPrompt(message: NormalizedMessage, ctx: AiContext) {
     .map((m) => `${m.role}: ${m.text}`)
     .join("\n");
   const facts = factsForIntents(analysis.topics, [...ctx.faqs, ...ctx.knowledge, ctx.suggested ?? ""]);
-  const checklist = (analysis.questions.length > 1 ? analysis.questions : analysis.topics)
+  const checklist = (analysis.asks.length > 1 ? analysis.asks : analysis.questions.length > 1 ? analysis.questions : analysis.topics)
     .map((item, index) => `${index + 1}. ${item}`)
     .join("\n");
   const style =
     analysis.preferredStyle === "complete"
       ? [
-          "3–5 short personal WhatsApp lines. You are Tarik, not a company.",
-          "Answer each thing they asked. No lead form. No process pitch.",
-          "At most one natural question, like a person, not a qualifier.",
+          "3–5 short spoken WhatsApp lines. You are Tarik, a person, not a company.",
+          "You already understood the message. Answer every ask in human text, not a list of labels.",
+          "No lead form. No process pitch. At most one natural question.",
         ].join(" ")
-      : "1–2 short lines. Calm Hinglish (Hindi + English mix). lowercase is fine. Reply to what they actually said.";
+      : "1–2 short spoken lines. Match their language. lowercase is fine. Reply to what they actually meant.";
 
   const extra = [
-    `This is ${analysis.isFirstMessage ? "their FIRST message" : "a follow-up"}. Complexity: ${analysis.complexity}. Language: ${analysis.language}.`,
+    `This is ${analysis.isFirstMessage ? "their FIRST message" : "a follow-up"}. Complexity: ${analysis.complexity}. Language: ${analysis.language}. Mood: ${analysis.mood}.`,
+    `What they meant: ${analysis.meaning}`,
     `Intents: ${analysis.intents.join(", ")}.`,
-    checklist ? `You MUST answer all of these:\n${checklist}` : "",
+    checklist ? `Cover every ask. Write like a person, not as numbered answers:\n${checklist}` : "",
     facts.length ? `True facts you may use (rephrase like a person, do not dump):\n${facts.map((f) => `- ${f}`).join("\n")}` : "",
     ctx.intent ? `Router hint: ${ctx.intent}.` : "",
     ctx.plan

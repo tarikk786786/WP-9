@@ -19,7 +19,7 @@ export function checkReplyQuality(text: string, analysis: MessageAnalysis, facts
   }
   if (analysis.preferredStyle === "complete") {
     const lines = text.split(/\n+/).filter((line) => line.trim().length > 8);
-    if (analysis.topics.length > 2 && lines.length < 2) reasons.push("too-thin");
+    if ((analysis.topics.length > 2 || analysis.asks.length > 2) && lines.length < 2) reasons.push("too-thin");
   }
   if (analysis.complexity === "simple" && text.length > 180) reasons.push("too-long");
   return { ok: reasons.length === 0, reasons };

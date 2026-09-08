@@ -33,4 +33,5 @@ export type ResponsePlan = {
   urgency: number;
   draft?: string;
   summary: string;
+  meaning?: string;
 };

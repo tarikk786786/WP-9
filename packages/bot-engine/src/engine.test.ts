@@ -137,6 +137,8 @@ describe("message analysis and engine pick", () => {
     assert.ok(analysis.intents.includes("process"));
     assert.ok(analysis.intents.includes("pricing"));
     assert.equal(analysis.preferredStyle, "complete");
+    assert.ok(analysis.asks.length >= 3);
+    assert.match(analysis.meaning, /rate|process|portfolio|site/i);
   });
 
   it("keeps a lone greeting short", () => {

@@ -16,7 +16,7 @@ const TOPIC_SIGNALS: Partial<Record<MessageIntent, RegExp>> = {
   forensics: /\b(forensic|evidence)\b/i,
   security: /\b(security|cyber)\b/i,
   "ai-work": /\b(ai|rag|agent)\b/i,
-  project: /\b(brief|banana|scope|kya)\b/i,
+  project: /\b(bata|soch|banana|kya|sun)\b/i,
   greeting: /\b(hey|haan|hello|salam|bolo|kya ho raha)\b/i,
 };
 
@@ -28,12 +28,14 @@ export function scoreReplyCompleteness(text: string, analysis: MessageAnalysis):
     const pattern = TOPIC_SIGNALS[topic];
     if (!pattern || pattern.test(text)) hits += 1;
   }
+  const askList = analysis.asks.length > 1 ? analysis.asks : analysis.questions;
   const questionCover =
-    analysis.questions.length <= 1
+    askList.length <= 1
       ? 1
-      : Math.min(1, text.split(/\n|[.!?]/).filter((line) => line.trim().length > 12).length / analysis.questions.length);
+      : Math.min(1, text.split(/\n|[.!?]/).filter((line) => line.trim().length > 12).length / askList.length);
   const topicScore = hits / check.length;
-  return topicScore * 0.7 + questionCover * 0.3;
+  const spoken = /\b(main|haan|nahi|dekh|likh|bolo|theek|tarik)\b/i.test(text) || text.split(/\n/).length >= 2 ? 1 : 0.85;
+  return topicScore * 0.6 + questionCover * 0.25 + spoken * 0.15;
 }
 
 export function missedTopics(text: string, analysis: MessageAnalysis): MessageIntent[] {
