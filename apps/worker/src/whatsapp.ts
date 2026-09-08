@@ -19,7 +19,7 @@ import {
   wasProcessed,
 } from "@bot/database";
 import type { NormalizedMessage } from "@bot/shared";
-import { analyzeMessage, combineBurstText, debounceChat, generateBestHumanReply, isDuplicate, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback } from "@bot/engine";
+import { analyzeMessage, combineBurstText, debounceChat, generateBestHumanReply, isCannedFallback, isDuplicate, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback, writeSpokenReply, avoidRepeat } from "@bot/engine";
 
 type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
 
@@ -197,6 +197,10 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   const history = await recentMessages(convo.id);
   const knowledge = await knowledgeSearch(combined.text);
   const inboundCount = history.filter((m) => m.direction === "in").length;
+  const recent = history
+    .slice()
+    .reverse()
+    .map((m) => ({ role: (m.direction === "in" ? "user" : "assistant") as const, text: m.text }));
   const analysis = analyzeMessage(combined.text, {
     isFirstMessage: inboundCount <= batch.length,
     inboundCount,
@@ -219,31 +223,34 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   const ruleFacts = matchAllRules(combined.text, rules)
     .filter((r) => !/agent|human/.test(r.triggerValue))
     .map((r) => r.response);
+  const spoken = writeSpokenReply(combined.text, analysis, recent);
+  const suggested = analysis.wantsAllAnswers
+    ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge], combined.text)
+    : isCannedFallback(routed.text)
+      ? spoken
+      : routed.text;
   const ai =
     settings.aiEnabled !== false
       ? await generateBestHumanReply(combined, {
           settings,
           customerName: combined.fromName,
-          recent: history
-            .slice()
-            .reverse()
-            .map((m) => ({ role: m.direction === "in" ? "user" : "assistant", text: m.text })),
+          recent,
           faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
           knowledge: [...knowledge, ...ruleFacts],
           intent: analysis.intents.join(","),
-          suggested: analysis.wantsAllAnswers
-            ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge])
-            : routed.text,
+          suggested,
           analysis,
           isFirstMessage: inboundCount <= batch.length,
           messageType: combined.type,
         })
       : null;
-  const text =
+  let text =
     ai?.text ||
     (analysis.wantsAllAnswers
-      ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge])
-      : routed.text);
+      ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge], combined.text)
+      : spoken);
+  if (!text || isCannedFallback(text)) text = spoken;
+  text = avoidRepeat(text, recent);
   if (!text) return;
   await sock.sendMessage(jid, { text });
   manager.snapshot.lastMessageSentAt = new Date().toISOString();

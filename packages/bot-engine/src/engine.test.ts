@@ -94,6 +94,7 @@ describe("router", () => {
       message: { ...base.message, text: "can we discuss a custom forensics brief tomorrow" },
     });
     assert.equal(decision.source, "fallback");
+    assert.doesNotMatch(decision.text, /^dekh liya\.?\s*bolo/i);
   });
 
   it("asks the model to sound like a person", () => {

@@ -1,4 +1,4 @@
-import { analyzeMessage, generateBestHumanReply, writeCompleteFallback } from "@bot/engine";
+import { analyzeMessage, generateBestHumanReply, isCannedFallback, writeCompleteFallback, writeSpokenReply } from "@bot/engine";
 import { defaultBotSettings } from "@bot/shared";
 import {
   isLowQualityReply,
@@ -87,11 +87,12 @@ export async function composeReply(options: {
   const keywordFacts = rules.keywordRules
     .filter((rule) => rule.enabled)
     .map((rule) => `${rule.keyword}: ${rule.reply}`);
-  const suggested = analysis.wantsAllAnswers
-    ? writeCompleteFallback(analysis, [...keywordFacts, rules.customFacts].filter(Boolean))
+  let suggested = analysis.wantsAllAnswers
+    ? writeCompleteFallback(analysis, [...keywordFacts, rules.customFacts].filter(Boolean), text)
     : fallback.action === "reply"
       ? fallback.text
       : writeHinglishReply(text, fromName, rules, matched);
+  if (isCannedFallback(suggested)) suggested = writeSpokenReply(text, analysis);
 
   if (rules.useLocalLlm !== false) {
     const settings = defaultBotSettings();
@@ -139,7 +140,7 @@ export async function composeReply(options: {
 
   return finish(
     analysis.wantsAllAnswers
-      ? writeCompleteFallback(analysis, keywordFacts)
+      ? writeCompleteFallback(analysis, keywordFacts, text)
       : writeHinglishReply(text, fromName, rules, matched),
     matched,
     analysis.wantsAllAnswers ? "complete-fallback" : "tarik-live",

@@ -1,5 +1,6 @@
 import type { MessageAnalysis } from "./analyze.ts";
 import { TARIK_PUBLIC_FACTS } from "./facts.ts";
+import { writeSpokenReply } from "../orchestrate/spoken.ts";
 
 const LINE_FOR: Record<string, string> = {
   greeting: "haan, sun raha hoon",
@@ -21,7 +22,11 @@ const LINE_FOR: Record<string, string> = {
   project: TARIK_PUBLIC_FACTS.project,
 };
 
-export function writeCompleteFallback(analysis: MessageAnalysis, extraFacts: string[] = []): string {
+export function writeCompleteFallback(
+  analysis: MessageAnalysis,
+  extraFacts: string[] = [],
+  incoming = "",
+): string {
   if (analysis.complexity === "simple" && analysis.intents[0] === "greeting") {
     return "haan, kya haal hai";
   }
@@ -53,7 +58,9 @@ export function writeCompleteFallback(analysis: MessageAnalysis, extraFacts: str
     lines.push("jo clear nahi, uspe andaz nahi");
   }
 
-  if (!lines.length) return "dekh liya. bolo";
+  if (!lines.length) {
+    return writeSpokenReply(incoming || analysis.asks.join(" ") || analysis.meaning, analysis);
+  }
   return lines.slice(0, 8).join("\n");
 }
 

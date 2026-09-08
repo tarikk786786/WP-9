@@ -8,6 +8,7 @@ import { recordFailure, recordSuccess } from "../orchestrate/health.ts";
 import { analyzeTurn } from "../orchestrate/intelligence.ts";
 import { polishHumanReply } from "../orchestrate/polish.ts";
 import { checkReplyQuality } from "../orchestrate/quality.ts";
+import { avoidRepeat, isCannedFallback, writeSpokenReply } from "../orchestrate/spoken.ts";
 import type { ResponsePlan, UserStyle } from "../orchestrate/types.ts";
 
 export type { MessageAnalysis } from "./analyze.ts";
@@ -326,11 +327,14 @@ export async function generateBestHumanReply(
   const facts = [...ctx.faqs, ...ctx.knowledge, ctx.suggested ?? ""];
 
   if (plan.draft && (plan.action === "acknowledge" || plan.action === "escalate" || plan.action === "wait" || plan.action === "clarify")) {
-    return { text: plan.draft, engine: `tier0 · ${plan.action}` };
+    return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
   }
   const wordCount = message.text.trim().split(/\s+/).filter(Boolean).length;
   if (plan.draft && plan.action === "ask" && wordCount < 14) {
-    return { text: plan.draft, engine: `tier0 · ${plan.action}` };
+    return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
+  }
+  if (plan.draft && (plan.confidence ?? 0) >= 0.88) {
+    return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
   }
 
   const prompt = buildPrompt(message, { ...ctx, analysis, plan, style: ctx.style ?? turn.style });
@@ -374,20 +378,30 @@ export async function generateBestHumanReply(
       best = labeled;
       bestScore = score;
     }
-    if (score >= 0.72) return labeled;
+    if (score >= 0.72) return { ...labeled, text: avoidRepeat(labeled.text, ctx.recent) };
   }
 
-  if (best) return { ...best, text: coverEveryAsk(best.text, message.text, analysis) };
+  if (best) {
+    const covered = coverEveryAsk(best.text, message.text, analysis);
+    return { ...best, text: avoidRepeat(isCannedFallback(covered) ? writeSpokenReply(message.text, analysis, ctx.recent) : covered, ctx.recent) };
+  }
   if (plan.draft && (plan.action === "ask" || plan.action === "clarify")) {
-    return { text: plan.draft, engine: `tier0 · ${plan.action}` };
+    return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
   }
   if (allowLong) {
+    const complete = coverEveryAsk(writeCompleteFallback(analysis, facts, message.text), message.text, analysis);
     return {
-      text: coverEveryAsk(writeCompleteFallback(analysis, facts), message.text, analysis),
+      text: avoidRepeat(isCannedFallback(complete) ? writeSpokenReply(message.text, analysis, ctx.recent) : complete, ctx.recent),
       engine: "complete-fallback",
     };
   }
-  return plan.draft ? { text: plan.draft, engine: `tier0 · ${plan.action}` } : null;
+  if (plan.draft) {
+    return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
+  }
+  return {
+    text: writeSpokenReply(message.text, analysis, ctx.recent),
+    engine: "spoken",
+  };
 }
 
 export async function generateOpenAiReply(

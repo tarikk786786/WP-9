@@ -1,6 +1,8 @@
 import type { AutomationRule, BotSettings, Faq, NormalizedMessage } from "@bot/shared";
 import type { BotDecision } from "@bot/shared";
 import { analyzeMessage } from "./ai/analyze.ts";
+import { writeCompleteFallback } from "./ai/fallback.ts";
+import { isCannedFallback, writeSpokenReply } from "./orchestrate/spoken.ts";
 
 const COMMANDS = /^(help|stop|start|menu)$/i;
 const HANDOFF = /\b(agent|human|person|staff|talk to (a )?human)\b/i;
@@ -184,5 +186,12 @@ export function routeMessage(input: {
     return { action: "reply", text: settings.welcomeMessage, source: "rule", intent: "welcome" };
   }
 
-  return { action: "reply", text: settings.fallbackMessage, source: "fallback" };
+  const complete = writeCompleteFallback(analysis, knowledgeHits ?? [], text);
+  const spoken = writeSpokenReply(text, analysis);
+  const cannedSettings = isCannedFallback(settings.fallbackMessage);
+  return {
+    action: "reply",
+    text: !isCannedFallback(complete) ? complete : cannedSettings ? spoken : settings.fallbackMessage,
+    source: "fallback",
+  };
 }

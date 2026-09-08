@@ -149,4 +149,32 @@ describe("conversation intelligence", () => {
     assert.doesNotMatch(text, /hey, bolo/i);
     assert.doesNotMatch(text, /definitely/i);
   });
+
+  it("answers the stuck WhatsApp loop without repeating dekh liya. bolo", () => {
+    const turns = [
+      ["Kya", /kya baat/i],
+      ["Aaj ka horoscope kya hai", /nahi dekhta/i],
+      ["Bolo", /sun raha/i],
+      ["Kya hua tumhe", /theek hoon/i],
+    ] as const;
+    for (const [text, expect] of turns) {
+      const turn = analyzeTurn(text, [], false);
+      assert.ok(turn.plan.draft);
+      assert.match(turn.plan.draft ?? "", expect);
+      assert.doesNotMatch(turn.plan.draft ?? "", /^dekh liya\.?\s*bolo/i);
+    }
+    const firstBolo = analyzeTurn("Bolo", [], false);
+    const secondBolo = analyzeTurn("Bolo", [
+      { role: "user", text: "Bolo" },
+      { role: "assistant", text: firstBolo.plan.draft ?? "" },
+    ], false);
+    assert.notEqual(secondBolo.plan.draft, firstBolo.plan.draft);
+    assert.doesNotMatch(secondBolo.plan.draft ?? "", /^dekh liya\.?\s*bolo/i);
+  });
+
+  it("rejects the canned fallback as empty", () => {
+    const analysis = analyzeMessage("kya");
+    const check = checkReplyQuality("dekh liya. bolo", analysis, []);
+    assert.equal(check.ok, false);
+  });
 });

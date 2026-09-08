@@ -1,4 +1,5 @@
 import type { MessageAnalysis } from "../ai/analyze.ts";
+import { isCannedFallback } from "./spoken.ts";
 
 const PRICE_NUMBER = /\b(?:rs\.?|inr|usd|\$|₹)\s?\d|\b\d{3,7}\s?(?:rs|inr|k|lakh)\b/i;
 const BOT_VOICE =
@@ -7,7 +8,7 @@ const LEAD = /\b(brief chahiye|3 lines|kis ke liye, kab tak|scope then|scope pe 
 
 export function checkReplyQuality(text: string, analysis: MessageAnalysis, facts: string[]) {
   const reasons: string[] = [];
-  if (!text.trim()) reasons.push("empty");
+  if (!text.trim() || isCannedFallback(text)) reasons.push("empty");
   if (BOT_VOICE.test(text) || LEAD.test(text)) reasons.push("bot-voice");
   if (PRICE_NUMBER.test(text) && !facts.some((fact) => PRICE_NUMBER.test(fact))) {
     reasons.push("invented-price");

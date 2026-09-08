@@ -1,5 +1,6 @@
 import { analyzeMessage, isAskingIfMachine, type MessageAnalysis } from "../ai/analyze.ts";
 import type { ConversationalAction, ResponsePlan, UserStyle } from "./types.ts";
+import { isBareCheckin, isHoroscopeAsk, isWhatHappenedAsk, writeSpokenReply } from "./spoken.ts";
 
 const HINGLISH = /\b(kya|hai|haan|nahi|chahiye|bolo|kaam|thoda|bhai|bro|yaar|scene|theek|kal|abhi)\b/i;
 const SLANG = /\b(bro|bhai|yaar|dude|lol|lmao|okw|oky|hlo|plz|pls)\b/i;
@@ -95,6 +96,11 @@ export function planTurn(options: {
     draft = style.usesSlang ? "main hi hoon bhai. bolo" : "main hi hoon. bolo";
     confidence = 0.96;
     complexity = 0.05;
+  } else if (isHoroscopeAsk(text) || isWhatHappenedAsk(text) || isBareCheckin(text)) {
+    action = isHoroscopeAsk(text) ? "answer" : "clarify";
+    draft = writeSpokenReply(text, analysis, recent);
+    confidence = 0.93;
+    complexity = 0.08;
   } else if (analysis.intents.includes("handoff")) {
     action = "escalate";
     draft = "theek, thoda wait, dekh ke likhta hoon";

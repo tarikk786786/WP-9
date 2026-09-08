@@ -31,6 +31,22 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
     return pick(lower, ["main hi hoon. bolo", "haan, main hi. kya baat hai", "main yahin hoon. bolo"]);
   }
 
+  if (has(lower, /\b(horoscope|rashifal|zodiac|kundli|janam ?patri|star sign)\b/)) {
+    return "woh nahi dekhta. jo kaam hai, seedha likh";
+  }
+
+  if (/^kya hua( tumhe| tujhe| aapko)?[?.!]*$/i.test(text.trim())) {
+    return "theek hoon. tu bol, kya scene hai";
+  }
+
+  if (/^(bolo|bol)[?.!]*$/i.test(text.trim())) {
+    return "haan, sun raha hoon. kya likhna hai";
+  }
+
+  if (/^kya[?.!]*$/i.test(text.trim())) {
+    return "haan, kya baat hai";
+  }
+
   if (has(lower, /\b(who are you|your name|aap kaun|tum kaun|kaun ho)\b/) || has(text, /कौन हो/)) {
     return pick(lower, ["tarik hoon. bolo", "main tarik. kya kaam hai", "tarik. haan, sun raha hoon"]);
   }
@@ -144,7 +160,7 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
 }
 
 export function isCannedScript(text: string) {
-  return /tarik tak pahunch|public facts|calmly wapas|extra detail ho to|forensics, ai, security|message mil gaya|on behalf|as an ai|assistant/i.test(
+  return /tarik tak pahunch|public facts|calmly wapas|extra detail ho to|forensics, ai, security|message mil gaya|on behalf|as an ai|assistant|^dekh liya\.?\s*bolo/i.test(
     text,
   );
 }
@@ -171,6 +187,7 @@ function isRepetitive(text: string) {
 export function isLowQualityReply(text: string) {
   const words = text.trim().split(/\s+/);
   if (words.length === 0) return true;
+  if (/^dekh liya\.?\s*bolo[.!]*$/i.test(text.trim())) return true;
   if (isCannedScript(text)) return true;
   if (/if they mention|known facts|system prompt|keyword hints/i.test(text)) return true;
   if (/hey, kaise ho/i.test(text) && /dekh liya|pahunch|public/i.test(text)) return true;
