@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
   "installCommand": "npm install",
-  "buildCommand": "npm run build --workspace=web && rm -rf .next && cp -a apps/web/.next .next"
+  "buildCommand": "npm run build --workspace=web"
 }
