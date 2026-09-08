@@ -18,7 +18,7 @@ import {
   upsertCustomer,
   wasProcessed,
 } from "@bot/database";
-import { generateOpenAiReply, isDuplicate, normalizeIncoming, routeMessage } from "@bot/engine";
+import { generateBestHumanReply, isDuplicate, normalizeIncoming, routeMessage } from "@bot/engine";
 
 type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
 
@@ -327,43 +327,48 @@ async function openSocket(pairingPhone?: string) {
         });
         const history = await recentMessages(convo.id);
         const knowledge = await knowledgeSearch(normalized.text);
-        const aiReply = settings.aiEnabled
-          ? await generateOpenAiReply(normalized, {
-              settings,
-              customerName: normalized.fromName,
-              recent: history
-                .slice()
-                .reverse()
-                .map((m) => ({ role: m.direction === "in" ? "user" : "assistant", text: m.text })),
-              faqs: faqs.map((f) => `${f.question}: ${f.answer}`),
-              knowledge,
-            })
-          : null;
-        const decision = routeMessage({
+        const routed = routeMessage({
           message: normalized,
           settings,
           rules,
           faqs,
           conversationStatus: convo.status,
           knowledgeHits: knowledge,
-          aiReply,
+          aiReply: null,
         });
-        if (decision.action === "handoff") {
+        if (routed.action === "handoff") {
           await setConversationStatus(convo.id, "waiting_human");
         }
-        if (decision.action === "skip" || !decision.text) continue;
+        if (routed.action === "skip") continue;
         if (settings.enabled === false) continue;
-        await sock.sendMessage(jid, { text: decision.text });
+        const ai =
+          settings.aiEnabled !== false
+            ? await generateBestHumanReply(normalized, {
+                settings,
+                customerName: normalized.fromName,
+                recent: history
+                  .slice()
+                  .reverse()
+                  .map((m) => ({ role: m.direction === "in" ? "user" : "assistant", text: m.text })),
+                faqs: faqs.map((f) => `${f.question}: ${f.answer}`),
+                knowledge,
+                intent: routed.intent ?? routed.source,
+                suggested: routed.text,
+              })
+            : null;
+        const text = ai?.text || routed.text;
+        if (!text) continue;
+        await sock.sendMessage(jid, { text });
         manager.snapshot.lastMessageSentAt = new Date().toISOString();
         await addMessage({
           conversation_id: convo.id,
           whatsapp_message_id: `out_${raw.key.id}`,
           direction: "out",
           message_type: "text",
-          text: decision.text,
+          text,
           media_reference: null,
-          ai_generated: decision.source === "ai",
-          intent: decision.intent ?? decision.source,
+          ai_generated: Boolean(ai),
+          intent: routed.intent ?? routed.source,
         });
       } catch (error) {
         await addLog("error", "whatsapp", error instanceof Error ? error.message : "message failed");

@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { defaultAutomationRules, defaultBotSettings, defaultFaqs } from "@bot/shared";
 import { isDuplicate, normalizeIncoming, resetDuplicates } from "./parser.ts";
 import { isWithinBusinessHours, matchFaq, matchRule, routeMessage } from "./router.ts";
+import { buildPrompt } from "./ai/provider.ts";
 
 describe("parser", () => {
   it("normalizes a text message and skips fromMe", () => {
@@ -91,5 +92,19 @@ describe("router", () => {
       message: { ...base.message, text: "can we discuss a custom forensics brief tomorrow" },
     });
     assert.equal(decision.source, "fallback");
+  });
+
+  it("asks the model to sound like a person", () => {
+    const prompt = buildPrompt(base.message, {
+      settings: defaultBotSettings(),
+      customerName: "Amina",
+      recent: [{ role: "user", text: "hi" }],
+      faqs: ["Who: tarik"],
+      knowledge: [],
+      intent: "greeting",
+      suggested: "hey, kya scene hai",
+    });
+    assert.match(prompt.system, /real person/i);
+    assert.match(prompt.user, /Amina/);
   });
 });

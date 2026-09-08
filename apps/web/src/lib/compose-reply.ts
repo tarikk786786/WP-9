@@ -1,6 +1,7 @@
+import { generateBestHumanReply } from "@bot/engine";
+import { defaultBotSettings } from "@bot/shared";
 import {
   isLowQualityReply,
-  isOwnerFactQuestion,
   polishToHinglish,
   writeHinglishReply,
 } from "@/lib/hinglish-brain";
@@ -10,7 +11,6 @@ import { inspectIncoming, isRateLimited, sanitizeOutgoing } from "@/lib/safety";
 import { scheduleProfileRefresh } from "@/lib/tarik-profile";
 import type { BotRules } from "@/lib/types";
 import { applyVoice } from "@/lib/voice";
-import { isServerlessDisk } from "@/lib/writable-dir";
 
 export type ComposedReply = ReplyDecision & { engine: string };
 
@@ -55,7 +55,6 @@ export async function composeReply(options: {
   }
 
   const hint = fallback.matchedRule;
-
   const greeting = hint === "greeting" || isGreetingMessage(text);
 
   if (rules.replyMode === "greetings" && !greeting) {
@@ -83,32 +82,50 @@ export async function composeReply(options: {
     return { action: "reply", text: clean, matchedRule: matched, engine };
   }
 
-  if (
-    greeting ||
-    hint === "after-hours" ||
-    hint === "hours" ||
-    hint === "price" ||
-    hint === "hello" ||
-    hint === "hi" ||
-    isOwnerFactQuestion(text) ||
-    hint !== "default"
-  ) {
-    return finish(
-      writeHinglishReply(text, fromName, rules, greeting ? "greeting" : hint),
-      greeting ? "greeting" : hint,
-      "tarik-live",
-    );
-  }
+  const matched = greeting ? "greeting" : hint;
+  const suggested = fallback.action === "reply" ? fallback.text : writeHinglishReply(text, fromName, rules, matched);
 
-  if (rules.useLocalLlm !== false && !isServerlessDisk()) {
+  if (rules.useLocalLlm !== false) {
+    const settings = defaultBotSettings();
+    settings.defaultLanguage = rules.language;
+    try {
+      const cloud = await generateBestHumanReply(
+        {
+          id: `sim_${Date.now()}`,
+          whatsappMessageId: `sim_${Date.now()}`,
+          sender: fromId,
+          chatId: fromId,
+          fromName,
+          type: "text",
+          text,
+          timestamp: new Date().toISOString(),
+          isGroup: false,
+          metadata: {},
+        },
+        {
+          settings,
+          customerName: fromName,
+          recent: [],
+          faqs: [],
+          knowledge: rules.customFacts ? [rules.customFacts] : [],
+          intent: matched,
+          suggested,
+        },
+      );
+      if (cloud?.text) {
+        return finish(polishToHinglish(cloud.text), matched, `${cloud.engine} · human`);
+      }
+    } catch {
+      /* try local next */
+    }
+
     try {
       const generated = await generateLocalReply(text, fromName, rules);
-      const polished = polishToHinglish(generated.text);
-      return finish(polished, hint, `${generated.engine} · hinglish`);
+      return finish(polishToHinglish(generated.text), matched, `${generated.engine} · human`);
     } catch {
-      // Human voice still answers.
+      /* human voice still answers */
     }
   }
 
-  return finish(writeHinglishReply(text, fromName, rules, hint), hint, "tarik-live");
+  return finish(writeHinglishReply(text, fromName, rules, matched), matched, "tarik-live");
 }

@@ -205,7 +205,12 @@ export async function generateLocalReply(
         return { text, engine: `${endpoint.name} · ${model}` };
       }
       if (endpoint.kind === "transformers") {
-        continue;
+        if (process.env.VERCEL) continue;
+        const pipe = await getTransformers();
+        const out = await pipe(`${system}\n\n${incoming}`, { max_new_tokens: 64 });
+        const text = out[0]?.generated_text?.trim();
+        if (!text) throw new Error("Empty on-device reply.");
+        return { text, engine: `${endpoint.name}` };
       }
     } catch (error) {
       errors.push(`${endpoint.name}: ${error instanceof Error ? error.message : "failed"}`);

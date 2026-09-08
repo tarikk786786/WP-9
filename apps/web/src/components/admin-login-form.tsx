@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function AdminLoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const [secret, setSecret] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +19,7 @@ export function AdminLoginForm() {
         <CardHeader>
           <CardTitle>Admin access</CardTitle>
           <CardDescription>
-            Enter <code>ADMIN_SECRET</code>. This cookie never goes to the Baileys worker.
+            Password is <code>ADMIN_SECRET</code>. Local default: <code>dev-admin-secret-change-me</code>.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -32,15 +31,17 @@ export function AdminLoginForm() {
               setError(null);
               const response = await fetch("/api/admin/login", {
                 method: "POST",
+                credentials: "include",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ secret }),
+                body: JSON.stringify({ secret: secret.trim() }),
               });
-              setBusy(false);
               if (!response.ok) {
-                setError("Secret did not match.");
+                const json = (await response.json().catch(() => ({}))) as { error?: string };
+                setBusy(false);
+                setError(json.error || "Secret did not match. Try dev-admin-secret-change-me");
                 return;
               }
-              router.push(params.get("next") || "/admin/dashboard");
+              window.location.assign(params.get("next") || "/admin/dashboard");
             }}
           >
             <div className="grid gap-1.5">

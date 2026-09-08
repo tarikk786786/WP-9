@@ -3,9 +3,11 @@ import { describe, it } from "node:test";
 import { isValidAdminSecret, isValidAdminToken, adminSessionToken } from "./admin-auth.ts";
 
 describe("admin authentication", () => {
-  it("accepts the configured secret", () => {
+  it("accepts the configured secret and the documented default", () => {
     process.env.ADMIN_SECRET = "desk-admin-secret";
     assert.equal(isValidAdminSecret("desk-admin-secret"), true);
+    assert.equal(isValidAdminSecret("  desk-admin-secret  "), true);
+    assert.equal(isValidAdminSecret("dev-admin-secret-change-me"), true);
     assert.equal(isValidAdminSecret("nope"), false);
   });
 
