@@ -131,7 +131,7 @@ export function AdminDashboard({ view }: { view: "dashboard" | "conversations" |
             <Stat title="Handoffs" value={String(stats.handoffs ?? 0)} />
           </div>
           {wa?.error ? <p className="text-sm text-destructive">{wa.error}</p> : null}
-          <ScanLogin hostedOnVercel={false} />
+          <ScanLogin />
         </>
       ) : null}
 
