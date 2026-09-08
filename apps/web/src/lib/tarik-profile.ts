@@ -1,3 +1,5 @@
+import { TARIK_PUBLIC, TARIK_SITE } from "@bot/engine";
+
 export type TarikProfile = {
   name: string;
   site: string;
@@ -5,6 +7,10 @@ export type TarikProfile = {
   studioUrl: string;
   title: string;
   base: string;
+  email: string;
+  phone: string;
+  instagram: string;
+  github: string;
   responseTime: string;
   accepting: string;
   services: string[];
@@ -13,31 +19,29 @@ export type TarikProfile = {
   refreshedAt: string;
 };
 
-export const TARIK_SITE = "https://tarikislam.in";
-
 const CANONICAL: Omit<TarikProfile, "refreshedAt" | "source"> = {
-  name: "Tarik Islam",
-  site: TARIK_SITE,
-  studio: "Dezo",
-  studioUrl: "https://dezo.in",
-  title: "Forensic Scientist, AI Developer & Cybersecurity Engineer",
-  base: "India",
-  responseTime: "under 24 hours",
-  accepting: "Q3 2026 engagements",
-  services: [
-    "Forensic science and digital evidence",
-    "Cybersecurity engineering",
-    "AI systems, RAG, and agents",
-    "Full-stack product engineering",
-    "Automation and workflows",
-    "0→1 founding and studio work via Dezo.in",
-  ],
+  name: TARIK_PUBLIC.name,
+  site: TARIK_PUBLIC.site,
+  studio: TARIK_PUBLIC.studio,
+  studioUrl: TARIK_PUBLIC.studioUrl,
+  title: TARIK_PUBLIC.title,
+  base: TARIK_PUBLIC.base,
+  email: TARIK_PUBLIC.email,
+  phone: TARIK_PUBLIC.phone,
+  instagram: TARIK_PUBLIC.instagram,
+  github: TARIK_PUBLIC.github,
+  responseTime: TARIK_PUBLIC.responseTime,
+  accepting: TARIK_PUBLIC.accepting,
+  services: [...TARIK_PUBLIC.services],
   notes: [
-    "Public site: tarikislam.in — details always start there.",
-    "Dezo.in is the founding studio for AI-native, secure-by-design products.",
+    `Public site: ${TARIK_PUBLIC.site.replace("https://", "")} — details always start there.`,
+    `${TARIK_PUBLIC.studioUrl.replace("https://", "")} is the AI product studio (founder & CEO).`,
+    `Based in ${TARIK_PUBLIC.base}. Timezone ${TARIK_PUBLIC.timezone}.`,
+    `Email ${TARIK_PUBLIC.email}. WhatsApp listed ${TARIK_PUBLIC.phone}.`,
+    `Instagram ${TARIK_PUBLIC.instagram}. GitHub ${TARIK_PUBLIC.github}.`,
+    `Degrees: ${TARIK_PUBLIC.degrees.join("; ")}. Certs: ${TARIK_PUBLIC.certs.join(", ")}.`,
+    `Site lists ${TARIK_PUBLIC.accepting}. Typical response ${TARIK_PUBLIC.responseTime}.`,
     "Do not invent prices, fake case results, or unpublished credentials.",
-    "Portfolio and timeline stay sealed until Tarik verifies them — invite a direct chat instead.",
-    "Response promise on the site: under 24 hours.",
   ],
 };
 
@@ -68,6 +72,8 @@ export function profileBrief(profile = cached) {
     `Base: ${profile.base}.`,
     `Site: ${profile.site}.`,
     `Studio: ${profile.studio} (${profile.studioUrl}).`,
+    `Email: ${profile.email}. Phone: ${profile.phone}.`,
+    `Instagram: ${profile.instagram}. GitHub: ${profile.github}.`,
     `Services: ${profile.services.join("; ")}.`,
     `Availability: currently accepting ${profile.accepting}.`,
     `Typical response: ${profile.responseTime}.`,
@@ -110,16 +116,26 @@ async function pullSiteProfile(): Promise<TarikProfile> {
     if (!response.ok) throw new Error(String(response.status));
     const html = await response.text();
     const text = stripHtml(html);
-    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+    const email = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? CANONICAL.email;
+    const phone = text.match(/\+91\s*89844\s*73230/)?.[0]?.replace(/\s+/g, " ") ?? CANONICAL.phone;
+    const instagram = text.match(/@tarik_islam_786/i)?.[0] ?? CANONICAL.instagram;
+    const github = text.match(/@tarikk786786/i)?.[0] ?? CANONICAL.github;
+    const city = /bhubaneswar/i.test(text) ? "Bhubaneswar, India" : CANONICAL.base;
+    const accepting = /q3 2026/i.test(text) ? "Q3 2026 high-stakes engagements" : CANONICAL.accepting;
+    const responseTime = /24 hours/i.test(text) ? "under 24 hours" : CANONICAL.responseTime;
     cached = {
       ...CANONICAL,
-      title: titleMatch?.[1]?.replace(/\s*[—|-].*$/, "").includes("Forensic")
-        ? CANONICAL.title
-        : CANONICAL.title,
+      email,
+      phone,
+      instagram,
+      github,
+      base: city,
+      accepting,
+      responseTime,
       notes: [
         ...CANONICAL.notes,
-        text.toLowerCase().includes("q3 2026")
-          ? "Site still lists Q3 2026 engagements as open."
+        /q3 2026/i.test(text)
+          ? "Live site still lists Q3 2026 high-stakes engagements as open."
           : "If availability is unclear, point them to tarikislam.in.",
       ],
       source: TARIK_SITE,

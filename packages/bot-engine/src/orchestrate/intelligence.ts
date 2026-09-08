@@ -137,7 +137,6 @@ export function planTurn(options: {
     complexity = 0.28;
   } else if (
     (analysis.intents.includes("project") ||
-      analysis.intents.includes("availability") ||
       (analysis.intents.includes("website") && /\b(chahiye|hire|hiring|banana|build)\b/i.test(text))) &&
     !analysis.intents.includes("process") &&
     !analysis.intents.includes("pricing") &&
@@ -153,7 +152,9 @@ export function planTurn(options: {
   }
 
   const requiresKnowledge = analysis.topics.some((topic) =>
-    ["pricing", "website", "studio", "services", "process", "portfolio"].includes(topic),
+    ["pricing", "website", "studio", "services", "process", "portfolio", "location", "contact", "credentials", "availability"].includes(
+      topic,
+    ),
   );
   const requiresReasoning = analysis.wantsAllAnswers || analysis.complexity === "lead" || analysis.complexity === "multi";
 

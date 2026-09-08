@@ -21,6 +21,8 @@ export type MessageIntent =
   | "portfolio"
   | "urgent"
   | "project"
+  | "contact"
+  | "credentials"
   | "smalltalk"
   | "general";
 
@@ -49,12 +51,14 @@ const INTENT_PATTERNS: Array<{ intent: MessageIntent; pattern: RegExp }> = [
   { intent: "portfolio", pattern: /\b(portfolio|work samples?|case stud|previous work|examples?)\b/i },
   { intent: "studio", pattern: /\b(dezo|studio)\b/i },
   { intent: "pricing", pattern: /\b(price|pricing|cost|rate|fees?|charge|budget|kitna|daam|quote|estimate|pric)\b/i },
-  { intent: "availability", pattern: /\b(available|availability|hire|hiring|freelance|engage|slot|bandwidth)\b/i },
+  { intent: "availability", pattern: /\b(available|availability|hire|hiring|freelance|engage|slot|bandwidth|q3)\b/i },
   { intent: "process", pattern: /\b(process|kaise start|how (do|does|to) (we |you )?(start|work)|steps?|workflow|approach)\b/i },
   { intent: "timeline", pattern: /\b(timeline|kitne din|how long|deadline|delivery|turnaround|kab tak)\b/i },
-  { intent: "meeting", pattern: /\b(call|phone|zoom|meet|meeting|video|milna|baat kar)\b/i },
-  { intent: "hours", pattern: /\b(hours?|timing|open|close|kitne baje|office time)\b/i },
-  { intent: "location", pattern: /\b(based (in|out of)?|address|kidhar ho|kahan se (kaam|ho)|where (are you|do you (live|work|sit)))\b/i },
+  { intent: "contact", pattern: /\b(email|gmail|contact|number|phone no|phone number|instagram|github|pgp)\b/i },
+  { intent: "credentials", pattern: /\b(resume|cv|degree|degrees|b\.?sc|m\.?sc|mca|m\.?tech|ceh|chfi|oscp|certificat|credential|qualification)\b/i },
+  { intent: "meeting", pattern: /\b(call|zoom|meet|meeting|video|milna|baat kar)\b/i },
+  { intent: "hours", pattern: /\b(hours?|timing|open|close|kitne baje|office time|timezone|ist|24 hours?|response time)\b/i },
+  { intent: "location", pattern: /\b(based (in|out of)?|address|kidhar ho|kahan se (kaam|ho)|where (are you|do you (live|work|sit))|bhubaneswar)\b/i },
   { intent: "forensics", pattern: /\b(forensic|evidence|malware|incident)\b/i },
   { intent: "security", pattern: /\b(cyber|security|audit|pentest|secure)\b/i },
   { intent: "ai-work", pattern: /\b(ai|llm|rag|automation|saas|gpt)\b/i },
@@ -101,7 +105,7 @@ export function analyzeMessage(
   if (unique.includes("ai-work") && unique.includes("handoff") && !/\b(ai|llm|rag|automation|saas|gpt)\b/i.test(body)) {
     unique.splice(unique.indexOf("ai-work"), 1);
   }
-  const placeAsk = /\b(based|address|kidhar ho|kahan se (kaam|ho)|where (are you|do you))\b/i.test(body);
+  const placeAsk = /\b(based|address|kidhar ho|kahan se (kaam|ho)|where (are you|do you)|bhubaneswar)\b/i.test(body);
   const linkAsk = /\b(site|website|portfolio|dezo|link|url|tarikislam)\b/i.test(body);
   if (unique.includes("location") && (!placeAsk || (linkAsk && !/\b(kahan se (kaam|ho)|based|address|kidhar ho)\b/i.test(body)))) {
     unique.splice(unique.indexOf("location"), 1);

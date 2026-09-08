@@ -38,7 +38,7 @@ export const defaultRules: BotRules = {
     {
       id: "hours",
       keyword: "hours",
-      reply: "din mein aksar yahin hota hoon",
+      reply: "ist. aksar din mein yahin, avg 24 ghante ke andar",
       enabled: true,
     },
     {

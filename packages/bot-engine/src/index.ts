@@ -12,6 +12,7 @@ export {
   scoreReplyCompleteness,
   missedAsks,
 } from "./ai/provider.ts";
+export { TARIK_PUBLIC, TARIK_PUBLIC_FACTS, TARIK_SITE, tarikSiteBrief } from "./ai/facts.ts";
 export { analyzeTurn, planTurn, inferUserStyle } from "./orchestrate/intelligence.ts";
 export { readMessage, splitHumanAsks, inferMood } from "./orchestrate/read.ts";
 export { debounceChat, combineBurstText } from "./orchestrate/debounce.ts";

@@ -50,6 +50,15 @@ describe("writeHinglishReply", () => {
   it("answers hours without stiff english", () => {
     const text = writeHinglishReply("Hi, what are your hours?", "Amina", defaultRules, "hours");
     assert.doesNotMatch(text, /I usually reply between/);
-    assert.match(text.toLowerCase(), /yahin|note|se /);
+    assert.match(text.toLowerCase(), /yahin|ist|24/);
+  });
+
+  it("uses tarikislam.in contact and city only when asked", () => {
+    const place = writeHinglishReply("where are you", "Amina", defaultRules);
+    assert.match(place.toLowerCase(), /bhubaneswar/);
+    const mail = writeHinglishReply("email kya hai", "Amina", defaultRules);
+    assert.match(mail, /princetarikislam@gmail\.com/);
+    const hi = writeHinglishReply("hi", "Amina", defaultRules, "greeting");
+    assert.doesNotMatch(hi, /gmail|89844|bhubaneswar/i);
   });
 });

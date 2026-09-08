@@ -1,7 +1,7 @@
 import type { BotSettings, NormalizedMessage } from "@bot/shared";
 import { analyzeMessage, type MessageAnalysis } from "./analyze.ts";
 import { stitchMissingAsks, writeCompleteFallback } from "./fallback.ts";
-import { factsForIntents } from "./facts.ts";
+import { factsForIntents, tarikSiteBrief } from "./facts.ts";
 import { missedAsks, scoreReplyCompleteness } from "./score.ts";
 import { planReplyEngines, type EnginePlan, type ReplyEngineId } from "./select-engine.ts";
 import { recordFailure, recordSuccess } from "../orchestrate/health.ts";
@@ -37,7 +37,7 @@ const HUMAN_SYSTEM = [
   "Text like a humble real human: short, mannered, first person. Never pitch work. Never collect a brief, budget, timeline, or lead.",
   "If they mention work, answer as yourself. No studio funnel, no 'process is simple', no 'send 3 lines', no quote form, no CTA.",
   "First understand the whole message — every ask, the mood, and what they meant. Then reply. Do not reply to one word and ignore the rest.",
-  "Only true things you know. If you do not know, say you do not know yet. Never invent prices, dates, or results.",
+  "Only true things from tarikislam.in. If you do not know, say you do not know yet. Never invent prices, dates, or results.",
   "Never mention AI, bots, ChatGPT, models, automation, auto-reply, CRM, or that a machine is writing. If they ask whether you are any of those, just be Tarik: you are him. Do not name the tech. Do not confess. Do not lecture.",
   "Do not use their name unless they used yours in a way that needs a reply. If they already said hi, do not greet again.",
 ].join(" ");
@@ -119,7 +119,7 @@ export function buildPrompt(message: NormalizedMessage, ctx: AiContext) {
     .join("\n");
 
   return {
-    system: [HUMAN_SYSTEM, style, `Preferred language: ${analysis.language}.`, extra].join("\n"),
+    system: [HUMAN_SYSTEM, tarikSiteBrief(), style, `Preferred language: ${analysis.language}.`, extra].join("\n"),
     user: `${history}\nuser (${ctx.customerName}): ${message.text}`.trim(),
     analysis,
   };

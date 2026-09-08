@@ -127,7 +127,7 @@ export const defaultAutomationRules = (): AutomationRule[] => [
   { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "haan, kya haal hai", priority: 10, enabled: true },
   { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "haan, bolo", priority: 10, enabled: true },
   { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "rate andaz se nahi bolta", priority: 20, enabled: true },
-  { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "din mein aksar yahin hota hoon", priority: 20, enabled: true },
+  { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "ist. aksar din mein yahin, avg 24 ghante ke andar", priority: 20, enabled: true },
   { id: "agent", name: "Human", triggerType: "keyword", triggerValue: "agent", response: "theek, thoda wait, dekh ke likhta hoon", priority: 5, enabled: true },
 ];
 
@@ -144,10 +144,28 @@ export const defaultFaqs = (): Faq[] => [
   {
     id: "site",
     question: "Website?",
-    answer: "tarikislam.in pe dekh lena. kuch specific chahiye to yahin likh",
+    answer: "tarikislam.in pe dekh lena. studio dezo.in pe hai",
     keywords: ["website", "portfolio", "site"],
     category: "identity",
     priority: 2,
+    enabled: true,
+  },
+  {
+    id: "where",
+    question: "Where are you based?",
+    answer: "bhubaneswar, india se kaam karta hoon",
+    keywords: ["where are you", "kidhar ho", "kahan se kaam"],
+    category: "identity",
+    priority: 3,
+    enabled: true,
+  },
+  {
+    id: "contact",
+    question: "How do I contact you?",
+    answer: "email princetarikislam@gmail.com. number +91 89844 73230",
+    keywords: ["email", "contact number"],
+    category: "identity",
+    priority: 4,
     enabled: true,
   },
 ];

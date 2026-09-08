@@ -79,9 +79,11 @@ export function blendSpokenReply(text: string, analysis: MessageAnalysis): strin
     lines = lines
       .map((line) =>
         line
-          .replace(/\bmain india se kaam karta hoon\.?\s*/gi, "")
+          .replace(/\bmain (bhubaneswar,?\s*)?india se kaam karta hoon\.?\s*/gi, "")
+          .replace(/\bbhubaneswar,?\s*india se kaam karta hoon\.?\s*/gi, "")
           .replace(/\bindia se kaam karta hoon\.?\s*/gi, "")
-          .replace(/\bbased in india\.?\s*/gi, "")
+          .replace(/\bbased in (bhubaneswar,?\s*)?india\.?\s*/gi, "")
+          .replace(/\bbhubaneswar[,.]?\s*/gi, "")
           .replace(/\s{2,}/g, " ")
           .replace(/^[,.\s]+/, "")
           .trim(),
@@ -89,7 +91,16 @@ export function blendSpokenReply(text: string, analysis: MessageAnalysis): strin
       .filter(Boolean);
   }
   if (!analysis.topics.includes("hours")) {
-    lines = lines.filter((line) => !/\bdin mein aksar yahin|note chhod\b/i.test(line));
+    lines = lines.filter((line) => !/\bdin mein aksar yahin|note chhod|avg 24 ghante\b/i.test(line));
+  }
+  if (!analysis.topics.includes("contact") && !analysis.topics.includes("email")) {
+    lines = lines.filter((line) => !/gmail|89844|@tarik_islam_786|tarikk786786/i.test(line));
+  }
+  if (!analysis.topics.includes("credentials")) {
+    lines = lines.filter((line) => !/\b(b\.sc|m\.sc|ceh|chfi|oscp)\b/i.test(line));
+  }
+  if (!analysis.topics.includes("availability")) {
+    lines = lines.filter((line) => !/\bq3 2026\b/i.test(line));
   }
 
   const dezoIdx = lines.findIndex((line) => /\bdezo\b/i.test(line));

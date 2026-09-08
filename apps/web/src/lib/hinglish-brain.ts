@@ -15,8 +15,6 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
   const tarik = getTarikProfile();
   const text = incoming.trim();
   const lower = text.toLowerCase();
-  const open = rules.openHour;
-  const close = rules.closeHour;
 
   if (hint === "after-hours") {
     return rules.afterHoursReply;
@@ -52,18 +50,32 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
   }
 
   if (has(lower, /\b(what do you do|about you|kya karte|kaam kya|services?)\b/)) {
-    return "forensics, security, ai, products. short mein bata kya chahiye";
+    return "forensics, cybersecurity, ai systems, products. public detail tarikislam.in pe hai";
   }
 
   if (has(lower, /\b(website|site|portfolio|profile|link)\b/) || has(text, /वेबसाइट/)) {
-    return `${tarik.site.replace("https://", "")} pe dekh lena. kuch specific chahiye to yahin likh`;
+    return `${tarik.site.replace("https://", "")} pe dekh lena. studio ${tarik.studioUrl.replace("https://", "")} pe hai`;
   }
 
   if (has(lower, /\b(dezo|studio)\b/)) {
     return `dezo mera studio hai. ${tarik.studioUrl.replace("https://", "")} pe hai, warna yahin bata`;
   }
 
-  if (has(lower, /\b(hire|hiring|available|availability|freelance|project|kaam|engage)\b/)) {
+  if (has(lower, /\b(resume|cv|experience|credential|certificate|degree|oscp|ceh|chfi)\b/)) {
+    return "b.sc/m.sc forensic, mca, m.tech cyber+ai. ceh, chfi, oscp — tarikislam.in pe hai";
+  }
+
+  if (has(lower, /\b(email|gmail|contact|instagram|github|phone number|number)\b/) && !has(lower, /\b(hire|project|banana)\b/)) {
+    if (has(lower, /instagram/)) return `${tarik.instagram} pe updates hain`;
+    if (has(lower, /github/)) return `${tarik.github} pe public code hai`;
+    return `email ${tarik.email}. number ${tarik.phone}`;
+  }
+
+  if (has(lower, /\b(available|availability|q3)\b/) && !has(lower, /\b(project|banana|website chahiye)\b/)) {
+    return `${tarik.accepting.toLowerCase()} site pe open hain. yahin bata kya soch rahe ho`;
+  }
+
+  if (has(lower, /\b(hire|hiring|freelance|project|kaam|engage)\b/)) {
     return pick(lower, [
       "haan, bata kya soch rahe ho",
       "sun raha hoon. thoda aur bata",
@@ -79,16 +91,12 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
     return "yeh sab karta hoon. kya soch rahe ho, short mein bata";
   }
 
-  if (has(lower, /\b(resume|cv|experience|credential|certificate)\b/)) {
-    return "cv chahiye to yahin bol, bhej dunga";
-  }
-
   if (
     hint === "hours" ||
-    has(lower, /\b(hours?|timing|kab|kitne baje|open|close)\b/) ||
+    has(lower, /\b(hours?|timing|kitne baje|open|close|timezone|ist|24 hours?)\b/) ||
     has(text, /समय|टाइम/)
   ) {
-    return `zyada tar ${open} se ${close} tak yahin hota hoon`;
+    return `ist. aksar din mein yahin, avg ${tarik.responseTime}`;
   }
 
   if (hint === "price" || has(lower, /\b(price|pricing|cost|rate|fees?|charge|kitna|daam|budget)\b/) || has(text, /कीमत|दाम|रेट/)) {

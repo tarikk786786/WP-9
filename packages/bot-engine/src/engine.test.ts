@@ -110,6 +110,7 @@ describe("router", () => {
     assert.match(prompt.system, /first person/i);
     assert.match(prompt.system, /you ARE tarik islam/i);
     assert.match(prompt.system, /you are him/i);
+    assert.match(prompt.system, /tarikislam\.in/i);
     assert.match(prompt.user, /Amina/);
   });
 
@@ -206,5 +207,23 @@ describe("message analysis and engine pick", () => {
     const siteOnOwnLine = full.split("\n").some((line) => /^tarikislam\.in pe public cheez hai$/i.test(line.trim()));
     assert.equal(siteOnOwnLine, false);
     assert.ok(scoreReplyCompleteness(full, analysis) >= 0.7);
+  });
+
+  it("uses tarikislam.in public facts for location, contact, and availability", () => {
+    const place = analyzeMessage("where are you based?", { isFirstMessage: true });
+    assert.ok(place.intents.includes("location"));
+    assert.match(writeCompleteFallback(place, [], "where are you based?"), /bhubaneswar/i);
+
+    const mail = analyzeMessage("email kya hai?", { isFirstMessage: true });
+    assert.ok(mail.intents.includes("contact"));
+    assert.match(writeCompleteFallback(mail, [], "email kya hai?"), /princetarikislam@gmail\.com/i);
+
+    const open = analyzeMessage("are you available?", { isFirstMessage: true });
+    assert.ok(open.intents.includes("availability"));
+    assert.match(writeCompleteFallback(open, [], "are you available?"), /q3 2026/i);
+
+    const cv = analyzeMessage("resume bhej", { isFirstMessage: true });
+    assert.ok(cv.intents.includes("credentials"));
+    assert.match(writeCompleteFallback(cv, [], "resume bhej"), /ceh|oscp|forensic/i);
   });
 });
