@@ -36,8 +36,8 @@ export async function keepAliveTick() {
   if (isServerlessDisk()) return;
   const snapshot = await hydrateScanSnapshot();
   const saved = await hasSavedSession();
-  if (saved && snapshot.phase !== "ready") {
-    if (snapshot.phase === "qr") return;
+  if (saved && snapshot.phase !== "ready" && snapshot.phase !== "qr") {
+    if (snapshot.phase === "connecting") return;
     await startScanSession();
   }
 }

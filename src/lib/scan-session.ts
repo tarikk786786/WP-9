@@ -24,17 +24,28 @@ type Manager = {
   snapshot: ScanSnapshot;
   sock: Socket | null;
   starting: boolean;
+  generation: number;
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
   reconnectDelay: number;
   start: (pairingPhone?: string) => Promise<ScanSnapshot>;
   logout: () => Promise<ScanSnapshot>;
 };
 
 function scheduleReconnect(manager: Manager) {
+  if (manager.reconnectTimer || manager.starting) return;
   const delay = manager.reconnectDelay;
-  setTimeout(() => {
-    manager.reconnectDelay = Math.min(delay * 2, 30_000);
+  manager.reconnectTimer = setTimeout(() => {
+    manager.reconnectTimer = null;
+    manager.reconnectDelay = Math.min(delay * 2, 15_000);
     void manager.start();
   }, delay);
+}
+
+function cancelReconnect(manager: Manager) {
+  if (manager.reconnectTimer) {
+    clearTimeout(manager.reconnectTimer);
+    manager.reconnectTimer = null;
+  }
 }
 
 const emptySnapshot = (): ScanSnapshot => ({
@@ -122,7 +133,9 @@ function createManager(): Manager {
     snapshot: emptySnapshot(),
     sock: null,
     starting: false,
-    reconnectDelay: 2000,
+    generation: 0,
+    reconnectTimer: null,
+    reconnectDelay: 1500,
     async start(pairingPhone?: string) {
       if (manager.sock && manager.snapshot.phase !== "logged_out") {
         if (manager.snapshot.phase === "ready") return manager.snapshot;
@@ -151,12 +164,17 @@ function createManager(): Manager {
       manager.starting = true;
       const restored = await restoreSavedSession();
       const saved = await getSavedPhone();
+      const stayLinked = restored || manager.snapshot.phase === "ready";
       manager.snapshot = await snapshotWithSave({
-        phase: manager.snapshot.qrDataUrl ? "qr" : "connecting",
-        qrDataUrl: manager.snapshot.qrDataUrl,
-        phone: saved.phone,
-        pairingCode: null,
-        error: restored ? "Saved login se reconnect ho raha hai…" : null,
+        phase: stayLinked
+          ? "ready"
+          : manager.snapshot.qrDataUrl
+            ? "qr"
+            : "connecting",
+        qrDataUrl: stayLinked ? null : manager.snapshot.qrDataUrl,
+        phone: saved.phone ?? manager.snapshot.phone,
+        pairingCode: stayLinked ? null : manager.snapshot.pairingCode,
+        error: stayLinked ? null : restored ? "Saved login se reconnect ho raha hai…" : null,
       });
       try {
         await openSocket(manager, pairingPhone);
@@ -183,6 +201,8 @@ function createManager(): Manager {
         // Session may already be dead.
       }
       manager.sock = null;
+      cancelReconnect(manager);
+      manager.generation += 1;
       await clearSavedSession();
       manager.snapshot = {
         ...emptySnapshot(),
@@ -210,7 +230,6 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
   const { state, saveCreds } = await loadAuthState(authDir);
   // Official Baileys auth: write creds.json immediately, not only after Linked.
   await saveCreds();
-  await persistSavedSession(manager.snapshot.phone);
 
   const version = await Promise.race([
     fetchLatestBaileysVersion().then((result) => result.version),
@@ -220,12 +239,17 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
   ]);
 
   if (manager.sock) {
+    const previous = manager.sock;
+    manager.sock = null;
+    manager.generation += 1;
     try {
-      manager.sock.end(undefined);
+      previous.end(undefined);
     } catch {
       // replace the previous socket
     }
   }
+  manager.generation += 1;
+  const generation = manager.generation;
 
   const logger = pino({ level: "silent" });
   const sock = makeWASocket({
@@ -262,13 +286,12 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
 
   sock.ev.on("creds.update", async () => {
     await saveCreds();
-    await persistSavedSession(manager.snapshot.phone);
-    manager.snapshot = await snapshotWithSave(manager.snapshot);
   });
 
   sock.ev.on("connection.update", async (update) => {
+    if (generation !== manager.generation || manager.sock !== sock) return;
     const { connection, lastDisconnect, qr } = update;
-    if (qr) {
+    if (qr && manager.snapshot.phase !== "ready") {
       manager.snapshot = await snapshotWithSave({
         phase: "qr",
         qrDataUrl: await QRCode.toDataURL(qr, { width: 280, margin: 1 }),
@@ -278,6 +301,7 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
       });
     }
     if (connection === "connecting") {
+      if (manager.snapshot.phase === "ready") return;
       manager.snapshot = await snapshotWithSave({
         ...manager.snapshot,
         phase: manager.snapshot.qrDataUrl ? "qr" : "connecting",
@@ -286,30 +310,29 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
     }
     if (connection === "open") {
       const phone = sock.user?.id?.split(":")[0] ?? sock.user?.id ?? null;
-      manager.reconnectDelay = 2000;
+      manager.reconnectDelay = 1500;
+      cancelReconnect(manager);
       await persistSavedSession(phone);
       await flushStore();
       manager.snapshot = await snapshotWithSave({
         phase: "ready",
         qrDataUrl: null,
+        pairingCode: null,
         phone,
         error: null,
       });
-      setTimeout(() => {
-        void persistSavedSession(phone).then(async () => {
-          manager.snapshot = await snapshotWithSave(manager.snapshot);
-        });
-      }, 750);
-      setTimeout(() => {
-        void persistSavedSession(phone);
-      }, 2500);
     }
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)
         ?.output?.statusCode;
-      const loggedOut = statusCode === DisconnectReason.loggedOut;
-      manager.sock = null;
+      const loggedOut =
+        statusCode === DisconnectReason.loggedOut ||
+        statusCode === DisconnectReason.forbidden ||
+        statusCode === DisconnectReason.badSession ||
+        statusCode === DisconnectReason.multideviceMismatch;
+      if (manager.sock === sock) manager.sock = null;
       if (loggedOut) {
+        cancelReconnect(manager);
         await clearSavedSession();
         manager.snapshot = {
           ...emptySnapshot(),
@@ -318,14 +341,27 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
         };
         return;
       }
-      manager.snapshot = await snapshotWithSave({
-        ...manager.snapshot,
-        phase: "connecting",
-        qrDataUrl: null,
-        error: (await hasSavedSession())
-          ? "Line drop hui. Saved login se reconnect ho raha hai…"
-          : "QR expire / drop. Naya QR aa raha hai — wahi scan karo.",
-      });
+      const linked = await hasSavedSession();
+      const replaced = statusCode === DisconnectReason.connectionReplaced;
+      if (linked) {
+        manager.snapshot = await snapshotWithSave({
+          phase: "ready",
+          qrDataUrl: null,
+          pairingCode: null,
+          phone: manager.snapshot.phone,
+          error: replaced
+            ? "Dusri jagah login ho gaya. 10s mein yahin wapas aaunga."
+            : null,
+        });
+        manager.reconnectDelay = replaced ? 10_000 : 1500;
+      } else {
+        manager.snapshot = await snapshotWithSave({
+          phase: "connecting",
+          qrDataUrl: null,
+          pairingCode: null,
+          error: "QR expire / drop. Naya QR aa raha hai — wahi scan karo.",
+        });
+      }
       scheduleReconnect(manager);
     }
   });

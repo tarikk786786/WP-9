@@ -31,11 +31,12 @@ function emptyScan(serverless = false): ScanSnapshot {
 }
 
 function phaseLabel(scan: ScanSnapshot) {
-  if (scan.phase === "ready") return "Linked · saved";
+  if (scan.phase === "ready" || (scan.persisted && scan.phase !== "logged_out" && scan.phase !== "qr")) {
+    return "Linked · saved";
+  }
   if (scan.qrDataUrl) return "Scan QR";
   if (scan.pairingCode) return "Enter code";
   if (scan.phase === "connecting") return "Connecting";
-  if (scan.persisted) return "Saved login";
   if (scan.phase === "logged_out") return "Logged out";
   return "Not linked";
 }
@@ -81,6 +82,7 @@ export function ScanLogin({
   const abortRef = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const phaseRef = useRef(scan.phase);
+  const savedReady = useRef(false);
   const booted = useRef(false);
   phaseRef.current = scan.phase;
 
@@ -155,10 +157,12 @@ export function ScanLogin({
           if (snapshot.qrDataUrl || snapshot.pairingCode || snapshot.phase === "ready") {
             setBusy(false);
           }
-          if (snapshot.phase === "ready" && snapshot.persisted) {
+          if (snapshot.phase === "ready" && snapshot.persisted && !savedReady.current) {
+            savedReady.current = true;
             void pullAndSaveLogin();
           }
           if (snapshot.phase === "logged_out") {
+            savedReady.current = false;
             setBusy(false);
             clearLocalArchive();
             setSavedHere(false);
@@ -187,7 +191,7 @@ export function ScanLogin({
         window.setTimeout(() => {
           if (abortRef.current) return;
           void readStream(undefined, true);
-        }, 800);
+        }, 4000);
       }
     }
   }
