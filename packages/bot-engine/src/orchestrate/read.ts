@@ -29,7 +29,7 @@ const ASK_LABELS: Array<{ pattern: RegExp; ask: string }> = [
   { pattern: /\b(timeline|kitne din|how long|deadline|kab tak)\b/i, ask: "kitna time lagta hai" },
   { pattern: /\b(call|zoom|meet|meeting|milna|baat kar)\b/i, ask: "call/meet kab ho sakta hai" },
   { pattern: /\b(hours?|timing|kitne baje)\b/i, ask: "kab tak yahin rehta hoon" },
-  { pattern: /\b(where|location|address|kahan|kidhar|based)\b/i, ask: "kahan se kaam karta hoon" },
+  { pattern: /\b(based|address|kidhar ho|kahan se kaam|where are you)\b/i, ask: "kahan se kaam karta hoon" },
   { pattern: /\b(who are you|kaun ho|your name|aap kaun|tum kaun)\b/i, ask: "main kaun hoon" },
   { pattern: /\b(what do you do|kya karte|kaam kya|services?)\b/i, ask: "main kya karta hoon" },
   { pattern: /\b(forensic|evidence|malware|incident)\b/i, ask: "forensics pe kaam hota hai kya" },
@@ -97,6 +97,9 @@ export function impliedAsks(text: string): string[] {
   const asksWhere = /\b(kahan|where|link|url|portfolio|dekhun)\b/i.test(text);
   if (wantsWork && !asksWhere) {
     found = found.filter((ask) => ask !== "site kahan hai" && ask !== "portfolio kahan dekhna hai");
+  }
+  if (/\b(site|website|portfolio|dezo|link)\b/i.test(text) && !/\b(kahan se kaam|based|address|kidhar ho)\b/i.test(text)) {
+    found = found.filter((ask) => ask !== "kahan se kaam karta hoon");
   }
   return [...new Set(found)];
 }

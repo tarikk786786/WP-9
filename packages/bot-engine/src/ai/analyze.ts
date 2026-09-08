@@ -54,10 +54,10 @@ const INTENT_PATTERNS: Array<{ intent: MessageIntent; pattern: RegExp }> = [
   { intent: "timeline", pattern: /\b(timeline|kitne din|how long|deadline|delivery|turnaround|kab tak)\b/i },
   { intent: "meeting", pattern: /\b(call|phone|zoom|meet|meeting|video|milna|baat kar)\b/i },
   { intent: "hours", pattern: /\b(hours?|timing|open|close|kitne baje|office time)\b/i },
-  { intent: "location", pattern: /\b(where|location|address|kahan|kidhar|based)\b/i },
+  { intent: "location", pattern: /\b(based (in|out of)?|address|kidhar ho|kahan se (kaam|ho)|where (are you|do you (live|work|sit)))\b/i },
   { intent: "forensics", pattern: /\b(forensic|evidence|malware|incident)\b/i },
   { intent: "security", pattern: /\b(cyber|security|audit|pentest|secure)\b/i },
-  { intent: "ai-work", pattern: /\b(ai|llm|rag|agent|automation|saas|gpt)\b/i },
+  { intent: "ai-work", pattern: /\b(ai|llm|rag|automation|saas|gpt)\b/i },
   { intent: "urgent", pattern: /\b(urgent|jaldi|asap|emergency|abhi)\b/i },
   { intent: "project", pattern: /\b(project|banana hai|website chahiye|site chahiye|build|app|product|mvp)\b/i },
 ];
@@ -97,6 +97,14 @@ export function analyzeMessage(
     unique.length = 0;
     unique.push(...filtered);
     if (!unique.includes("identity")) unique.unshift("identity");
+  }
+  if (unique.includes("ai-work") && unique.includes("handoff") && !/\b(ai|llm|rag|automation|saas|gpt)\b/i.test(body)) {
+    unique.splice(unique.indexOf("ai-work"), 1);
+  }
+  const placeAsk = /\b(based|address|kidhar ho|kahan se (kaam|ho)|where (are you|do you))\b/i.test(body);
+  const linkAsk = /\b(site|website|portfolio|dezo|link|url|tarikislam)\b/i.test(body);
+  if (unique.includes("location") && (!placeAsk || (linkAsk && !/\b(kahan se (kaam|ho)|based|address|kidhar ho)\b/i.test(body)))) {
+    unique.splice(unique.indexOf("location"), 1);
   }
   if (unique.includes("website") && /\b(chahiye|banana|build|banani|banwana)\b/i.test(body)) {
     const i = unique.indexOf("website");

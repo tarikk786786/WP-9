@@ -5,6 +5,7 @@ import { isDuplicate, normalizeIncoming, resetDuplicates } from "./parser.ts";
 import { isWithinBusinessHours, matchFaq, matchRule, routeMessage } from "./router.ts";
 import { analyzeMessage, buildPrompt, missedAsks, planReplyEngines, scoreReplyCompleteness, writeCompleteFallback } from "./ai/provider.ts";
 import { stitchMissingAsks } from "./ai/fallback.ts";
+import { polishHumanReply } from "./orchestrate/polish.ts";
 
 describe("parser", () => {
   it("normalizes a text message and skips fromMe", () => {
@@ -195,11 +196,14 @@ describe("message analysis and engine pick", () => {
     const thin = "Dezo mera studio hai, dezo.in pe site dekh sakte ho.\nRate andaz se nahi bolta.";
     const missed = missedAsks(thin, analysis);
     assert.ok(missed.length >= 1);
-    const full = stitchMissingAsks(thin, analysis, missed);
+    const full = polishHumanReply(stitchMissingAsks(thin, analysis, missed), "hey tarik, dezo se website banana hai. process kya hai, price kaise decide hota hai, aur site kahan dekhun?", analysis);
     assert.match(full, /pehle sunta|jo clear/i);
     assert.match(full, /tarikislam\.in/i);
     assert.match(full, /dezo/i);
     assert.match(full, /andaz/i);
+    assert.doesNotMatch(full, /india/i);
+    const siteOnOwnLine = full.split("\n").some((line) => /^tarikislam\.in pe public cheez hai$/i.test(line.trim()));
+    assert.equal(siteOnOwnLine, false);
     assert.ok(scoreReplyCompleteness(full, analysis) >= 0.7);
   });
 });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { analyzeTurn } from "./orchestrate/intelligence.ts";
 import { checkReplyQuality } from "./orchestrate/quality.ts";
-import { polishHumanReply } from "./orchestrate/polish.ts";
+import { polishHumanReply, blendSpokenReply } from "./orchestrate/polish.ts";
 import { combineBurstText } from "./orchestrate/debounce.ts";
 import { analyzeMessage } from "./ai/analyze.ts";
 import { missedAsks } from "./ai/score.ts";
@@ -31,6 +31,24 @@ describe("conversation intelligence", () => {
     assert.match(turn.analysis.meaning, /rate|process|site|dezo/i);
     assert.equal(turn.plan.action, "answer");
     assert.equal(turn.analysis.preferredStyle, "complete");
+    assert.ok(!turn.analysis.topics.includes("location"));
+    assert.doesNotMatch(turn.analysis.asks.join(" "), /kahan se kaam/i);
+  });
+
+  it("weaves site into spoken lines and never dumps India on a link ask", () => {
+    const analysis = analyzeMessage(
+      "hey tarik, dezo se website banana hai. process kya hai, price kaise decide hota hai, aur site kahan dekhun?",
+      { isFirstMessage: true },
+    );
+    const dumped =
+      "dezo mera studio hai, dezo.in pe dekh sakte ho. main india se kaam karta hoon. rate andaz se nahi bolta.\ntarikislam.in pe public cheez hai\npehle sunta hoon, phir jo clear ho wohi kehta hoon";
+    const blended = blendSpokenReply(dumped, analysis);
+    assert.match(blended, /dezo/i);
+    assert.match(blended, /tarikislam\.in/i);
+    assert.match(blended, /andaz|pehle sunta/i);
+    assert.doesNotMatch(blended, /india/i);
+    const siteOnOwnLine = blended.split("\n").some((line) => /^tarikislam\.in pe public cheez hai$/i.test(line.trim()));
+    assert.equal(siteOnOwnLine, false);
   });
 
   it("maps a price typo onto pricing intent", () => {

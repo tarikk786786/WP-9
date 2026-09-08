@@ -61,7 +61,15 @@ export function buildPrompt(message: NormalizedMessage, ctx: AiContext) {
     .slice(-8)
     .map((m) => `${m.role}: ${m.text}`)
     .join("\n");
-  const facts = factsForIntents(analysis.topics, [...ctx.faqs, ...ctx.knowledge, ctx.suggested ?? ""]);
+  const factsRaw = factsForIntents(analysis.topics, [...ctx.faqs, ...ctx.knowledge, ctx.suggested ?? ""]);
+  const already = ctx.recent
+    .filter((row) => row.role === "assistant")
+    .map((row) => row.text)
+    .join("\n")
+    .toLowerCase();
+  const facts = already
+    ? factsRaw.filter((fact) => !already.includes(fact.slice(0, 22).toLowerCase()))
+    : factsRaw;
   const checklist = (analysis.asks.length > 1 ? analysis.asks : analysis.questions.length > 1 ? analysis.questions : analysis.topics)
     .map((item, index) => `${index + 1}. ${item}`)
     .join("\n");
@@ -74,12 +82,29 @@ export function buildPrompt(message: NormalizedMessage, ctx: AiContext) {
         ].join(" ")
       : "1–2 short spoken lines. Match their language. lowercase is fine. Reply to what they actually meant.";
 
+  const moodHint =
+    analysis.mood === "stressed"
+      ? "They sound pressed. Keep it short and exact."
+      : analysis.mood === "warm"
+        ? "They are warm. Stay soft, no extra pitch."
+        : analysis.mood === "casual"
+          ? "They are casual. Match that, still mannered."
+          : "Stay calm and human.";
+  const langHint =
+    analysis.language === "english"
+      ? "Reply in natural English. No Hinglish dump."
+      : analysis.language === "hindi"
+        ? "Reply in simple Hindi/Hinglish, spoken."
+        : "Reply in spoken Hinglish. Do not switch into brochure English.";
   const extra = [
     `This is ${analysis.isFirstMessage ? "their FIRST message" : "a follow-up"}. Complexity: ${analysis.complexity}. Language: ${analysis.language}. Mood: ${analysis.mood}.`,
+    langHint,
+    moodHint,
     `What they meant: ${analysis.meaning}`,
     `Intents: ${analysis.intents.join(", ")}.`,
     checklist ? `Cover every ask. Write like a person, not as numbered answers:\n${checklist}` : "",
-    facts.length ? `True facts you may use (rephrase like a person, do not dump):\n${facts.map((f) => `- ${f}`).join("\n")}` : "",
+    facts.length ? `True facts you may use (rephrase like a person, weave them in, do not dump as a last labeled line):\n${facts.map((f) => `- ${f}`).join("\n")}` : "",
+    already ? "Do not repeat facts already said in the thread." : "",
     ctx.intent ? `Router hint: ${ctx.intent}.` : "",
     ctx.plan
       ? `Response plan: action=${ctx.plan.action}; tone=${ctx.plan.tone}; length=${ctx.plan.answerLength}; confidence=${ctx.plan.confidence}.`
@@ -93,7 +118,7 @@ export function buildPrompt(message: NormalizedMessage, ctx: AiContext) {
     .join("\n");
 
   return {
-    system: [HUMAN_SYSTEM, style, `Preferred language: ${ctx.settings.defaultLanguage}.`, extra].join("\n"),
+    system: [HUMAN_SYSTEM, style, `Preferred language: ${analysis.language}.`, extra].join("\n"),
     user: `${history}\nuser (${ctx.customerName}): ${message.text}`.trim(),
     analysis,
   };

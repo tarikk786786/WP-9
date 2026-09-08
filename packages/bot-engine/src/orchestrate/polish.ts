@@ -64,5 +64,61 @@ export function polishHumanReply(text: string, incoming: string, analysis: Messa
     clean = isAskingIfMachine(incoming) ? "main hi hoon. bolo" : clean.replace(/as an ai[, ]*/i, "").trim();
   }
   if (!clean) clean = "dekh liya. bolo";
-  return clean;
+  return blendSpokenReply(clean, analysis);
+}
+
+export function blendSpokenReply(text: string, analysis: MessageAnalysis): string {
+  let lines = text
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  if (!analysis.topics.includes("location")) {
+    lines = lines
+      .map((line) =>
+        line
+          .replace(/\bmain india se kaam karta hoon\.?\s*/gi, "")
+          .replace(/\bindia se kaam karta hoon\.?\s*/gi, "")
+          .replace(/\bbased in india\.?\s*/gi, "")
+          .replace(/\s{2,}/g, " ")
+          .replace(/^[,.\s]+/, "")
+          .trim(),
+      )
+      .filter(Boolean);
+  }
+  if (!analysis.topics.includes("hours")) {
+    lines = lines.filter((line) => !/\bdin mein aksar yahin|note chhod\b/i.test(line));
+  }
+
+  const dezoIdx = lines.findIndex((line) => /\bdezo\b/i.test(line));
+  const siteIdx = lines.findIndex((line) => /\btarikislam\.in\b/i.test(line));
+  if (dezoIdx >= 0 && siteIdx >= 0 && dezoIdx !== siteIdx) {
+    if (!/\btarikislam\.in\b/i.test(lines[dezoIdx])) {
+      lines[dezoIdx] = `${lines[dezoIdx].replace(/[.!?]+$/, "")} — public cheez tarikislam.in pe hai`;
+    }
+    lines.splice(siteIdx, 1);
+  }
+
+  const rateIdx = lines.findIndex((line) => /\bandaz se nahi bolta\b/i.test(line));
+  const processIdx = lines.findIndex((line) => /\bpehle sunta\b/i.test(line));
+  if (rateIdx >= 0 && processIdx >= 0 && rateIdx !== processIdx) {
+    if (!/\bpehle sunta\b/i.test(lines[rateIdx])) {
+      lines[rateIdx] = `${lines[rateIdx].replace(/[.!?]+$/, "")}, pehle sunta hoon, phir jo clear ho wohi kehta hoon`;
+    }
+    lines.splice(processIdx, 1);
+  }
+
+  const maxLines = analysis.preferredStyle === "complete" ? 5 : 3;
+  const kept: string[] = [];
+  let questions = 0;
+  for (const line of lines) {
+    if (!line) continue;
+    if (/\?/.test(line)) {
+      questions += 1;
+      if (questions > 1) continue;
+    }
+    kept.push(line);
+    if (kept.length >= maxLines) break;
+  }
+  return kept.join("\n").trim() || text.trim();
 }
