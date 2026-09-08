@@ -93,7 +93,7 @@ export function blendSpokenReply(text: string, analysis: MessageAnalysis): strin
   if (!analysis.topics.includes("hours")) {
     lines = lines.filter((line) => !/\bdin mein aksar yahin|note chhod|avg 24 ghante\b/i.test(line));
   }
-  if (!analysis.topics.includes("contact") && !analysis.topics.includes("email")) {
+  if (!analysis.topics.includes("contact")) {
     lines = lines.filter((line) => !/gmail|89844|@tarik_islam_786|tarikk786786/i.test(line));
   }
   if (!analysis.topics.includes("credentials")) {
