@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import pino from "pino";
 import QRCode from "qrcode";
 import { composeReply } from "@/lib/compose-reply";
 import { recordReply } from "@/lib/record-reply";
@@ -180,12 +181,17 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
     Browsers,
     DisconnectReason,
     fetchLatestBaileysVersion,
+    makeCacheableSignalKeyStore,
     useMultiFileAuthState: loadAuthState,
   } = baileys;
 
   const authDir = getAuthDir();
   await mkdir(authDir, { recursive: true });
   const { state, saveCreds } = await loadAuthState(authDir);
+  // Official Baileys auth: write creds.json immediately, not only after Linked.
+  await saveCreds();
+  await persistSavedSession(manager.snapshot.phone);
+
   const version = await Promise.race([
     fetchLatestBaileysVersion().then((result) => result.version),
     new Promise<undefined>((resolve) => {
@@ -201,9 +207,13 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
     }
   }
 
+  const logger = pino({ level: "silent" });
   const sock = makeWASocket({
     ...(version ? { version } : {}),
-    auth: state,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, logger),
+    },
     browser: Browsers.ubuntu("Chrome"),
     syncFullHistory: false,
     markOnlineOnConnect: false,

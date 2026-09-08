@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { copyText, downloadJson } from "@/lib/browser-copy";
 import type { ScanSnapshot } from "@/lib/types";
 
 const STORAGE_KEY = "tarik.whatsapp.session.v1";
@@ -76,7 +77,9 @@ export function ScanLogin({
   const [busy, setBusy] = useState(false);
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [savedHere, setSavedHere] = useState(false);
+  const [exportNote, setExportNote] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const phaseRef = useRef(scan.phase);
   const booted = useRef(false);
   phaseRef.current = scan.phase;
@@ -237,6 +240,56 @@ export function ScanLogin({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function exportLogin() {
+    setExportNote(null);
+    try {
+      const response = await fetch("/api/scan/session", { cache: "no-store" });
+      const json = (await response.json()) as {
+        archive?: { files?: { ["creds.json"]?: string } };
+        snapshot?: ScanSnapshot;
+      };
+      if (json.snapshot) setScan(json.snapshot);
+      if (!json.archive?.files?.["creds.json"]) {
+        setExportNote("Pehle WhatsApp Linked karo, phir Export login.");
+        return;
+      }
+      if (writeLocalArchive(json.archive)) setSavedHere(true);
+      downloadJson("tarik-whatsapp-login.json", json.archive);
+      const copied = await copyText(JSON.stringify(json.archive));
+      setExportNote(
+        copied
+          ? "Login file download ho gayi, clipboard pe bhi. Vercel env: WHATSAPP_AUTH_JSON."
+          : "Login file download ho gayi.",
+      );
+    } catch (error) {
+      setExportNote(error instanceof Error ? error.message : "Export fail.");
+    }
+  }
+
+  async function importLoginFile(file: File) {
+    setExportNote(null);
+    try {
+      const archive = JSON.parse(await file.text()) as unknown;
+      const restore = await fetch("/api/scan/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(archive),
+      });
+      const snap = (await restore.json()) as ScanSnapshot & { error?: string };
+      if (!restore.ok) {
+        setExportNote(snap.error ?? "Import fail. File check karo.");
+        return;
+      }
+      if (writeLocalArchive(archive)) setSavedHere(true);
+      setScan(snap);
+      if (snap.phone) setPhone(snap.phone);
+      setExportNote("Login import ho gayi. Reconnect chal raha hai.");
+      void readStream(undefined, true);
+    } catch {
+      setExportNote("JSON file padhi nahi. Export wali file use karo.");
+    }
+  }
+
   async function logout() {
     stopLogin();
     setBusy(true);
@@ -319,12 +372,18 @@ export function ScanLogin({
             />
           </div>
           {scan.error ? <p className="text-destructive">{scan.error}</p> : null}
-          {remembered ? (
-            <p className="text-xs text-muted-foreground">
-              Saved on this device. Vercel tab band ho to yahi browser wapas
-              restore karega. Laptop pe `npm run live` + `data/` folder forever hai.
-            </p>
-          ) : null}
+          {exportNote ? <p className="text-xs">{exportNote}</p> : null}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void importLoginFile(file);
+            }}
+          />
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => void readStream()}
@@ -338,6 +397,16 @@ export function ScanLogin({
               disabled={busy || scan.phase === "ready" || phone.replace(/\D/g, "").length < 10}
             >
               Link with code
+            </Button>
+            <Button variant="outline" onClick={() => void exportLogin()} disabled={busy}>
+              Export login
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+            >
+              Import login
             </Button>
             <Button
               variant="ghost"

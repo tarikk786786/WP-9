@@ -7,7 +7,7 @@ Relay answers WhatsApp for you with **free local models** and a safety layer.
 3. **Safety** — skips OTPs, money/transfer asks, secrets, and jailbreaks. Rate-limits each contact.
 4. **Cloud API** — optional Meta webhook if you later move the Business number to Vercel.
 
-Replies are **first person as Tarik** (“main Tarik hoon”), never “on behalf of”. After one QR scan, login is saved on this machine (`data/whatsapp-session.json` + `data/baileys-auth`) **and in this browser**. Refresh or reopen the desk and it restores that login — no new QR unless you tap Log out or WhatsApp unlinks the device. On Vercel the server disk is temporary, so the browser copy is what reconnects the next visit.
+Replies are **first person as Tarik** (“main Tarik hoon”), never “on behalf of”. After one QR scan, click **Export login** to download `tarik-whatsapp-login.json` (also copied). Import that file on another machine, or paste it into `WHATSAPP_AUTH_JSON`. Auth follows [Baileys multi-file session save](https://github.com/WhiskeySockets/Baileys): `creds.json` is written immediately and on every `creds.update`.
 
 `npm run live` starts a keeper that restarts Next if it dies, pokes `/api/live` every 8 seconds, restores the saved WhatsApp login, and writes rules + heartbeat to `data/`. Voice and greetings auto-save on the desk. Vercel serverless cannot keep a scan socket 24/7; use this Node process (laptop or VPS) for always-live personal WhatsApp.
 

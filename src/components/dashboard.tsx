@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { LocalBrain } from "@/components/local-brain";
 import { ScanLogin } from "@/components/scan-login";
+import { copyText } from "@/lib/browser-copy";
 import type { DeskData } from "@/lib/load-desk";
 import type { BotRules, InboxMessage, KeywordRule } from "@/lib/types";
 
@@ -152,7 +153,11 @@ export function Dashboard({ initial }: { initial: DeskData }) {
 
   async function copyRulesJson() {
     if (!rules) return;
-    await navigator.clipboard.writeText(JSON.stringify(rules));
+    const ok = await copyText(JSON.stringify(rules));
+    if (!ok) {
+      setError("Copy blocked by the browser. Select and copy from Export if needed.");
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
