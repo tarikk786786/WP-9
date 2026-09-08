@@ -29,7 +29,7 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
   }
 
   if (has(lower, /\b(who are you|your name|aap kaun|tum kaun|kaun ho)\b/) || has(text, /कौन हो/)) {
-    return pick(lower, ["tarik. yahin hoon, bolo", "main tarik. kya kaam hai", "tarik hoon. haan bolo"]);
+    return pick(lower, ["tarik hoon. bolo", "main tarik. kya kaam hai", "tarik. haan, sun raha hoon"]);
   }
 
   if (has(lower, /\b(what do you do|about you|kya karte|kaam kya|services?)\b/)) {
@@ -95,7 +95,7 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
   }
 
   if (has(lower, /\b(thank|thanks|thx|shukriya|dhanyavaad|thanku)\b/) || has(text, /शुक्रिया|धन्यवाद/)) {
-    return pick(lower, ["all good", "koi baat nahi", "haan, done"]);
+    return pick(lower, ["koi baat nahi", "all good", "ji, done"]);
   }
 
   if (has(lower, /\b(sorry|maaf|galti|my bad)\b/) || has(text, /माफ|सॉरी/)) {

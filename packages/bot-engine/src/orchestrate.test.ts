@@ -31,6 +31,12 @@ describe("conversation intelligence", () => {
     assert.ok(check.reasons.includes("invented-price"));
   });
 
+  it("rejects boastful copy", () => {
+    const analysis = analyzeMessage("can you do security?");
+    const check = checkReplyQuality("I am the best, audits are my thing, guaranteed.", analysis, []);
+    assert.equal(check.ok, false);
+  });
+
   it("acks a bare ok without asking a new question", () => {
     const turn = analyzeTurn("ok", [{ role: "user", text: "brief bhej dena" }], false);
     assert.equal(turn.plan.action, "acknowledge");

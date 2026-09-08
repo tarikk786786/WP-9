@@ -108,9 +108,9 @@ export const defaultBotSettings = (): BotSettings => ({
   faqEnabled: true,
   welcomeEnabled: true,
   defaultLanguage: "hinglish",
-  welcomeMessage: "hey, kya ho raha hai",
-  fallbackMessage: "haan, dekh liya. thoda aur bata",
-  humanHandoffMessage: "theek, human pe bhej raha hoon. thoda wait",
+  welcomeMessage: "haan, kya haal hai",
+  fallbackMessage: "dekh liya. jo missing ho woh bata dena, andaz se nahi bolunga",
+  humanHandoffMessage: "theek, ab main khud dekh ke likhta hoon. thoda wait",
   timezone: "Asia/Kolkata",
   businessHours: {
     enabled: false,
@@ -128,14 +128,14 @@ export const defaultAutomationRules = (): AutomationRule[] => [
   { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "hey, bolo", priority: 10, enabled: true },
   { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "rate scope pe depend karta hai. kya banana hai?", priority: 20, enabled: true },
   { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "din mein mostly yahin hota hoon. note chhod dena", priority: 20, enabled: true },
-  { id: "agent", name: "Human", triggerType: "keyword", triggerValue: "agent", response: "theek, human pe bhej raha hoon. thoda wait", priority: 5, enabled: true },
+  { id: "agent", name: "Human", triggerType: "keyword", triggerValue: "agent", response: "theek, thoda wait, dekh ke likhta hoon", priority: 5, enabled: true },
 ];
 
 export const defaultFaqs = (): Faq[] => [
   {
     id: "who",
     question: "Who are you?",
-    answer: "tarik hoon. haan bolo",
+    answer: "tarik hoon. bolo, madad kya chahiye",
     keywords: ["who are you", "kaun ho", "your name"],
     category: "identity",
     priority: 1,

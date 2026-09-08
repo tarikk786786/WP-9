@@ -2,12 +2,13 @@ import type { MessageAnalysis } from "../ai/analyze.ts";
 
 const PRICE_NUMBER = /\b(?:rs\.?|inr|usd|\$|₹)\s?\d|\b\d{3,7}\s?(?:rs|inr|k|lakh)\b/i;
 const BOT_VOICE =
-  /how can i help you today|thanks for reaching out|as an ai|on behalf of|we can definitely|i'd be happy|feel free to|looking forward|audits are my thing|i'll check my schedule|i'm mostly around|leave a note/i;
+  /how can i help you today|thanks for reaching out|as an ai|on behalf of|we can definitely|i'd be happy|feel free to|looking forward|audits are my thing|i'll check my schedule|i'm mostly around|leave a note|i am the best|world[- ]class|guaranteed|100%|oversell/i;
+const BOAST = /\b(the best|world class|expert at everything|i crush|easily done|no problem at all, any budget)\b/i;
 
 export function checkReplyQuality(text: string, analysis: MessageAnalysis, facts: string[]) {
   const reasons: string[] = [];
   if (!text.trim()) reasons.push("empty");
-  if (BOT_VOICE.test(text)) reasons.push("bot-voice");
+  if (BOT_VOICE.test(text) || BOAST.test(text)) reasons.push("bot-voice");
   if (PRICE_NUMBER.test(text) && !facts.some((fact) => PRICE_NUMBER.test(fact))) {
     reasons.push("invented-price");
   }

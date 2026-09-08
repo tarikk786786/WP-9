@@ -3,8 +3,8 @@ import type { BotRules } from "@/lib/types";
 export const defaultRules: BotRules = {
   enabled: true,
   botName: "Tarik",
-  defaultReply: "haan, dekh liya. thoda aur bata",
-  greetingReply: "hey, kya ho raha hai",
+  defaultReply: "dekh liya. jo missing ho woh bata dena, andaz se nahi bolunga",
+  greetingReply: "haan, kya haal hai",
   includeName: false,
   useLocalLlm: true,
   preferredModel: "",
@@ -44,7 +44,7 @@ export const defaultRules: BotRules = {
     {
       id: "price",
       keyword: "price",
-      reply: "rate scope pe depend karta hai. kya banana hai?",
+      reply: "rate andaz se nahi. scope clear ho to exact number",
       enabled: true,
     },
   ],

@@ -1,6 +1,6 @@
 import type { MessageAnalysis } from "../ai/analyze.ts";
 
-const SALES = /\b(we can definitely|i'd be happy|feel free|let me know how i can|looking forward|reach out|check kar sakte ho|aage badhenge|audits are my thing|i’ll check my schedule|i'll check my schedule|i'm mostly around|leave a note)\b/i;
+const SALES = /\b(we can definitely|i'd be happy|feel free|let me know how i can|looking forward|reach out|check kar sakte ho|aage badhenge|audits are my thing|i’ll check my schedule|i'll check my schedule|i'm mostly around|leave a note|the best|world-class|guaranteed)\b/i;
 
 export function polishHumanReply(text: string, incoming: string, analysis: MessageAnalysis): string {
   let out = text.replace(/\r/g, "").trim();

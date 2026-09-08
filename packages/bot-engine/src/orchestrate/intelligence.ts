@@ -92,7 +92,7 @@ export function planTurn(options: {
 
   if (analysis.intents.includes("handoff")) {
     action = "escalate";
-    draft = "theek, human pe bhej raha hoon. thoda wait";
+    draft = "theek, thoda wait, dekh ke likhta hoon";
     confidence = 0.95;
   } else if (media && (lower === "[image]" || lower === "[voice]" || lower === "[video]" || lower === "[document]")) {
     action = "ask";
@@ -106,27 +106,27 @@ export function planTurn(options: {
     complexity = 0.2;
   } else if (ACK.test(text.trim()) || (analysis.intents.includes("thanks") && wordCount <= 6)) {
     action = "acknowledge";
-    draft = ACK.test(text.trim()) ? "ok" : style.usesSlang ? "all good bro" : "all good";
+    draft = ACK.test(text.trim()) ? "ok" : style.usesSlang ? "koi baat nahi bro" : "koi baat nahi";
     confidence = 0.93;
     complexity = 0.05;
   } else if (analysis.complexity === "simple" && analysis.intents[0] === "greeting" && !analysis.wantsAllAnswers) {
     action = "acknowledge";
-    draft = style.usesSlang ? "haan bro, bolo" : "hey, kya ho raha hai";
+    draft = style.usesSlang ? "haan bro, bolo" : "haan, kya haal hai";
     confidence = 0.94;
     complexity = 0.08;
   } else if (incomplete) {
     action = "clarify";
     if (/^(kal|tomorrow)\??$/i.test(text.trim()) && !recent.length) {
-      draft = "kal kis ke liye — call, kaam, ya aur kuch?";
+      draft = "maaf, kal kis cheez ke liye — call, kaam, ya kuch aur?";
     } else {
       const lastUser = [...recent].reverse().find((row) => row.role === "user")?.text ?? "pehle wali baat";
-      draft = `woh ${lastUser.slice(0, 42).replace(/\n/g, " ")} wali baat? short mein confirm kar de`;
+      draft = `pehle wali baat confirm kar dun — ${lastUser.slice(0, 42).replace(/\n/g, " ")}?`;
     }
     confidence = 0.66;
     complexity = 0.28;
   } else if (analysis.intents.includes("project") && !analysis.intents.includes("process") && wordCount < 12) {
     action = "ask";
-    draft = "haan. kya banana hai, kis ke liye, kab tak — 3 lines likh de";
+    draft = "theek. agar 3 lines mein kya, kis ke liye, kab tak bata sako, uske hisaab se exact bol paunga";
     confidence = 0.7;
     complexity = 0.4;
   } else if (analysis.wantsAllAnswers || analysis.complexity === "lead") {

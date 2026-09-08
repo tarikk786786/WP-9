@@ -6,7 +6,7 @@ const TOPIC_SIGNALS: Partial<Record<MessageIntent, RegExp>> = {
   website: /\b(tarikislam\.in|website|site)\b/i,
   studio: /\b(dezo)\b/i,
   pricing: /\b(rate|scope|number|quote|andaz|price|budget)\b/i,
-  availability: /\b(le sakta|available|24h|haan)\b/i,
+  availability: /\b(time|24h|nikal|koshish|reply|available)\b/i,
   process: /\b(pehle|brief|scope|approach|step|process)\b/i,
   timeline: /\b(timeline|scope|din|depend)\b/i,
   meeting: /\b(call|time|meet|zoom)\b/i,

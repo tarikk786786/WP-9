@@ -2,7 +2,7 @@ import type { MessageAnalysis } from "./analyze.ts";
 import { TARIK_PUBLIC_FACTS } from "./facts.ts";
 
 const LINE_FOR: Record<string, string> = {
-  greeting: "hey, sun raha hoon",
+  greeting: "haan, sun raha hoon",
   identity: TARIK_PUBLIC_FACTS.identity,
   services: TARIK_PUBLIC_FACTS.services,
   website: TARIK_PUBLIC_FACTS.website,
@@ -23,10 +23,10 @@ const LINE_FOR: Record<string, string> = {
 
 export function writeCompleteFallback(analysis: MessageAnalysis, extraFacts: string[] = []): string {
   if (analysis.complexity === "simple" && analysis.intents[0] === "greeting") {
-    return "hey, kya ho raha hai";
+    return "haan, kya haal hai";
   }
   if (analysis.complexity === "simple" && analysis.intents[0] === "thanks") {
-    return "all good";
+    return "koi baat nahi";
   }
 
   const lines: string[] = [];
@@ -50,9 +50,9 @@ export function writeCompleteFallback(analysis: MessageAnalysis, extraFacts: str
   }
 
   if (analysis.wantsAllAnswers) {
-    lines.push("kya banana hai, kis ke liye, kab tak — yeh 3 lines likh de, uske baad clear number dunga");
+    lines.push("agar 3 lines mein kya, kis ke liye, kab tak bata sako, uske hisaab se exact bol paunga");
   }
 
-  if (!lines.length) return "haan, dekh liya. thoda aur bata — kya banana hai, kab tak, kis ke liye";
+  if (!lines.length) return "dekh liya. jo missing ho, woh bata dena — andaz se nahi bolunga";
   return lines.slice(0, 8).join("\n");
 }
