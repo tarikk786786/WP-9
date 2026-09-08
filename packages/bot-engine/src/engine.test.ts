@@ -104,7 +104,7 @@ describe("router", () => {
       intent: "greeting",
       suggested: "hey, kya scene hai",
     });
-    assert.match(prompt.system, /real person/i);
+    assert.match(prompt.system, /first person/i);
     assert.match(prompt.user, /Amina/);
   });
 
@@ -144,18 +144,32 @@ describe("message analysis and engine pick", () => {
   });
 
   it("picks gpt-4o first for a complete lead when OpenAI is available", () => {
-    const previous = process.env.OPENAI_API_KEY;
+    const previousOpen = process.env.OPENAI_API_KEY;
+    const previousGroq = process.env.GROQ_API_KEY;
     process.env.OPENAI_API_KEY = "sk-test";
     delete process.env.GROQ_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.GEMINI_API_KEY;
     const analysis = analyzeMessage("website banana hai, process aur rate dono bata, dezo ke through", {
       isFirstMessage: true,
     });
     const plans = planReplyEngines(analysis);
     assert.equal(plans[0]?.engine, "gpt-4o");
     assert.ok((plans[0]?.maxTokens ?? 0) >= 300);
-    if (previous) process.env.OPENAI_API_KEY = previous;
+    if (previousOpen) process.env.OPENAI_API_KEY = previousOpen;
     else delete process.env.OPENAI_API_KEY;
+    if (previousGroq) process.env.GROQ_API_KEY = previousGroq;
+    else delete process.env.GROQ_API_KEY;
+  });
+
+  it("picks groq first on a cheap hybrid turn when Groq is configured", () => {
+    const previousGroq = process.env.GROQ_API_KEY;
+    process.env.GROQ_API_KEY = "gsk-test";
+    process.env.AI_POLICY = "hybrid";
+    const analysis = analyzeMessage("ok noted, thanks", { isFirstMessage: false });
+    const plans = planReplyEngines(analysis);
+    assert.equal(plans[0]?.engine, "groq");
+    if (previousGroq) process.env.GROQ_API_KEY = previousGroq;
   });
 
   it("writes a fallback that answers more than one topic", () => {

@@ -62,7 +62,7 @@ pgvector is enabled for optional RAG embeddings (`knowledge_documents.embedding`
 
 ## AI setup
 
-Set `OPENAI_API_KEY` on the worker. If it is missing, the engine still answers from rules, FAQs, knowledge text, and fallback copy. Prompts forbid inventing prices, orders, policies, or pretending a human replied.
+Hybrid router (`AI_POLICY=hybrid`): greetings/thanks stay off-model; Groq/Gemini/other cheap models handle ordinary chat; GPT-4o/Claude only on hard leads. Set `GROQ_API_KEY` on the **worker** and Vercel. Optional: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`. If every cloud key fails, the engine still answers from facts and fallback copy. It will not invent prices.
 
 ## Worker setup (required in production)
 

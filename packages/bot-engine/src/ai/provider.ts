@@ -4,6 +4,10 @@ import { writeCompleteFallback } from "./fallback.ts";
 import { factsForIntents } from "./facts.ts";
 import { missedTopics, scoreReplyCompleteness } from "./score.ts";
 import { planReplyEngines, type EnginePlan, type ReplyEngineId } from "./select-engine.ts";
+import { recordFailure, recordSuccess } from "../orchestrate/health.ts";
+import { analyzeTurn } from "../orchestrate/intelligence.ts";
+import { checkReplyQuality } from "../orchestrate/quality.ts";
+import type { ResponsePlan, UserStyle } from "../orchestrate/types.ts";
 
 export type { MessageAnalysis } from "./analyze.ts";
 export { analyzeMessage, detectIntent, splitAsks } from "./analyze.ts";
@@ -21,15 +25,18 @@ export type AiContext = {
   suggested?: string;
   analysis?: MessageAnalysis;
   isFirstMessage?: boolean;
+  messageType?: string;
+  plan?: ResponsePlan;
+  style?: UserStyle;
 };
 
 const HUMAN_SYSTEM = [
-  "You are Tarik Islam, a real person, texting on WhatsApp in first person.",
-  "Never sound like a bot, CRM, or assistant. Do not mention AI, models, or automation.",
-  "Do not invent prices, fake case results, unpublished credentials, or that a human already replied.",
-  "If they asked more than one thing, answer every ask. Do not hide behind a single website line.",
-  "Unknown numbers stay unknown: say you quote after scope, then still answer the other parts.",
-  "No brochure, no stacked job titles, no 'How can I help you today', no 'Thanks for reaching out'.",
+  "You are Tarik Islam texting on WhatsApp in first person — warm, casual, specific.",
+  "Match their language and slang (Hinglish/English/Hindi). Do not switch into customer-support English.",
+  "Do not invent prices, fake case results, unpublished credentials, or that someone already replied live.",
+  "If they asked more than one thing, answer every ask. Unknown numbers stay unknown: quote after scope, still answer the rest.",
+  "If the plan is CLARIFY or ASK, ask one short question instead of dumping a brochure.",
+  "No 'How can I help you today', no 'Thanks for reaching out', no stacked bios, no mentioning models.",
 ].join(" ");
 
 function isBadAiText(text: string, allowLong: boolean) {
@@ -72,6 +79,13 @@ export function buildPrompt(message: NormalizedMessage, ctx: AiContext) {
     checklist ? `You MUST answer all of these:\n${checklist}` : "",
     facts.length ? `True facts you may use (rephrase like a person, do not dump):\n${facts.map((f) => `- ${f}`).join("\n")}` : "",
     ctx.intent ? `Router hint: ${ctx.intent}.` : "",
+    ctx.plan
+      ? `Response plan: action=${ctx.plan.action}; tone=${ctx.plan.tone}; length=${ctx.plan.answerLength}; confidence=${ctx.plan.confidence}.`
+      : "",
+    ctx.style
+      ? `Their style: language=${ctx.style.language}, formality=${ctx.style.formality}, slang=${ctx.style.usesSlang}, emoji=${ctx.style.usesEmoji}. Match it.`
+      : "",
+    ctx.plan?.summary && ctx.plan.summary !== "No prior thread." ? `Thread:\n${ctx.plan.summary}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -96,7 +110,10 @@ async function openAiCompatible(options: {
   temperature: number;
   allowLong: boolean;
 }): Promise<ProviderHit | null> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "User-Agent": "TarikDesk/1.0",
+  };
   if (options.key) headers.Authorization = `Bearer ${options.key}`;
   try {
     const response = await fetch(options.url, {
@@ -162,6 +179,40 @@ async function anthropicReply(
   }
 }
 
+async function geminiReply(
+  system: string,
+  user: string,
+  plan: EnginePlan,
+  allowLong: boolean,
+): Promise<ProviderHit | null> {
+  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!key) return null;
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${plan.model}:generateContent?key=${encodeURIComponent(key)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: system }] },
+          contents: [{ role: "user", parts: [{ text: user }] }],
+          generationConfig: { temperature: plan.temperature, maxOutputTokens: plan.maxTokens },
+        }),
+        signal: AbortSignal.timeout(22_000),
+      },
+    );
+    if (!response.ok) return null;
+    const data = (await response.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim();
+    if (!text || isBadAiText(text, allowLong)) return null;
+    return { text, engine: "gemini" };
+  } catch {
+    return null;
+  }
+}
+
 function callEngine(plan: EnginePlan, system: string, user: string, allowLong: boolean): Promise<ProviderHit | null> {
   const common = {
     system,
@@ -186,6 +237,24 @@ function callEngine(plan: EnginePlan, system: string, user: string, allowLong: b
         url: "https://api.groq.com/openai/v1/chat/completions",
         key: process.env.GROQ_API_KEY,
       });
+    case "together":
+      return process.env.TOGETHER_API_KEY
+        ? openAiCompatible({
+            ...common,
+            url: "https://api.together.xyz/v1/chat/completions",
+            key: process.env.TOGETHER_API_KEY,
+          })
+        : Promise.resolve(null);
+    case "cerebras":
+      return process.env.CEREBRAS_API_KEY
+        ? openAiCompatible({
+            ...common,
+            url: "https://api.cerebras.ai/v1/chat/completions",
+            key: process.env.CEREBRAS_API_KEY,
+          })
+        : Promise.resolve(null);
+    case "gemini":
+      return geminiReply(system, user, plan, allowLong);
     case "openrouter":
       return openAiCompatible({
         ...common,
@@ -216,21 +285,40 @@ export async function generateBestHumanReply(
   message: NormalizedMessage,
   ctx: AiContext,
 ): Promise<ProviderHit | null> {
-  const prompt = buildPrompt(message, ctx);
-  const analysis = prompt.analysis;
-  const allowLong = analysis.preferredStyle === "complete";
-  const plans = planReplyEngines(analysis);
+  const inbound = ctx.recent.filter((row) => row.role === "user").length;
+  const turn = analyzeTurn(message.text, ctx.recent, ctx.isFirstMessage ?? inbound <= 1);
+  const analysis = ctx.analysis ?? turn.analysis;
+  const plan = ctx.plan ?? turn.plan;
+  const facts = [...ctx.faqs, ...ctx.knowledge, ctx.suggested ?? ""];
+
+  if (plan.draft && (plan.action === "acknowledge" || plan.action === "escalate" || plan.action === "wait")) {
+    return { text: plan.draft, engine: `tier0 · ${plan.action}` };
+  }
+
+  const prompt = buildPrompt(message, { ...ctx, analysis, plan, style: ctx.style ?? turn.style });
+  const allowLong = analysis.preferredStyle === "complete" || plan.answerLength === "complete";
+  const plans = planReplyEngines(analysis, plan);
   let best: ProviderHit | null = null;
   let bestScore = -1;
 
-  for (const plan of plans) {
-    const hit = await callEngine(plan, prompt.system, prompt.user, allowLong);
-    if (!hit) continue;
+  for (const enginePlan of plans) {
+    const started = Date.now();
+    const hit = await callEngine(enginePlan, prompt.system, prompt.user, allowLong);
+    if (!hit) {
+      recordFailure(enginePlan.engine);
+      continue;
+    }
+    recordSuccess(enginePlan.engine, Date.now() - started);
     let text = hit.text;
+    const quality = checkReplyQuality(text, analysis, facts);
+    if (!quality.ok && quality.reasons.includes("invented-price")) {
+      recordFailure(enginePlan.engine);
+      continue;
+    }
     let score = scoreReplyCompleteness(text, analysis);
     const missed = missedTopics(text, analysis);
     if (allowLong && missed.length && score < 0.75) {
-      const repaired = await callEngine(plan, prompt.system, repairUser(prompt.user, missed), allowLong);
+      const repaired = await callEngine(enginePlan, prompt.system, repairUser(prompt.user, missed), allowLong);
       if (repaired) {
         const repairedScore = scoreReplyCompleteness(repaired.text, analysis);
         if (repairedScore >= score) {
@@ -239,7 +327,7 @@ export async function generateBestHumanReply(
         }
       }
     }
-    const labeled = { text, engine: `${hit.engine} · ${plan.reason}` };
+    const labeled = { text, engine: `${hit.engine} · ${enginePlan.reason}` };
     if (score > bestScore) {
       best = labeled;
       bestScore = score;
@@ -248,10 +336,13 @@ export async function generateBestHumanReply(
   }
 
   if (best) return best;
-  if (allowLong) {
-    return { text: writeCompleteFallback(analysis, [...ctx.faqs, ...ctx.knowledge]), engine: "complete-fallback" };
+  if (plan.draft && (plan.action === "ask" || plan.action === "clarify")) {
+    return { text: plan.draft, engine: `tier0 · ${plan.action}` };
   }
-  return null;
+  if (allowLong) {
+    return { text: writeCompleteFallback(analysis, facts), engine: "complete-fallback" };
+  }
+  return plan.draft ? { text: plan.draft, engine: `tier0 · ${plan.action}` } : null;
 }
 
 export async function generateOpenAiReply(

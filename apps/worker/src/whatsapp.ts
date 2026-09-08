@@ -18,7 +18,8 @@ import {
   upsertCustomer,
   wasProcessed,
 } from "@bot/database";
-import { analyzeMessage, generateBestHumanReply, isDuplicate, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback } from "@bot/engine";
+import type { NormalizedMessage } from "@bot/shared";
+import { analyzeMessage, combineBurstText, debounceChat, generateBestHumanReply, isDuplicate, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback } from "@bot/engine";
 
 type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
 
@@ -180,6 +181,84 @@ export async function sendWhatsApp(chatId: string, text: string) {
   });
 }
 
+async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
+  const sock = manager.sock;
+  if (!sock || !batch.length) return;
+  const last = batch[batch.length - 1];
+  const combined = { ...last, text: combineBurstText(batch.map((row) => row.text)) };
+  const settings = await getSettings();
+  const rules = await getRules();
+  const faqs = await getFaqs();
+  const customer = await upsertCustomer({
+    number: jid.replace(/@s\.whatsapp\.net$/, ""),
+    name: combined.fromName,
+  });
+  const convo = await upsertConversation(customer.id, jid);
+  const history = await recentMessages(convo.id);
+  const knowledge = await knowledgeSearch(combined.text);
+  const inboundCount = history.filter((m) => m.direction === "in").length;
+  const analysis = analyzeMessage(combined.text, {
+    isFirstMessage: inboundCount <= batch.length,
+    inboundCount,
+  });
+  const routed = routeMessage({
+    message: combined,
+    settings,
+    rules,
+    faqs,
+    conversationStatus: convo.status,
+    knowledgeHits: knowledge,
+    aiReply: null,
+  });
+  if (routed.action === "handoff") {
+    await setConversationStatus(convo.id, "waiting_human");
+  }
+  if (routed.action === "skip") return;
+  if (settings.enabled === false) return;
+  const faqFacts = matchAllFaqs(combined.text, faqs).map((f) => `${f.question}: ${f.answer}`);
+  const ruleFacts = matchAllRules(combined.text, rules)
+    .filter((r) => !/agent|human/.test(r.triggerValue))
+    .map((r) => r.response);
+  const ai =
+    settings.aiEnabled !== false
+      ? await generateBestHumanReply(combined, {
+          settings,
+          customerName: combined.fromName,
+          recent: history
+            .slice()
+            .reverse()
+            .map((m) => ({ role: m.direction === "in" ? "user" : "assistant", text: m.text })),
+          faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
+          knowledge: [...knowledge, ...ruleFacts],
+          intent: analysis.intents.join(","),
+          suggested: analysis.wantsAllAnswers
+            ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge])
+            : routed.text,
+          analysis,
+          isFirstMessage: inboundCount <= batch.length,
+          messageType: combined.type,
+        })
+      : null;
+  const text =
+    ai?.text ||
+    (analysis.wantsAllAnswers
+      ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge])
+      : routed.text);
+  if (!text) return;
+  await sock.sendMessage(jid, { text });
+  manager.snapshot.lastMessageSentAt = new Date().toISOString();
+  await addMessage({
+    conversation_id: convo.id,
+    whatsapp_message_id: `out_${combined.whatsappMessageId}`,
+    direction: "out",
+    message_type: "text",
+    text,
+    media_reference: null,
+    ai_generated: Boolean(ai),
+    intent: routed.intent ?? routed.source,
+  });
+}
+
 export async function startWhatsApp(pairingPhone?: string) {
   if (manager.sock && (manager.snapshot.phase === "ready" || manager.snapshot.phase === "qr")) {
     return manager.snapshot;
@@ -317,9 +396,6 @@ async function openSocket(pairingPhone?: string) {
   });
 
   sock.ev.on("messages.upsert", async ({ messages }) => {
-    const settings = await getSettings();
-    const rules = await getRules();
-    const faqs = await getFaqs();
     for (const raw of messages) {
       try {
         const jid = raw.key.remoteJid;
@@ -350,67 +426,8 @@ async function openSocket(pairingPhone?: string) {
           ai_generated: false,
           intent: null,
         });
-        const history = await recentMessages(convo.id);
-        const knowledge = await knowledgeSearch(normalized.text);
-        const inboundCount = history.filter((m) => m.direction === "in").length;
-        const analysis = analyzeMessage(normalized.text, {
-          isFirstMessage: inboundCount <= 1,
-          inboundCount,
-        });
-        const routed = routeMessage({
-          message: normalized,
-          settings,
-          rules,
-          faqs,
-          conversationStatus: convo.status,
-          knowledgeHits: knowledge,
-          aiReply: null,
-        });
-        if (routed.action === "handoff") {
-          await setConversationStatus(convo.id, "waiting_human");
-        }
-        if (routed.action === "skip") continue;
-        if (settings.enabled === false) continue;
-        const faqFacts = matchAllFaqs(normalized.text, faqs).map((f) => `${f.question}: ${f.answer}`);
-        const ruleFacts = matchAllRules(normalized.text, rules)
-          .filter((r) => !/agent|human/.test(r.triggerValue))
-          .map((r) => r.response);
-        const ai =
-          settings.aiEnabled !== false
-            ? await generateBestHumanReply(normalized, {
-                settings,
-                customerName: normalized.fromName,
-                recent: history
-                  .slice()
-                  .reverse()
-                  .map((m) => ({ role: m.direction === "in" ? "user" : "assistant", text: m.text })),
-                faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
-                knowledge: [...knowledge, ...ruleFacts],
-                intent: analysis.intents.join(","),
-                suggested: analysis.wantsAllAnswers
-                  ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge])
-                  : routed.text,
-                analysis,
-                isFirstMessage: inboundCount <= 1,
-              })
-            : null;
-        const text =
-          ai?.text ||
-          (analysis.wantsAllAnswers
-            ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge])
-            : routed.text);
-        if (!text) continue;
-        await sock.sendMessage(jid, { text });
-        manager.snapshot.lastMessageSentAt = new Date().toISOString();
-        await addMessage({
-          conversation_id: convo.id,
-          whatsapp_message_id: `out_${raw.key.id}`,
-          direction: "out",
-          message_type: "text",
-          text,
-          media_reference: null,
-          ai_generated: Boolean(ai),
-          intent: routed.intent ?? routed.source,
+        debounceChat(jid, normalized, (batch) => {
+          void replyToBurst(jid, batch);
         });
       } catch (error) {
         await addLog("error", "whatsapp", error instanceof Error ? error.message : "message failed");
