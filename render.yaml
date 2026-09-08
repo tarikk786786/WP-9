@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: whatsapp-baileys-worker
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm run worker
+    plan: starter
+    envVars:
+      - key: WORKER_PORT
+        value: 8788
+    disk:
+      name: baileys-auth
+      mountPath: /app/data
+      sizeGB: 1

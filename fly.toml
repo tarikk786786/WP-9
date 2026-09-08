@@ -1,0 +1,16 @@
+# fly.toml — persistent Baileys worker (not the Next.js app)
+app = "whatsapp-baileys-worker"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8788
+  force_https = true
+  auto_stop_machines = false
+  min_machines_running = 1
+
+[mounts]
+  source = "baileys_data"
+  destination = "/app/data"

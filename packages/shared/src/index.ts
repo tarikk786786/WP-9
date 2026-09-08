@@ -1,0 +1,162 @@
+import { z } from "zod";
+
+export const ConversationStatus = z.enum(["bot", "waiting_human", "human", "closed"]);
+export type ConversationStatus = z.infer<typeof ConversationStatus>;
+
+export const MessageType = z.enum([
+  "text",
+  "image",
+  "audio",
+  "video",
+  "document",
+  "sticker",
+  "location",
+  "contact",
+  "reaction",
+  "buttons",
+  "list",
+  "quoted",
+  "unknown",
+]);
+export type MessageType = z.infer<typeof MessageType>;
+
+export const NormalizedMessage = z.object({
+  id: z.string(),
+  whatsappMessageId: z.string(),
+  sender: z.string(),
+  chatId: z.string(),
+  fromName: z.string(),
+  type: MessageType,
+  text: z.string(),
+  timestamp: z.string(),
+  isGroup: z.boolean(),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+});
+export type NormalizedMessage = z.infer<typeof NormalizedMessage>;
+
+export const SendMessageBody = z.object({
+  chatId: z.string().min(1),
+  message: z.string().min(1).max(2000),
+});
+export type SendMessageBody = z.infer<typeof SendMessageBody>;
+
+export const WorkerHealth = z.object({
+  worker: z.literal("ok"),
+  uptimeMs: z.number(),
+  whatsapp: z.object({
+    phase: z.enum(["idle", "qr", "connecting", "ready", "logged_out"]),
+    connected: z.boolean(),
+    phone: z.string().nullable(),
+    qrDataUrl: z.string().nullable(),
+    pairingCode: z.string().nullable(),
+    persisted: z.boolean(),
+    error: z.string().nullable(),
+    lastConnectedAt: z.string().nullable(),
+    lastMessageReceivedAt: z.string().nullable(),
+    lastMessageSentAt: z.string().nullable(),
+  }),
+});
+export type WorkerHealth = z.infer<typeof WorkerHealth>;
+
+export const AutomationRule = z.object({
+  id: z.string(),
+  name: z.string(),
+  triggerType: z.enum(["exact", "contains", "keyword", "regex"]),
+  triggerValue: z.string(),
+  response: z.string(),
+  priority: z.number(),
+  enabled: z.boolean(),
+});
+export type AutomationRule = z.infer<typeof AutomationRule>;
+
+export const Faq = z.object({
+  id: z.string(),
+  question: z.string(),
+  answer: z.string(),
+  keywords: z.array(z.string()),
+  category: z.string(),
+  priority: z.number(),
+  enabled: z.boolean(),
+});
+export type Faq = z.infer<typeof Faq>;
+
+export const BotSettings = z.object({
+  enabled: z.boolean(),
+  aiEnabled: z.boolean(),
+  faqEnabled: z.boolean(),
+  welcomeEnabled: z.boolean(),
+  defaultLanguage: z.enum(["hinglish", "english", "hindi"]),
+  welcomeMessage: z.string(),
+  fallbackMessage: z.string(),
+  humanHandoffMessage: z.string(),
+  timezone: z.string(),
+  businessHours: z.object({
+    enabled: z.boolean(),
+    days: z.array(z.number()),
+    open: z.string(),
+    close: z.string(),
+    afterHoursMessage: z.string(),
+  }),
+  replyToGroups: z.boolean(),
+  replyToMedia: z.boolean(),
+});
+export type BotSettings = z.infer<typeof BotSettings>;
+
+export const defaultBotSettings = (): BotSettings => ({
+  enabled: true,
+  aiEnabled: true,
+  faqEnabled: true,
+  welcomeEnabled: true,
+  defaultLanguage: "hinglish",
+  welcomeMessage: "hey, kya ho raha hai",
+  fallbackMessage: "haan, dekh liya. thoda aur bata",
+  humanHandoffMessage: "theek, human pe bhej raha hoon. thoda wait",
+  timezone: "Asia/Kolkata",
+  businessHours: {
+    enabled: false,
+    days: [1, 2, 3, 4, 5],
+    open: "09:00",
+    close: "18:00",
+    afterHoursMessage: "thoda late ho gaya mere side. subah dekh ke likhta hoon",
+  },
+  replyToGroups: false,
+  replyToMedia: true,
+});
+
+export const defaultAutomationRules = (): AutomationRule[] => [
+  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "hey, kya scene hai", priority: 10, enabled: true },
+  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "hey, bolo", priority: 10, enabled: true },
+  { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "rate scope pe depend karta hai. kya banana hai?", priority: 20, enabled: true },
+  { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "din mein mostly yahin hota hoon. note chhod dena", priority: 20, enabled: true },
+  { id: "agent", name: "Human", triggerType: "keyword", triggerValue: "agent", response: "theek, human pe bhej raha hoon. thoda wait", priority: 5, enabled: true },
+];
+
+export const defaultFaqs = (): Faq[] => [
+  {
+    id: "who",
+    question: "Who are you?",
+    answer: "tarik hoon. haan bolo",
+    keywords: ["who are you", "kaun ho", "your name"],
+    category: "identity",
+    priority: 1,
+    enabled: true,
+  },
+  {
+    id: "site",
+    question: "Website?",
+    answer: "tarikislam.in pe dekh lena. kuch specific chahiye to yahin likh",
+    keywords: ["website", "portfolio", "site"],
+    category: "identity",
+    priority: 2,
+    enabled: true,
+  },
+];
+
+export type RouteSource = "command" | "handoff" | "hours" | "rule" | "faq" | "knowledge" | "ai" | "fallback" | "skip";
+
+export type BotDecision = {
+  action: "reply" | "skip" | "handoff";
+  text: string;
+  source: RouteSource;
+  intent?: string;
+};

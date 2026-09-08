@@ -1,0 +1,26 @@
+name: Security
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install
+      - run: npm audit --audit-level=high
+        continue-on-error: true
+      - name: Block committed secrets
+        run: |
+          if git grep -nE 'sk-[A-Za-z0-9]{20,}|SUPABASE_SERVICE_ROLE_KEY=.+[A-Za-z]' -- ':!.env.example' ':!docs/**'; then
+            echo "Possible secret found in repo"
+            exit 1
+          fi

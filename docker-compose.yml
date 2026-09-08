@@ -1,0 +1,28 @@
+services:
+  worker:
+    build: .
+    ports:
+      - "8788:8788"
+    env_file:
+      - .env
+    volumes:
+      - worker-auth:/app/data
+    restart: unless-stopped
+
+  web:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    command: sh -c "npm install && npm run dev:web"
+    ports:
+      - "43217:43217"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    depends_on:
+      - worker
+    environment:
+      WORKER_API_URL: http://worker:8788
+
+volumes:
+  worker-auth:

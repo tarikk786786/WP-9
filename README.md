@@ -1,87 +1,159 @@
-# Relay — always-live local LLM WhatsApp replies
+# WhatsApp auto-reply bot
 
-Relay answers WhatsApp for you with **free local models** and a safety layer.
+Personal WhatsApp auto-reply without the Meta Cloud API. A **persistent Node worker** keeps a [Baileys](https://github.com/WhiskeySockets/Baileys) WhatsApp Web socket alive. **Vercel** hosts the Next.js admin dashboard only. **Supabase** stores customers, conversations, messages, FAQs, rules, settings, knowledge, logs, and Baileys session files.
 
-1. **Login by scan** — QR-link the WhatsApp on your phone and keep this Node process running.
-2. **Local brain** — tries Ollama, LM Studio, Jan, llama.cpp, and Kobold on localhost, then an on-device Flan-T5 model. Keyword rules are the fallback.
-3. **Safety** — skips OTPs, money/transfer asks, secrets, and jailbreaks. Rate-limits each contact.
-4. **Cloud API** — optional Meta webhook if you later move the Business number to Vercel.
+Do not run Baileys inside a Vercel Serverless Function. The socket needs a process that stays up.
 
-Replies are **first person as Tarik** (“main Tarik hoon”), never “on behalf of”. After one QR scan, click **Export login** to download `tarik-whatsapp-login.json` (also copied). Import that file on another machine, or paste it into `WHATSAPP_AUTH_JSON`. Auth follows [Baileys multi-file session save](https://github.com/WhiskeySockets/Baileys): `creds.json` is written immediately and on every `creds.update`.
+```
+WhatsApp  →  Baileys worker  →  bot engine  →  WhatsApp
+                    ↕
+                Supabase
+                    ↕
+         Vercel Next.js admin
+```
 
-`npm run live` starts a keeper that restarts Next if it dies, pokes `/api/live` every 8 seconds, restores the saved WhatsApp login, and writes rules + heartbeat to `data/`. Voice and greetings auto-save on the desk. Vercel serverless cannot keep a scan socket 24/7; use this Node process (laptop or VPS) for always-live personal WhatsApp.
+## Architecture
 
-## What you get
+| Piece | Role |
+| --- | --- |
+| `apps/web` | Next.js App Router dashboard on Vercel |
+| `apps/worker` | Long-running Baileys process (Railway, Render, Fly, VPS, Docker) |
+| `packages/bot-engine` | Normalize → dedupe → route (commands, handoff, hours, rules, FAQ, knowledge, AI, fallback) |
+| `packages/database` | Supabase or in-memory store |
+| `packages/shared` | Zod types |
+| `supabase/migrations` | Postgres schema + pgvector |
 
-- Always-live desk with detected local engines
-- QR login: WhatsApp → Linked devices → Link a device
-- Safety filters before any model runs
-- Simulator that uses the same compose path
-- Cloud API webhook with hub challenge and optional signature checks
+Vercel talks to the worker with `WORKER_API_URL` and `WORKER_API_SECRET` (server-side only). The browser never sees the worker secret.
 
-## Run locally
+## Baileys and WhatsApp authentication
+
+1. Start the worker (`npm run worker`).
+2. Open `/admin/dashboard` → Show QR, or pairing code with country-code phone.
+3. On the phone: **Linked devices → Link a device**.
+4. On `connection.open`, session files are written to `data/baileys-auth` and copied into Supabase `baileys_auth`.
+5. Worker restart / deploy / machine reboot hydrates those files. You should not need a new QR unless WhatsApp logged the device out (`401` / `loggedOut` / `badSession`).
+
+Reconnect uses exponential backoff (capped). Logged-out sessions are wiped and a fresh QR is requested.
+
+## Local setup
 
 ```bash
 npm install
-cp .env.example .env.local
-npm run live
+cp .env.example .env
+# fill ADMIN_SECRET and WORKER_API_SECRET
+npm run dev:worker   # :8788
+npm run dev:web      # :43217
 ```
 
-Optional stronger free model:
+Or `docker compose up`.
+
+Open http://127.0.0.1:43217 (overview), `/admin` (desk), `/desk` (Hinglish simulator). Default local secrets are in `.env.example` comments — change them.
+
+Without Supabase, state lives in worker memory plus the local `data/` directory. Sessions survive worker restarts only if `data/baileys-auth` is on a persistent volume.
+
+## Supabase setup
+
+1. Create a project.
+2. Run `supabase/migrations/0001_init.sql` then `supabase/seed.sql` in the SQL editor.
+3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the **worker** (and optionally the web app).
+4. Keep the service role key off the client.
+
+pgvector is enabled for optional RAG embeddings (`knowledge_documents.embedding`). Similarity search currently falls back to keyword match unless you add embedding jobs.
+
+## AI setup
+
+Set `OPENAI_API_KEY` on the worker. If it is missing, the engine still answers from rules, FAQs, knowledge text, and fallback copy. Prompts forbid inventing prices, orders, policies, or pretending a human replied.
+
+## Worker setup (required in production)
+
+Host `apps/worker` as a **persistent** Node process:
+
+- **Docker:** `docker build -t wa-worker . && docker run -p 8788:8788 --env-file .env -v wa-data:/app/data wa-worker`
+- **Railway / Render / Fly:** start command `npm run worker`, attach a volume at `/app/data`
+- **VPS:** `npm run worker` under systemd
+
+Protect `WORKER_API_SECRET`. Do not expose the Baileys socket. Only the HTTP API (`/health` public, everything else authenticated) should be reachable, preferably on a private network.
+
+Health: `GET /worker/health` (also `/health`).
+
+## Vercel setup
+
+Deploy **`apps/web` only**.
+
+Suggested Vercel settings:
+
+- Root Directory: `apps/web`
+- Include files outside the root (npm workspaces)
+- Env: `WORKER_API_URL`, `WORKER_API_SECRET`, `ADMIN_SECRET`, `NEXT_PUBLIC_APP_URL`
+
+Do not add Baileys as a Vercel function.
+
+## GitHub setup
+
+Branches: `main`, `develop`, `feature/*`, `fix/*`, `hotfix/*`.
+
+CI (`.github/workflows/ci.yml`) runs `npm install`, lint, typecheck, test, build. Secrets belong in GitHub Secrets, never in the repo.
+
+## Environment variables
+
+See `.env.example`. Never commit `.env`. Never log secrets. Sentry is optional (`SENTRY_DSN`).
+
+## Deployment checklist
+
+- [ ] Worker process is always on, with a persistent volume
+- [ ] Supabase migration applied
+- [ ] `WORKER_API_SECRET` matches on Vercel and the worker
+- [ ] Admin secret set; dashboard not public without it
+- [ ] OpenAI key only on the worker
+- [ ] WhatsApp linked once; session files in Supabase
+- [ ] After deploy, worker hydrates session without a new QR
+- [ ] `/api/health` shows web ok; worker health shows WhatsApp phase
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| QR never appears on Vercel | Worker is down or `WORKER_API_URL` is wrong |
+| Scan then immediate logout | WhatsApp rejected the session; worker wipes auth and issues a new QR |
+| Duplicate replies | Duplicate protection uses `whatsapp_message_id`; check unique constraint |
+| Human asked but bot still replies | Set conversation status to `human` in admin |
+| AI invents facts | Disable AI or add FAQs / knowledge; fallback is used when the model is unsure |
+| Session lost on restart | No volume and no Supabase `baileys_auth` |
+
+## Security
+
+- Worker APIs require `Authorization: Bearer` or `x-worker-secret`
+- Admin dashboard uses `ADMIN_SECRET` httpOnly cookie
+- Rate limits on login, send, and admin writes
+- Zod validation on send payloads
+- Meta Cloud webhook routes return 410 by design
+
+## Session persistence
+
+Order of truth: WhatsApp → Baileys multi-file auth in `data/baileys-auth` → base64 rows in `baileys_auth`. The worker hydrates the directory before `useMultiFileAuthState`. `creds.update` is debounced so writes do not race.
+
+## Production checklist
+
+1. Persistent worker host + volume  
+2. Supabase service role on worker  
+3. Vercel web only  
+4. Matching API secrets  
+5. Bot enabled in settings  
+6. Business hours / FAQs / rules reviewed  
+7. CI green  
+8. No secrets in git  
+
+## Scripts
 
 ```bash
-# https://ollama.com
-ollama pull llama3.2
+npm run dev          # worker + web
+npm run dev:web
+npm run dev:worker
+npm run worker
+npm run lint
+npm run typecheck
+npm test
+npm run build
 ```
 
-Open [http://127.0.0.1:43217](http://127.0.0.1:43217). Click **Show QR**, scan from Linked devices once. The session is written to disk and reused forever on this host. Use **Voice** for language, tone, media, groups, signature, and extra facts. Use **Generate reply** to hear the same first-person voice.
-
-## Connect WhatsApp Business
-
-1. Create a Meta app at [developers.facebook.com](https://developers.facebook.com/apps/) and add the WhatsApp product.
-2. Use the test number or a verified WhatsApp Business number. Copy the **Phone number ID** and a permanent **access token**.
-3. Set these environment variables in Vercel (and in `.env.local` for local webhook tests):
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `WHATSAPP_ACCESS_TOKEN` | Yes | Graph API bearer token |
-| `WHATSAPP_PHONE_NUMBER_ID` | Yes | Number that sends replies |
-| `WHATSAPP_VERIFY_TOKEN` | Yes | Shared secret you invent for webhook setup |
-| `WHATSAPP_APP_SECRET` | Recommended | Validates Meta signatures |
-| `REPLY_RULES_JSON` | Optional | Same rules the dashboard can copy, so every Vercel function uses them |
-
-4. Deploy to Vercel, then in Meta set the callback URL to:
-
-```
-https://YOUR-DOMAIN/api/whatsapp/webhook
-```
-
-Use the same verify token as `WHATSAPP_VERIFY_TOKEN`. Subscribe to `messages`.
-
-5. Send a text from a number allowed on that WhatsApp app (the test number only accepts allow-listed testers).
-
-## How replies are chosen
-
-1. Auto-reply must be on.
-2. If business hours are on and it is outside the window, send the after-hours text.
-3. Short greetings (`hi`, `hello`, `hey`, …) use the greeting reply.
-4. Hours, price, site, and hire questions use the live Hinglish voice (facts from tarikislam.in).
-5. Other messages use the same voice. A local LLM is optional and never blocks a reply.
-
-After you **Generate reply**, the thread stays in the Inbox tab. WhatsApp scan stays open after Linked — keep the tab open so messages keep arriving.
-
-Dashboard **Save** writes `data/store.json` on a long-lived disk (local). On Vercel that file is not shared across functions, so paste the copied JSON into `REPLY_RULES_JSON` after you settle on copy.
-
-## Deploy on Vercel
-
-```bash
-npx vercel
-```
-
-Add the environment variables in the Vercel project, then redeploy. The webhook must be HTTPS, which Vercel provides.
-
-## Limits
-
-- Cloud API only talks to a **WhatsApp Business** number, not your everyday personal chat unless you migrate that number to Business and Meta approves it.
-- The 24-hour customer care window still applies: you can reply to a user who messaged you first. Template messages are not implemented in this slice.
-- Inbox history on Vercel is ephemeral unless you add a database later.
+CI tests mock Baileys (no real WhatsApp account).
