@@ -3,7 +3,7 @@ import type { MessageAnalysis } from "../ai/analyze.ts";
 const PRICE_NUMBER = /\b(?:rs\.?|inr|usd|\$|₹)\s?\d|\b\d{3,7}\s?(?:rs|inr|k|lakh)\b/i;
 const BOT_VOICE =
   /how can i help you today|thanks for reaching out|as an ai|on behalf of|we can definitely|i'd be happy|feel free to|looking forward|audits are my thing|i'll check my schedule|i'm mostly around|leave a note|i am the best|world[- ]class|guaranteed|100%|oversell/i;
-const LEAD = /\b(brief chahiye|3 lines|kis ke liye, kab tak|scope then|uske hisaab se approach|rate final|lead|inbound|book a call|send (me )?your (budget|requirement))\b/i;
+const LEAD = /\b(brief chahiye|3 lines|kis ke liye, kab tak|scope then|uske hisaab se approach|rate final|rate scope pe depend|note chhod|lead|inbound|book a call|send (me )?your (budget|requirement)|kaam ho sakta hai)\b/i;
 
 export function checkReplyQuality(text: string, analysis: MessageAnalysis, facts: string[]) {
   const reasons: string[] = [];

@@ -1,6 +1,6 @@
 import type { MessageAnalysis } from "../ai/analyze.ts";
 
-const SALES = /\b(we can definitely|i'd be happy|feel free|let me know how i can|looking forward|reach out|check kar sakte ho|aage badhenge|audits are my thing|i’ll check my schedule|i'll check my schedule|i'm mostly around|leave a note|the best|world-class|guaranteed|brief chahiye|3 lines mein|kis ke liye, kab tak|rate final|on behalf)\b/i;
+const SALES = /\b(we can definitely|i'd be happy|feel free|let me know how i can|looking forward|reach out|check kar sakte ho|aage badhenge|audits are my thing|i’ll check my schedule|i'll check my schedule|i'm mostly around|leave a note|note chhod|the best|world-class|guaranteed|brief chahiye|3 lines mein|kis ke liye, kab tak|rate final|rate scope pe depend|on behalf|kaam ho sakta hai)\b/i;
 
 export function polishHumanReply(text: string, incoming: string, analysis: MessageAnalysis): string {
   let out = text.replace(/\r/g, "").trim();
@@ -10,6 +10,7 @@ export function polishHumanReply(text: string, incoming: string, analysis: Messa
   if (userGreeted) {
     out = out.replace(/^(hey[,.]?\s*)?(haan[,.]?\s*)?(bolo|sure)[!.]?\s*/i, "");
     out = out.replace(/^hey[,\s]+/i, "");
+    out = out.replace(/^kya scene hai[!.]?\s*/i, "");
   }
   out = out.replace(/\b(Hey|Hi|Hello),?\s+(sure|definitely)[.!]?\s*/g, "");
   out = out.replace(/\bWe can definitely[^.?\n]*[.!]?\s*/gi, "");
@@ -18,7 +19,10 @@ export function polishHumanReply(text: string, incoming: string, analysis: Messa
   out = out.replace(/\bYeah,\s*/g, "haan, ");
   out = out.replace(/\baudits are my thing[.!]?\s*/gi, "");
   out = out.replace(/\bfeel free to (reach out|ask)[^.?\n]*[.!]?\s*/gi, "");
-  out = out.replace(/\bindia se kaam karta hoon[^.?\n]*[.!]?\s*/gi, "");
+  out = out.replace(/\brate scope pe depend karta hai[^.?\n]*[.!]?\s*/gi, "");
+  out = out.replace(/\bnote chhod dena[^.?\n]*[.!]?\s*/gi, "");
+  out = out.replace(/\bwebsite ka kaam ho sakta hai[^.?\n]*[.!]?\s*/gi, "");
+  out = out.replace(/\bavailability theek hai[^.?\n]*[.!]?\s*/gi, "");
   if (!analysis.topics.includes("location")) {
     out = out.replace(/^meet tab[^\n]*\n?/gim, "");
   }

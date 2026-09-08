@@ -45,6 +45,13 @@ describe("conversation intelligence", () => {
     assert.equal(behalf.ok, false);
   });
 
+  it("keeps a short hire ask as a person, not a quote form", () => {
+    const turn = analyzeTurn("I want to hire you for a website", [], true);
+    assert.equal(turn.plan.action, "ask");
+    assert.match(turn.plan.draft ?? "", /bata kya soch/i);
+    assert.doesNotMatch(turn.plan.draft ?? "", /3 lines|rate scope|brief/i);
+  });
+
   it("acks a bare ok without asking a new question", () => {
     const turn = analyzeTurn("ok", [{ role: "user", text: "brief bhej dena" }], false);
     assert.equal(turn.plan.action, "acknowledge");

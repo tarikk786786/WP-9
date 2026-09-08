@@ -124,7 +124,14 @@ export function planTurn(options: {
     }
     confidence = 0.66;
     complexity = 0.28;
-  } else if (analysis.intents.includes("project") && !analysis.intents.includes("process") && wordCount < 12) {
+  } else if (
+    (analysis.intents.includes("project") ||
+      analysis.intents.includes("availability") ||
+      (analysis.intents.includes("website") && /\b(chahiye|hire|hiring|banana|build)\b/i.test(text))) &&
+    !analysis.intents.includes("process") &&
+    !analysis.intents.includes("pricing") &&
+    wordCount < 14
+  ) {
     action = "ask";
     draft = "haan, bata kya soch rahe ho";
     confidence = 0.7;

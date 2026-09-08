@@ -294,7 +294,8 @@ export async function generateBestHumanReply(
   if (plan.draft && (plan.action === "acknowledge" || plan.action === "escalate" || plan.action === "wait" || plan.action === "clarify")) {
     return { text: plan.draft, engine: `tier0 · ${plan.action}` };
   }
-  if (plan.draft && plan.action === "ask" && message.text.trim().split(/\s+/).length < 8) {
+  const wordCount = message.text.trim().split(/\s+/).filter(Boolean).length;
+  if (plan.draft && plan.action === "ask" && wordCount < 14) {
     return { text: plan.draft, engine: `tier0 · ${plan.action}` };
   }
 
