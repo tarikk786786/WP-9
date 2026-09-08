@@ -55,11 +55,14 @@ export function isIncompleteFollowup(
   recent: Array<{ role: "user" | "assistant"; text: string }>,
 ): boolean {
   const body = text.trim();
+  if (/^(kal|tomorrow)\??$/i.test(body)) return true;
   if (!recent.length) return false;
   const words = body.split(/\s+/).filter(Boolean);
   if (words.length > 6) return false;
-  return /^(tomorrow|kal|which|woh|yeh|that|this|ok\?|and\b|uska|iska)\b/i.test(body) || /^\W*\w+\??$/.test(body);
+  return /^(tomorrow|kal|which one|woh|yeh|that one|this one|uska|iska)\b/i.test(body);
 }
+
+const ACK = /^(ok+|okay|oky|theek|thik|acha|accha|hmm+|haan|han|done|cool|great|nice|👍)[\s!.]*$/i;
 
 function mediaAction(messageType: string): ConversationalAction | null {
   if (messageType === "audio" || messageType === "image" || messageType === "video" || messageType === "document") {
@@ -101,9 +104,9 @@ export function planTurn(options: {
           : "pic/file aa gayi. text mein likh do kya dekhna hai";
     confidence = 0.9;
     complexity = 0.2;
-  } else if (analysis.intents.includes("thanks") && wordCount <= 6) {
+  } else if (ACK.test(text.trim()) || (analysis.intents.includes("thanks") && wordCount <= 6)) {
     action = "acknowledge";
-    draft = style.usesSlang ? "all good bro" : "all good";
+    draft = ACK.test(text.trim()) ? "ok" : style.usesSlang ? "all good bro" : "all good";
     confidence = 0.93;
     complexity = 0.05;
   } else if (analysis.complexity === "simple" && analysis.intents[0] === "greeting" && !analysis.wantsAllAnswers) {
@@ -113,8 +116,12 @@ export function planTurn(options: {
     complexity = 0.08;
   } else if (incomplete) {
     action = "clarify";
-    const lastUser = [...recent].reverse().find((row) => row.role === "user")?.text ?? "pehle wali baat";
-    draft = `woh ${lastUser.slice(0, 42).replace(/\n/g, " ")} wali baat? short mein confirm kar de`;
+    if (/^(kal|tomorrow)\??$/i.test(text.trim()) && !recent.length) {
+      draft = "kal kis ke liye — call, kaam, ya aur kuch?";
+    } else {
+      const lastUser = [...recent].reverse().find((row) => row.role === "user")?.text ?? "pehle wali baat";
+      draft = `woh ${lastUser.slice(0, 42).replace(/\n/g, " ")} wali baat? short mein confirm kar de`;
+    }
     confidence = 0.66;
     complexity = 0.28;
   } else if (analysis.intents.includes("project") && !analysis.intents.includes("process") && wordCount < 12) {

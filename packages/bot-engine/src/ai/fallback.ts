@@ -30,7 +30,7 @@ export function writeCompleteFallback(analysis: MessageAnalysis, extraFacts: str
   }
 
   const lines: string[] = [];
-  if (analysis.isFirstMessage && analysis.intents.includes("greeting")) {
+  if (analysis.isFirstMessage && analysis.intents.includes("greeting") && !analysis.wantsAllAnswers) {
     lines.push(LINE_FOR.greeting);
   }
 
@@ -38,7 +38,7 @@ export function writeCompleteFallback(analysis: MessageAnalysis, extraFacts: str
   for (const intent of order) {
     const fact = LINE_FOR[intent];
     if (!fact) continue;
-    if (intent === "greeting") continue;
+    if (intent === "greeting" || (intent === "location" && !analysis.topics.includes("location"))) continue;
     if (!lines.some((line) => line === fact)) lines.push(fact);
   }
 

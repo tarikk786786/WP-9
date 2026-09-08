@@ -6,6 +6,7 @@ import { missedTopics, scoreReplyCompleteness } from "./score.ts";
 import { planReplyEngines, type EnginePlan, type ReplyEngineId } from "./select-engine.ts";
 import { recordFailure, recordSuccess } from "../orchestrate/health.ts";
 import { analyzeTurn } from "../orchestrate/intelligence.ts";
+import { polishHumanReply } from "../orchestrate/polish.ts";
 import { checkReplyQuality } from "../orchestrate/quality.ts";
 import type { ResponsePlan, UserStyle } from "../orchestrate/types.ts";
 
@@ -31,12 +32,13 @@ export type AiContext = {
 };
 
 const HUMAN_SYSTEM = [
-  "You are Tarik Islam texting on WhatsApp in first person — warm, casual, specific.",
-  "Match their language and slang (Hinglish/English/Hindi). Do not switch into customer-support English.",
-  "Do not invent prices, fake case results, unpublished credentials, or that someone already replied live.",
-  "If they asked more than one thing, answer every ask. Unknown numbers stay unknown: quote after scope, still answer the rest.",
-  "If the plan is CLARIFY or ASK, ask one short question instead of dumping a brochure.",
-  "No 'How can I help you today', no 'Thanks for reaching out', no stacked bios, no mentioning models.",
+  "You are Tarik texting on WhatsApp. First person. Short. Human. Not a sales page.",
+  "Match their language. Hinglish stays Hinglish. English stays short English, never corporate.",
+  "Never invent prices or credentials. Never say we can definitely, I'd be happy, feel free, looking forward, or I'll check my schedule.",
+  "If they already said hi, do not greet again. Start with the answer.",
+  "Answer only what they asked. Do not add location, India, or extra services they did not mention.",
+  "If they named a time, confirm that time. Do not say leave a note or that you are mostly around during the day.",
+  "No 'hey, bolo' as a whole reply when they asked a real question.",
 ].join(" ");
 
 function isBadAiText(text: string, allowLong: boolean) {
@@ -66,10 +68,9 @@ export function buildPrompt(message: NormalizedMessage, ctx: AiContext) {
   const style =
     analysis.preferredStyle === "complete"
       ? [
-          "Write 3–7 short WhatsApp lines.",
-          "If they greeted, one soft greeting then answers — do not only greet.",
-          "Cover every item in the checklist. One line per ask is fine.",
-          "Calm Hinglish unless they wrote pure English; then match them.",
+          "3–5 short WhatsApp lines. No greeting if they already greeted.",
+          "Cover each ask in the checklist. One line per ask.",
+          "End with at most one brief-ask, not two.",
         ].join(" ")
       : "1–2 short lines. Calm Hinglish (Hindi + English mix). lowercase is fine. Reply to what they actually said.";
 
@@ -291,7 +292,10 @@ export async function generateBestHumanReply(
   const plan = ctx.plan ?? turn.plan;
   const facts = [...ctx.faqs, ...ctx.knowledge, ctx.suggested ?? ""];
 
-  if (plan.draft && (plan.action === "acknowledge" || plan.action === "escalate" || plan.action === "wait")) {
+  if (plan.draft && (plan.action === "acknowledge" || plan.action === "escalate" || plan.action === "wait" || plan.action === "clarify")) {
+    return { text: plan.draft, engine: `tier0 · ${plan.action}` };
+  }
+  if (plan.draft && plan.action === "ask" && message.text.trim().split(/\s+/).length < 8) {
     return { text: plan.draft, engine: `tier0 · ${plan.action}` };
   }
 
@@ -309,9 +313,9 @@ export async function generateBestHumanReply(
       continue;
     }
     recordSuccess(enginePlan.engine, Date.now() - started);
-    let text = hit.text;
+    let text = polishHumanReply(hit.text, message.text, analysis);
     const quality = checkReplyQuality(text, analysis, facts);
-    if (!quality.ok && quality.reasons.includes("invented-price")) {
+    if (!quality.ok) {
       recordFailure(enginePlan.engine);
       continue;
     }
@@ -320,9 +324,11 @@ export async function generateBestHumanReply(
     if (allowLong && missed.length && score < 0.75) {
       const repaired = await callEngine(enginePlan, prompt.system, repairUser(prompt.user, missed), allowLong);
       if (repaired) {
-        const repairedScore = scoreReplyCompleteness(repaired.text, analysis);
-        if (repairedScore >= score) {
-          text = repaired.text;
+        const repairedText = polishHumanReply(repaired.text, message.text, analysis);
+        const repairedQuality = checkReplyQuality(repairedText, analysis, facts);
+        const repairedScore = scoreReplyCompleteness(repairedText, analysis);
+        if (repairedQuality.ok && repairedScore >= score) {
+          text = repairedText;
           score = repairedScore;
         }
       }
@@ -335,12 +341,15 @@ export async function generateBestHumanReply(
     if (score >= 0.72) return labeled;
   }
 
-  if (best) return best;
+  if (best) return { ...best, text: polishHumanReply(best.text, message.text, analysis) };
   if (plan.draft && (plan.action === "ask" || plan.action === "clarify")) {
     return { text: plan.draft, engine: `tier0 · ${plan.action}` };
   }
   if (allowLong) {
-    return { text: writeCompleteFallback(analysis, facts), engine: "complete-fallback" };
+    return {
+      text: polishHumanReply(writeCompleteFallback(analysis, facts), message.text, analysis),
+      engine: "complete-fallback",
+    };
   }
   return plan.draft ? { text: plan.draft, engine: `tier0 · ${plan.action}` } : null;
 }

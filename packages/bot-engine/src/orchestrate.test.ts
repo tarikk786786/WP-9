@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { analyzeTurn } from "./orchestrate/intelligence.ts";
 import { checkReplyQuality } from "./orchestrate/quality.ts";
+import { polishHumanReply } from "./orchestrate/polish.ts";
 import { combineBurstText } from "./orchestrate/debounce.ts";
 import { analyzeMessage } from "./ai/analyze.ts";
 
@@ -30,7 +31,30 @@ describe("conversation intelligence", () => {
     assert.ok(check.reasons.includes("invented-price"));
   });
 
+  it("acks a bare ok without asking a new question", () => {
+    const turn = analyzeTurn("ok", [{ role: "user", text: "brief bhej dena" }], false);
+    assert.equal(turn.plan.action, "acknowledge");
+    assert.equal(turn.plan.draft, "ok");
+  });
+
+  it("asks what tomorrow is about instead of agreeing blindly", () => {
+    const turn = analyzeTurn("kal?", [], true);
+    assert.equal(turn.plan.action, "clarify");
+    assert.match(turn.plan.draft ?? "", /kal/i);
+  });
+
   it("joins a burst into one message", () => {
     assert.equal(combineBurstText(["hi", "bro", "you there"]), "hi\nbro\nyou there");
+  });
+
+  it("strips a second greeting and leftover sales english", () => {
+    const analysis = analyzeMessage("hey, process kya hai aur rate?");
+    const text = polishHumanReply(
+      "hey, bolo\nprocess simple hai\nWe can definitely talk.\nrate scope pe depend karta hai?",
+      "hey, process kya hai aur rate?",
+      analysis,
+    );
+    assert.doesNotMatch(text, /hey, bolo/i);
+    assert.doesNotMatch(text, /definitely/i);
   });
 });

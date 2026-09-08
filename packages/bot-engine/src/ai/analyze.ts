@@ -54,7 +54,7 @@ const INTENT_PATTERNS: Array<{ intent: MessageIntent; pattern: RegExp }> = [
   { intent: "security", pattern: /\b(cyber|security|audit|pentest|secure)\b/i },
   { intent: "ai-work", pattern: /\b(ai|llm|rag|agent|automation|saas|gpt)\b/i },
   { intent: "urgent", pattern: /\b(urgent|jaldi|asap|emergency|abhi)\b/i },
-  { intent: "project", pattern: /\b(project|banana hai|build|website banana|app|product|mvp)\b/i },
+  { intent: "project", pattern: /\b(project|banana hai|website chahiye|site chahiye|build|app|product|mvp)\b/i },
 ];
 
 const HINGLISH_MARKERS =
@@ -100,6 +100,11 @@ export function analyzeMessage(
   const questions = splitAsks(body);
   const intents = INTENT_PATTERNS.filter((row) => row.pattern.test(body)).map((row) => row.intent);
   const unique = [...new Set(intents.length ? intents : (["general"] as MessageIntent[]))];
+  if (unique.includes("website") && /\b(chahiye|banana|build|banani|banwana)\b/i.test(body)) {
+    const i = unique.indexOf("website");
+    if (i >= 0) unique.splice(i, 1);
+    if (!unique.includes("project")) unique.push("project");
+  }
   const topics = unique.filter((intent) => intent !== "greeting" && intent !== "thanks" && intent !== "smalltalk");
   const urgency = unique.includes("urgent") ? "high" : "normal";
   const wordCount = body.split(/\s+/).filter(Boolean).length;
