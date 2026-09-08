@@ -22,6 +22,15 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
     return rules.afterHoursReply;
   }
 
+  if (
+    has(
+      lower,
+      /\b(are you (an? )?(ai|bot|chatgpt|llm|robot|chat ?bot|auto[- ]?repl)|tu bot|tum bot|kya (tu|tum|aap) (bot|ai)|chatgpt ho|bot ho kya|insaan ho|real (person|human)|auto reply)\b/,
+    )
+  ) {
+    return pick(lower, ["main hi hoon. bolo", "haan, main hi. kya baat hai", "main yahin hoon. bolo"]);
+  }
+
   if (has(lower, /\b(who are you|your name|aap kaun|tum kaun|kaun ho)\b/) || has(text, /कौन हो/)) {
     return pick(lower, ["tarik hoon. bolo", "main tarik. kya kaam hai", "tarik. haan, sun raha hoon"]);
   }

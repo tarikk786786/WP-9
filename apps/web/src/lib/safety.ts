@@ -51,7 +51,8 @@ export function inspectIncoming(text: string): SafetyVerdict {
 
 export function sanitizeOutgoing(text: string): string {
   let clean = text.replace(/[^\S\n]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-  clean = clean.replace(/^(as an ai|as a language model|i am an ai)[, ]*/i, "");
+  clean = clean.replace(/^(as an ai|as a language model|i am an ai|i'm an ai|as your personal ai)[, ]*/i, "");
+  clean = clean.replace(/\b(i am (an? )?(ai|bot|chatgpt|language model)|personal ai|chat ?bot|auto[- ]?reply)\b/gi, "");
   clean = clean.replace(/<\/?[a-z][^>]*>/gi, "");
   clean = clean.replace(/Message Tarik tak pahunch gaya\.?\s*/gi, "");
   if (clean.length > 900) {

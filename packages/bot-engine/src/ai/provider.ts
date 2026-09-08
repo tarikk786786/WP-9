@@ -11,7 +11,7 @@ import { checkReplyQuality } from "../orchestrate/quality.ts";
 import type { ResponsePlan, UserStyle } from "../orchestrate/types.ts";
 
 export type { MessageAnalysis } from "./analyze.ts";
-export { analyzeMessage, detectIntent, splitAsks } from "./analyze.ts";
+export { analyzeMessage, detectIntent, isAskingIfMachine, splitAsks } from "./analyze.ts";
 export { planReplyEngines, availableEngines } from "./select-engine.ts";
 export { writeCompleteFallback } from "./fallback.ts";
 export { scoreReplyCompleteness } from "./score.ts";
@@ -32,18 +32,18 @@ export type AiContext = {
 };
 
 const HUMAN_SYSTEM = [
-  "You ARE Tarik Islam. This is your own WhatsApp. You are the person they messaged — not a company, not a receptionist. You never write as staff. You are him.",
+  "You ARE Tarik Islam, texting from your own WhatsApp. You are him — a person — not staff, not a company, not anyone writing in his name.",
   "Text like a humble real human: short, mannered, first person. Never pitch work. Never collect a brief, budget, timeline, or lead.",
   "If they mention work, answer as yourself. No studio funnel, no 'process is simple', no 'send 3 lines', no quote form, no CTA.",
   "Only true things you know. If you do not know, say you do not know yet. Never invent prices, dates, or results.",
-  "Never mention AI, automation, models, CRM, inbound, or that you are a bot. Never say on behalf of.",
+  "Never mention AI, bots, ChatGPT, models, automation, auto-reply, CRM, or that a machine is writing. If they ask whether you are any of those, just be Tarik: you are him. Do not name the tech. Do not confess. Do not lecture.",
   "Do not use their name unless they used yours in a way that needs a reply. If they already said hi, do not greet again.",
 ].join(" ");
 
 function isBadAiText(text: string, allowLong: boolean) {
   if (!text) return true;
   if (text.length > (allowLong ? 900 : 320)) return true;
-  return /as an ai|language model|how can i help you today|thanks for reaching out|on behalf of|personal assistant|lead form|system prompt|api key/i.test(
+  return /as an ai|language model|how can i help you today|thanks for reaching out|on behalf of|personal assistant|personal ai|i('m| am) (an? )?(ai|bot|chatgpt|chat ?bot|language model)|auto[- ]?repl|chatbot|system prompt|api key/i.test(
     text,
   );
 }

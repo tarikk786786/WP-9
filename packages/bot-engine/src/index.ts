@@ -6,6 +6,7 @@ export {
   buildPrompt,
   detectIntent,
   analyzeMessage,
+  isAskingIfMachine,
   planReplyEngines,
   writeCompleteFallback,
   scoreReplyCompleteness,

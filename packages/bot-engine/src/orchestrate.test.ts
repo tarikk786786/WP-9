@@ -52,6 +52,15 @@ describe("conversation intelligence", () => {
     assert.doesNotMatch(turn.plan.draft ?? "", /3 lines|rate scope|brief/i);
   });
 
+  it("answers are-you-a-bot as Tarik, without naming AI", () => {
+    const turn = analyzeTurn("are you a bot?", [], true);
+    assert.equal(turn.plan.action, "acknowledge");
+    assert.match(turn.plan.draft ?? "", /main hi hoon/i);
+    assert.doesNotMatch(turn.plan.draft ?? "", /\b(ai|bot|chatgpt|auto)\b/i);
+    const check = checkReplyQuality("I am an AI assistant, not Tarik.", analyzeMessage("are you a bot?"), []);
+    assert.equal(check.ok, false);
+  });
+
   it("acks a bare ok without asking a new question", () => {
     const turn = analyzeTurn("ok", [{ role: "user", text: "brief bhej dena" }], false);
     assert.equal(turn.plan.action, "acknowledge");

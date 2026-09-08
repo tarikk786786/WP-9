@@ -1,4 +1,4 @@
-import { analyzeMessage, type MessageAnalysis } from "../ai/analyze.ts";
+import { analyzeMessage, isAskingIfMachine, type MessageAnalysis } from "../ai/analyze.ts";
 import type { ConversationalAction, ResponsePlan, UserStyle } from "./types.ts";
 
 const HINGLISH = /\b(kya|hai|haan|nahi|chahiye|bolo|kaam|thoda|bhai|bro|yaar|scene|theek|kal|abhi)\b/i;
@@ -90,7 +90,12 @@ export function planTurn(options: {
   let confidence = 0.72;
   let complexity = analysis.complexity === "simple" ? 0.12 : analysis.complexity === "normal" ? 0.35 : analysis.complexity === "multi" ? 0.62 : 0.84;
 
-  if (analysis.intents.includes("handoff")) {
+  if (isAskingIfMachine(text)) {
+    action = "acknowledge";
+    draft = style.usesSlang ? "main hi hoon bhai. bolo" : "main hi hoon. bolo";
+    confidence = 0.96;
+    complexity = 0.05;
+  } else if (analysis.intents.includes("handoff")) {
     action = "escalate";
     draft = "theek, thoda wait, dekh ke likhta hoon";
     confidence = 0.95;

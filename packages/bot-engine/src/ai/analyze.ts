@@ -37,8 +37,8 @@ export type MessageAnalysis = {
 const INTENT_PATTERNS: Array<{ intent: MessageIntent; pattern: RegExp }> = [
   { intent: "greeting", pattern: /\b(hi|hii|hello|hey|yo|hola|namaste|namaskar|salam|salaam|assalam|kaise ho|kya haal|whats?up|good morning|gm)\b/i },
   { intent: "thanks", pattern: /\b(thank|thanks|thx|shukriya|dhanyavaad)\b/i },
-  { intent: "handoff", pattern: /\b(agent|human|person|staff|talk to (a )?human)\b/i },
-  { intent: "identity", pattern: /\b(who are you|your name|aap kaun|tum kaun|kaun ho|introduce)\b/i },
+  { intent: "handoff", pattern: /\b(talk to (a )?(human|person|agent)|human agent|real (agent|person)|kisi (insaan|agent) se|insaan se baat)\b/i },
+  { intent: "identity", pattern: /\b(who are you|your name|aap kaun|tum kaun|kaun ho|introduce|are you (a |an )?(bot|ai|chatgpt|human|real)|tu bot|tum bot|kya tu (bot|ai)|chatgpt ho|auto[- ]?repl)\b/i },
   { intent: "services", pattern: /\b(what do you do|kya karte|kaam kya|services?|offer)\b/i },
   { intent: "website", pattern: /\b(website|site|web ?site|link|url|tarikislam)\b/i },
   { intent: "portfolio", pattern: /\b(portfolio|work samples?|case stud|previous work|examples?)\b/i },
@@ -56,6 +56,12 @@ const INTENT_PATTERNS: Array<{ intent: MessageIntent; pattern: RegExp }> = [
   { intent: "urgent", pattern: /\b(urgent|jaldi|asap|emergency|abhi)\b/i },
   { intent: "project", pattern: /\b(project|banana hai|website chahiye|site chahiye|build|app|product|mvp)\b/i },
 ];
+
+export function isAskingIfMachine(text: string) {
+  return /\b(are you (an? )?(ai|bot|chatgpt|llm|robot|chat ?bot|auto[- ]?repl|automated)|you('re| are) (an? )?(ai|bot|chatgpt)|tu bot|tum bot|kya (tu|tum|aap) (bot|ai)|chatgpt ho|bot ho kya|insaan ho|real (person|human)|auto reply)\b/i.test(
+    text,
+  );
+}
 
 const HINGLISH_MARKERS =
   /\b(kya|hai|haan|nahi|chahiye|bolo|kaam|thoda|mujhe|aap|tum|kaise|kitna|andaz|dekh|likh|bhej|scene)\b/i;
@@ -100,6 +106,12 @@ export function analyzeMessage(
   const questions = splitAsks(body);
   const intents = INTENT_PATTERNS.filter((row) => row.pattern.test(body)).map((row) => row.intent);
   const unique = [...new Set(intents.length ? intents : (["general"] as MessageIntent[]))];
+  if (isAskingIfMachine(body)) {
+    const filtered = unique.filter((intent) => intent !== "ai-work" && intent !== "handoff");
+    unique.length = 0;
+    unique.push(...filtered);
+    if (!unique.includes("identity")) unique.unshift("identity");
+  }
   if (unique.includes("website") && /\b(chahiye|banana|build|banani|banwana)\b/i.test(body)) {
     const i = unique.indexOf("website");
     if (i >= 0) unique.splice(i, 1);

@@ -26,6 +26,12 @@ describe("writeHinglishReply", () => {
     );
   });
 
+  it("does not admit being AI when asked", () => {
+    const text = writeHinglishReply("are you an AI?", "Amina", defaultRules);
+    assert.match(text.toLowerCase(), /main hi hoon|main yahin|main hi/);
+    assert.doesNotMatch(text, /\b(ai|bot|chatgpt|assistant|auto-?reply)\b/i);
+  });
+
   it("answers who-are-you without a brochure", () => {
     const text = writeHinglishReply("who are you", "Amina", defaultRules);
     assert.match(text.toLowerCase(), /tarik/);
