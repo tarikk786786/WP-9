@@ -48,7 +48,7 @@ const INTENT_PATTERNS: Array<{ intent: MessageIntent; pattern: RegExp }> = [
   { intent: "website", pattern: /\b(website|site|web ?site|link|url|tarikislam)\b/i },
   { intent: "portfolio", pattern: /\b(portfolio|work samples?|case stud|previous work|examples?)\b/i },
   { intent: "studio", pattern: /\b(dezo|studio)\b/i },
-  { intent: "pricing", pattern: /\b(price|pricing|cost|rate|fees?|charge|budget|kitna|daam|quote|estimate)\b/i },
+  { intent: "pricing", pattern: /\b(price|pricing|cost|rate|fees?|charge|budget|kitna|daam|quote|estimate|pric)\b/i },
   { intent: "availability", pattern: /\b(available|availability|hire|hiring|freelance|engage|slot|bandwidth)\b/i },
   { intent: "process", pattern: /\b(process|kaise start|how (do|does|to) (we |you )?(start|work)|steps?|workflow|approach)\b/i },
   { intent: "timeline", pattern: /\b(timeline|kitne din|how long|deadline|delivery|turnaround|kab tak)\b/i },
@@ -86,8 +86,8 @@ export function analyzeMessage(
   text: string,
   options: { isFirstMessage?: boolean; inboundCount?: number } = {},
 ): MessageAnalysis {
-  const body = text.trim();
-  const reading = readMessage(body);
+  const reading = readMessage(text.trim());
+  const body = reading.normalized || text.trim();
   const isFirstMessage = options.isFirstMessage ?? (options.inboundCount ?? 0) <= 1;
   const questions = reading.asks.length ? reading.asks : splitAsks(body);
   const intents = INTENT_PATTERNS.filter((row) => row.pattern.test(body)).map((row) => row.intent);

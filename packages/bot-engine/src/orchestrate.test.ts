@@ -36,6 +36,13 @@ describe("conversation intelligence", () => {
     assert.match(turn.plan.intent, /pricing/);
   });
 
+  it("does not ignore a price ask hidden in typos", () => {
+    const turn = analyzeTurn("pric pls webiste banana hai", [], true);
+    assert.ok(turn.analysis.intents.includes("pricing"));
+    assert.ok(turn.analysis.intents.includes("project"));
+    assert.notEqual(turn.plan.action, "ask");
+  });
+
   it("rejects invented prices", () => {
     const analysis = analyzeMessage("kitna lagega website ka?");
     const check = checkReplyQuality("rate 45000 rs hai", analysis, ["rate andaz se nahi bolta"]);
