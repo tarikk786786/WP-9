@@ -124,8 +124,28 @@ function createManager(): Manager {
     starting: false,
     reconnectDelay: 2000,
     async start(pairingPhone?: string) {
-      if (manager.snapshot.phase === "ready" && manager.sock) {
-        return manager.snapshot;
+      if (manager.sock && manager.snapshot.phase !== "logged_out") {
+        if (manager.snapshot.phase === "ready") return manager.snapshot;
+        if (
+          manager.snapshot.phase === "qr" ||
+          manager.snapshot.phase === "connecting"
+        ) {
+          const digits = pairingPhone?.replace(/\D/g, "") ?? "";
+          if (digits.length >= 10 && !manager.snapshot.pairingCode) {
+            try {
+              const pairingCode = await manager.sock.requestPairingCode(digits);
+              manager.snapshot = await snapshotWithSave({
+                ...manager.snapshot,
+                pairingCode,
+                phone: digits,
+                error: null,
+              });
+            } catch {
+              // keep showing the live QR
+            }
+          }
+          return manager.snapshot;
+        }
       }
       if (manager.starting) return manager.snapshot;
       manager.starting = true;
@@ -302,7 +322,9 @@ async function openSocket(manager: Manager, pairingPhone?: string) {
         ...manager.snapshot,
         phase: "connecting",
         qrDataUrl: null,
-        error: "Line drop hui. Saved login se reconnect ho raha hai…",
+        error: (await hasSavedSession())
+          ? "Line drop hui. Saved login se reconnect ho raha hai…"
+          : "QR expire / drop. Naya QR aa raha hai — wahi scan karo.",
       });
       scheduleReconnect(manager);
     }

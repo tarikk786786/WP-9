@@ -212,20 +212,19 @@ export function ScanLogin({
         }
 
         const archive = readLocalArchive();
-        if (!archive) return;
+        if (!archive) {
+          setSavedHere(false);
+          return;
+        }
         const restore = await fetch("/api/scan/restore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(archive),
         });
         const snap = (await restore.json()) as ScanSnapshot & { error?: string };
-        if (!restore.ok) {
+        if (!restore.ok || !snap.persisted) {
           clearLocalArchive();
           setSavedHere(false);
-          setScan((current) => ({
-            ...current,
-            error: snap.error ?? "Saved login restore nahi hua. Naya QR.",
-          }));
           return;
         }
         setScan(snap);

@@ -41,6 +41,25 @@ async function walkFiles(dir: string, prefix = ""): Promise<string[]> {
   return files;
 }
 
+export function credsJsonIsLinked(raw: string): boolean {
+  try {
+    const creds = JSON.parse(raw) as { registered?: boolean; me?: { id?: string } };
+    return creds.registered === true || Boolean(creds.me?.id);
+  } catch {
+    return false;
+  }
+}
+
+function archiveIsLinked(archive: SessionArchive): boolean {
+  try {
+    return credsJsonIsLinked(
+      Buffer.from(archive.files["creds.json"], "base64").toString("utf8"),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function parseSessionArchive(raw: unknown): SessionArchive | null {
   try {
     const parsed = (
@@ -83,9 +102,15 @@ export async function readSessionArchive(): Promise<SessionArchive | null> {
 
 export async function hasSavedSession(): Promise<boolean> {
   for (const root of persistRoots()) {
-    if (existsSync(path.join(root, "baileys-auth", "creds.json"))) return true;
+    try {
+      const raw = await readFile(path.join(root, "baileys-auth", "creds.json"), "utf8");
+      if (credsJsonIsLinked(raw)) return true;
+    } catch {
+      // next root
+    }
   }
-  return Boolean(await readSessionArchive());
+  const archive = await readSessionArchive();
+  return Boolean(archive && archiveIsLinked(archive));
 }
 
 async function phoneFromCreds(): Promise<string | null> {
@@ -104,8 +129,11 @@ async function phoneFromCreds(): Promise<string | null> {
 
 export async function getSavedPhone(): Promise<{ phone: string | null; savedAt: string | null }> {
   const archive = await readSessionArchive();
-  const phone = archive?.phone ?? (await phoneFromCreds());
-  return { phone, savedAt: archive?.savedAt ?? null };
+  if (archive && archiveIsLinked(archive)) {
+    return { phone: archive.phone ?? (await phoneFromCreds()), savedAt: archive.savedAt };
+  }
+  const phone = await phoneFromCreds();
+  return { phone, savedAt: null };
 }
 
 async function writeAuthFiles(files: Record<string, string>) {
@@ -126,22 +154,37 @@ async function writeAuthFiles(files: Record<string, string>) {
 }
 
 export async function restoreSavedSession(): Promise<boolean> {
-  if (existsSync(path.join(getAuthDir(), "creds.json"))) return true;
+  if (!(await hasSavedSession())) return false;
+  if (existsSync(path.join(getAuthDir(), "creds.json"))) {
+    try {
+      const raw = await readFile(path.join(getAuthDir(), "creds.json"), "utf8");
+      if (credsJsonIsLinked(raw)) return true;
+    } catch {
+      // fall through and copy
+    }
+  }
   const existing = firstExistingPath("baileys-auth", "creds.json");
   if (existsSync(existing)) {
-    const names = await walkFiles(path.dirname(existing));
-    const files: Record<string, string> = {};
-    for (const rel of names) {
-      const buf = await readFile(path.join(path.dirname(existing), rel));
-      files[rel] = buf.toString("base64");
+    try {
+      const raw = await readFile(existing, "utf8");
+      if (credsJsonIsLinked(raw)) {
+        const names = await walkFiles(path.dirname(existing));
+        const files: Record<string, string> = {};
+        for (const rel of names) {
+          const buf = await readFile(path.join(path.dirname(existing), rel));
+          files[rel] = buf.toString("base64");
+        }
+        await writeAuthFiles(files);
+        return true;
+      }
+    } catch {
+      // try archive
     }
-    await writeAuthFiles(files);
-    return existsSync(path.join(getAuthDir(), "creds.json"));
   }
   const archive = await readSessionArchive();
-  if (!archive) return false;
+  if (!archive || !archiveIsLinked(archive)) return false;
   await writeAuthFiles(archive.files);
-  return existsSync(path.join(getAuthDir(), "creds.json"));
+  return true;
 }
 
 export async function persistSavedSession(phone: string | null): Promise<SessionArchive | null> {
@@ -152,6 +195,13 @@ export async function persistSavedSession(phone: string | null): Promise<Session
   }
   const names = await walkFiles(sourceDir);
   if (!names.includes("creds.json")) return readSessionArchive();
+  let linked = false;
+  try {
+    linked = credsJsonIsLinked(await readFile(path.join(sourceDir, "creds.json"), "utf8"));
+  } catch {
+    linked = false;
+  }
+  if (!linked) return null;
   const files: Record<string, string> = {};
   for (const rel of names) {
     const buf = await readFile(path.join(sourceDir, rel));
@@ -175,7 +225,7 @@ export async function exportSessionArchive(): Promise<SessionArchive | null> {
 
 export async function importSessionArchive(raw: unknown): Promise<boolean> {
   const archive = parseSessionArchive(raw);
-  if (!archive) return false;
+  if (!archive || !archiveIsLinked(archive)) return false;
   await writeAuthFiles(archive.files);
   await writeToAllRoots(ARCHIVE_REL, JSON.stringify(archive));
   return existsSync(path.join(getAuthDir(), "creds.json"));
