@@ -50,9 +50,9 @@ export function writeCompleteFallback(analysis: MessageAnalysis, extraFacts: str
   }
 
   if (analysis.wantsAllAnswers) {
-    lines.push("agar 3 lines mein kya, kis ke liye, kab tak bata sako, uske hisaab se exact bol paunga");
+    lines.push("jo clear nahi, uspe andaz nahi");
   }
 
-  if (!lines.length) return "dekh liya. jo missing ho, woh bata dena — andaz se nahi bolunga";
+  if (!lines.length) return "dekh liya. bolo";
   return lines.slice(0, 8).join("\n");
 }

@@ -37,6 +37,14 @@ describe("conversation intelligence", () => {
     assert.equal(check.ok, false);
   });
 
+  it("rejects lead-desk and on-behalf copy", () => {
+    const analysis = analyzeMessage("website banana hai");
+    const lead = checkReplyQuality("send 3 lines: kya banana hai, kis ke liye, kab tak. brief chahiye.", analysis, []);
+    const behalf = checkReplyQuality("I am writing on behalf of Tarik. Thanks for reaching out.", analysis, []);
+    assert.equal(lead.ok, false);
+    assert.equal(behalf.ok, false);
+  });
+
   it("acks a bare ok without asking a new question", () => {
     const turn = analyzeTurn("ok", [{ role: "user", text: "brief bhej dena" }], false);
     assert.equal(turn.plan.action, "acknowledge");

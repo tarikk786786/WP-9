@@ -126,7 +126,7 @@ export function planTurn(options: {
     complexity = 0.28;
   } else if (analysis.intents.includes("project") && !analysis.intents.includes("process") && wordCount < 12) {
     action = "ask";
-    draft = "theek. agar 3 lines mein kya, kis ke liye, kab tak bata sako, uske hisaab se exact bol paunga";
+    draft = "haan, bata kya soch rahe ho";
     confidence = 0.7;
     complexity = 0.4;
   } else if (analysis.wantsAllAnswers || analysis.complexity === "lead") {
@@ -142,7 +142,7 @@ export function planTurn(options: {
   return {
     action,
     intent: [...new Set([...analysis.intents, ...typos])].join(",") || "general",
-    goal: action === "clarify" ? "resolve_reference" : action === "ask" ? "collect_scope" : "help_user",
+    goal: action === "clarify" ? "resolve_reference" : action === "ask" ? "listen" : "talk_as_self",
     tone: style.formality === "low" ? "casual" : "calm",
     language: style.language,
     answerLength: analysis.preferredStyle === "complete" ? "complete" : "short",

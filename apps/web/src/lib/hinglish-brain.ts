@@ -1,11 +1,6 @@
 import { getTarikProfile } from "./tarik-profile.ts";
 import type { BotRules } from "./types.ts";
 
-function firstName(name: string) {
-  const first = name.trim().split(/\s+/)[0];
-  return first && first !== "Test" ? first : "";
-}
-
 function has(text: string, pattern: RegExp) {
   return pattern.test(text);
 }
@@ -20,7 +15,6 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
   const tarik = getTarikProfile();
   const text = incoming.trim();
   const lower = text.toLowerCase();
-  const first = firstName(fromName);
   const open = rules.openHour;
   const close = rules.closeHour;
 
@@ -46,9 +40,9 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
 
   if (has(lower, /\b(hire|hiring|available|availability|freelance|project|kaam|engage)\b/)) {
     return pick(lower, [
-      "haan, le sakta hoon. short mein bata kya banana hai",
-      "available hoon. 2-3 lines mein scope likh de",
-      "haan. kya banana hai, seedha likh",
+      "haan, bata kya soch rahe ho",
+      "sun raha hoon. thoda aur bata",
+      "theek. kya soch rahe ho",
     ]);
   }
 
@@ -57,7 +51,7 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
   }
 
   if (has(lower, /\b(ai|llm|rag|agent|automation|saas)\b/)) {
-    return "yeh sab karta hoon. brief bhej, dekh ke likhta hoon";
+    return "yeh sab karta hoon. kya soch rahe ho, short mein bata";
   }
 
   if (has(lower, /\b(resume|cv|experience|credential|certificate)\b/)) {
@@ -69,11 +63,11 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
     has(lower, /\b(hours?|timing|kab|kitne baje|open|close)\b/) ||
     has(text, /समय|टाइम/)
   ) {
-    return `zyada tar ${open} se ${close} tak yahin hota hoon. note chhod dena, dekh lunga`;
+    return `zyada tar ${open} se ${close} tak yahin hota hoon`;
   }
 
   if (hint === "price" || has(lower, /\b(price|pricing|cost|rate|fees?|charge|kitna|daam|budget)\b/) || has(text, /कीमत|दाम|रेट/)) {
-    return "rate andaz se nahi bolta. kya banana hai, phir number dunga";
+    return "rate andaz se nahi bolta";
   }
 
   if (has(lower, /assalam|salaam|salam/)) {
@@ -88,14 +82,12 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
     hint === "greeting" ||
     has(lower, /^(hi|hii|hello|hey|yo|hola|namaste|namaskar|kaise ho|kya haal|whats?up|how are you)[\s!?.]*$/i)
   ) {
-    const greetings = first
-      ? [`hey, kya ho raha hai`, `haan ${first.toLowerCase()}, bolo`, `hey, theek ho?`]
-      : [`hey, kya ho raha hai`, `haan bolo`, `hey, theek ho?`];
+    const greetings = [`haan, kya haal hai`, `haan bolo`, `hey, theek ho?`];
     return rules.greetingReply?.length < 40 ? pick(lower, [rules.greetingReply, ...greetings]) : pick(lower, greetings);
   }
 
   if (has(lower, /\b(thank|thanks|thx|shukriya|dhanyavaad|thanku)\b/) || has(text, /शुक्रिया|धन्यवाद/)) {
-    return pick(lower, ["koi baat nahi", "all good", "ji, done"]);
+    return pick(lower, ["koi baat nahi", "koi nahi", "ji"]);
   }
 
   if (has(lower, /\b(sorry|maaf|galti|my bad)\b/) || has(text, /माफ|सॉरी/)) {
@@ -185,7 +177,7 @@ export function isLowQualityReply(text: string) {
 export function polishToHinglish(text: string) {
   let clean = text.replace(/[^\S\n]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
   clean = clean.replace(/^(hi|hello|hey)\s+[A-Z][a-z]+[,—–-]\s*/i, "");
-  clean = clean.replace(/\bon behalf of (tarik|him|the owner)\b/gi, "");
+  clean = clean.replace(/\bon behalf of (tarik|him|the owner|me)\b/gi, "");
   clean = clean.replace(/\bI will\b/gi, "main");
   clean = clean.replace(/\bThanks for your message\b/gi, "ok");
   clean = clean.replace(/\bI got it\b/gi, "dekh liya");

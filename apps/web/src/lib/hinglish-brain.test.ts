@@ -35,9 +35,10 @@ describe("writeHinglishReply", () => {
 
   it("hires in first person, not on behalf", () => {
     const text = writeHinglishReply("I want to hire you", "Amina", defaultRules);
-    assert.match(text.toLowerCase(), /\b(main|haan|available|le sakta)\b/);
+    assert.match(text.toLowerCase(), /\b(main|haan|bata)\b/);
     assert.doesNotMatch(text, /on behalf/i);
     assert.doesNotMatch(text, /assistant/i);
+    assert.doesNotMatch(text, /3 lines|brief|lead|number dunga/i);
   });
 
   it("answers hours without stiff english", () => {

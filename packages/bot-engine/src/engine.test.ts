@@ -105,6 +105,8 @@ describe("router", () => {
       suggested: "hey, kya scene hai",
     });
     assert.match(prompt.system, /first person/i);
+    assert.match(prompt.system, /you ARE tarik islam/i);
+    assert.match(prompt.system, /you are him/i);
     assert.match(prompt.user, /Amina/);
   });
 
@@ -177,7 +179,8 @@ describe("message analysis and engine pick", () => {
     const text = writeCompleteFallback(analysis);
     assert.match(text, /dezo/i);
     assert.match(text, /tarikislam\.in/i);
-    assert.match(text, /rate|scope|number/i);
+    assert.match(text, /rate/i);
+    assert.doesNotMatch(text, /3 lines|on behalf|lead form|number dunga/i);
     assert.ok(scoreReplyCompleteness(text, analysis) >= 0.5);
   });
 });

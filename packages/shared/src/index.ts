@@ -109,8 +109,8 @@ export const defaultBotSettings = (): BotSettings => ({
   welcomeEnabled: true,
   defaultLanguage: "hinglish",
   welcomeMessage: "haan, kya haal hai",
-  fallbackMessage: "dekh liya. jo missing ho woh bata dena, andaz se nahi bolunga",
-  humanHandoffMessage: "theek, ab main khud dekh ke likhta hoon. thoda wait",
+  fallbackMessage: "dekh liya. bolo",
+  humanHandoffMessage: "theek, thoda wait, dekh ke likhta hoon",
   timezone: "Asia/Kolkata",
   businessHours: {
     enabled: false,
@@ -124,10 +124,10 @@ export const defaultBotSettings = (): BotSettings => ({
 });
 
 export const defaultAutomationRules = (): AutomationRule[] => [
-  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "hey, kya scene hai", priority: 10, enabled: true },
-  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "hey, bolo", priority: 10, enabled: true },
-  { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "rate scope pe depend karta hai. kya banana hai?", priority: 20, enabled: true },
-  { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "din mein mostly yahin hota hoon. note chhod dena", priority: 20, enabled: true },
+  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "haan, kya haal hai", priority: 10, enabled: true },
+  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "haan, bolo", priority: 10, enabled: true },
+  { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "rate andaz se nahi bolta", priority: 20, enabled: true },
+  { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "din mein aksar yahin hota hoon", priority: 20, enabled: true },
   { id: "agent", name: "Human", triggerType: "keyword", triggerValue: "agent", response: "theek, thoda wait, dekh ke likhta hoon", priority: 5, enabled: true },
 ];
 
@@ -135,7 +135,7 @@ export const defaultFaqs = (): Faq[] => [
   {
     id: "who",
     question: "Who are you?",
-    answer: "tarik hoon. bolo, madad kya chahiye",
+    answer: "tarik hoon. bolo",
     keywords: ["who are you", "kaun ho", "your name"],
     category: "identity",
     priority: 1,
