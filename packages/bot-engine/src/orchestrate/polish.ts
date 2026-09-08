@@ -7,6 +7,7 @@ export function polishHumanReply(text: string, incoming: string, analysis: Messa
   out = out.replace(/^[A-Z][a-z]{1,12},\s+/, "");
   out = out.replace(/^ayaan[,:]?\s*/i, "");
   out = out.replace(/^bolo[!.]?\s*/i, "");
+  out = out.replace(/^hey[,.]?\s*bolo[!.]?\s*/i, "");
   const userGreeted = /^(hi|hey|hello|yo)\b/i.test(incoming.trim());
   if (userGreeted) {
     out = out.replace(/^(hey[,.]?\s*)?(haan[,.]?\s*)?(bolo|sure)[!.]?\s*/i, "");
