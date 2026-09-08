@@ -3,7 +3,8 @@ import { describe, it } from "node:test";
 import { defaultAutomationRules, defaultBotSettings, defaultFaqs } from "@bot/shared";
 import { isDuplicate, normalizeIncoming, resetDuplicates } from "./parser.ts";
 import { isWithinBusinessHours, matchFaq, matchRule, routeMessage } from "./router.ts";
-import { analyzeMessage, buildPrompt, planReplyEngines, scoreReplyCompleteness, writeCompleteFallback } from "./ai/provider.ts";
+import { analyzeMessage, buildPrompt, missedAsks, planReplyEngines, scoreReplyCompleteness, writeCompleteFallback } from "./ai/provider.ts";
+import { stitchMissingAsks } from "./ai/fallback.ts";
 
 describe("parser", () => {
   it("normalizes a text message and skips fromMe", () => {
@@ -184,5 +185,21 @@ describe("message analysis and engine pick", () => {
     assert.match(text, /rate/i);
     assert.doesNotMatch(text, /3 lines|on behalf|lead form|number dunga/i);
     assert.ok(scoreReplyCompleteness(text, analysis) >= 0.5);
+  });
+
+  it("stitches process and personal site when a draft skips them", () => {
+    const analysis = analyzeMessage(
+      "hey tarik, dezo se website banana hai. process kya hai, price kaise decide hota hai, aur site kahan dekhun?",
+      { isFirstMessage: true },
+    );
+    const thin = "Dezo mera studio hai, dezo.in pe site dekh sakte ho.\nRate andaz se nahi bolta.";
+    const missed = missedAsks(thin, analysis);
+    assert.ok(missed.length >= 1);
+    const full = stitchMissingAsks(thin, analysis, missed);
+    assert.match(full, /pehle sunta|jo clear/i);
+    assert.match(full, /tarikislam\.in/i);
+    assert.match(full, /dezo/i);
+    assert.match(full, /andaz/i);
+    assert.ok(scoreReplyCompleteness(full, analysis) >= 0.7);
   });
 });

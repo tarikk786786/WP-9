@@ -5,6 +5,8 @@ import { checkReplyQuality } from "./orchestrate/quality.ts";
 import { polishHumanReply } from "./orchestrate/polish.ts";
 import { combineBurstText } from "./orchestrate/debounce.ts";
 import { analyzeMessage } from "./ai/analyze.ts";
+import { missedAsks } from "./ai/score.ts";
+import { stitchMissingAsks } from "./ai/fallback.ts";
 
 describe("conversation intelligence", () => {
   it("acknowledges a thanks without needing a model", () => {
@@ -94,6 +96,29 @@ describe("conversation intelligence", () => {
 
   it("joins a burst into one message", () => {
     assert.equal(combineBurstText(["hi", "bro", "you there"]), "hi\nbro\nyou there");
+  });
+
+  it("keeps hi and thanks as one human line", () => {
+    const hi = analyzeTurn("hi", [], true);
+    const thanks = analyzeTurn("thanks", [], false);
+    assert.equal(hi.plan.action, "acknowledge");
+    assert.match(hi.plan.draft ?? "", /kya haal|bolo/i);
+    assert.doesNotMatch(hi.plan.draft ?? "", /\n/);
+    assert.equal(thanks.plan.action, "acknowledge");
+    assert.match(thanks.plan.draft ?? "", /koi baat nahi/i);
+  });
+
+  it("rejects scope-pe-depend and fills a thin typo price+build reply", () => {
+    const analysis = analyzeMessage("pric pls webiste banana hai", { isFirstMessage: true });
+    assert.equal(checkReplyQuality("rate andaz se nahi bolta, scope pe depend karta hai.", analysis, []).ok, false);
+    const polished = polishHumanReply(
+      "rate andaz se nahi bolta, scope pe depend karta hai.\nbatao kya banana soch rahe ho?",
+      "pric pls webiste banana hai",
+      analysis,
+    );
+    assert.doesNotMatch(polished, /scope pe depend/i);
+    const filled = stitchMissingAsks(polished, analysis, missedAsks(polished, analysis));
+    assert.match(filled, /andaz|bata|soch/i);
   });
 
   it("strips a second greeting and leftover sales english", () => {

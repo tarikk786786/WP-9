@@ -1,8 +1,8 @@
 import type { BotSettings, NormalizedMessage } from "@bot/shared";
 import { analyzeMessage, type MessageAnalysis } from "./analyze.ts";
-import { writeCompleteFallback } from "./fallback.ts";
+import { stitchMissingAsks, writeCompleteFallback } from "./fallback.ts";
 import { factsForIntents } from "./facts.ts";
-import { missedTopics, scoreReplyCompleteness } from "./score.ts";
+import { missedAsks, scoreReplyCompleteness } from "./score.ts";
 import { planReplyEngines, type EnginePlan, type ReplyEngineId } from "./select-engine.ts";
 import { recordFailure, recordSuccess } from "../orchestrate/health.ts";
 import { analyzeTurn } from "../orchestrate/intelligence.ts";
@@ -14,7 +14,7 @@ export type { MessageAnalysis } from "./analyze.ts";
 export { analyzeMessage, detectIntent, isAskingIfMachine, splitAsks } from "./analyze.ts";
 export { planReplyEngines, availableEngines } from "./select-engine.ts";
 export { writeCompleteFallback } from "./fallback.ts";
-export { scoreReplyCompleteness } from "./score.ts";
+export { missedAsks, missedTopics, scoreReplyCompleteness } from "./score.ts";
 
 export type AiContext = {
   settings: BotSettings;
@@ -276,6 +276,13 @@ function callEngine(plan: EnginePlan, system: string, user: string, allowLong: b
   }
 }
 
+function coverEveryAsk(text: string, incoming: string, analysis: MessageAnalysis): string {
+  let out = polishHumanReply(text, incoming, analysis);
+  const missed = missedAsks(out, analysis);
+  if (!missed.length) return out;
+  return polishHumanReply(stitchMissingAsks(out, analysis, missed), incoming, analysis);
+}
+
 function repairUser(user: string, missed: string[]) {
   return `${user}
 
@@ -315,18 +322,18 @@ export async function generateBestHumanReply(
       continue;
     }
     recordSuccess(enginePlan.engine, Date.now() - started);
-    let text = polishHumanReply(hit.text, message.text, analysis);
+    let text = coverEveryAsk(hit.text, message.text, analysis);
     const quality = checkReplyQuality(text, analysis, facts);
     if (!quality.ok) {
       recordFailure(enginePlan.engine);
       continue;
     }
     let score = scoreReplyCompleteness(text, analysis);
-    const missed = missedTopics(text, analysis);
-    if (allowLong && missed.length && score < 0.75) {
+    const missed = missedAsks(text, analysis);
+    if (allowLong && missed.length && score < 0.86) {
       const repaired = await callEngine(enginePlan, prompt.system, repairUser(prompt.user, missed), allowLong);
       if (repaired) {
-        const repairedText = polishHumanReply(repaired.text, message.text, analysis);
+        const repairedText = coverEveryAsk(repaired.text, message.text, analysis);
         const repairedQuality = checkReplyQuality(repairedText, analysis, facts);
         const repairedScore = scoreReplyCompleteness(repairedText, analysis);
         if (repairedQuality.ok && repairedScore >= score) {
@@ -334,6 +341,8 @@ export async function generateBestHumanReply(
           score = repairedScore;
         }
       }
+      text = coverEveryAsk(text, message.text, analysis);
+      score = scoreReplyCompleteness(text, analysis);
     }
     const labeled = { text, engine: `${hit.engine} · ${enginePlan.reason}` };
     if (score > bestScore) {
@@ -343,13 +352,13 @@ export async function generateBestHumanReply(
     if (score >= 0.72) return labeled;
   }
 
-  if (best) return { ...best, text: polishHumanReply(best.text, message.text, analysis) };
+  if (best) return { ...best, text: coverEveryAsk(best.text, message.text, analysis) };
   if (plan.draft && (plan.action === "ask" || plan.action === "clarify")) {
     return { text: plan.draft, engine: `tier0 · ${plan.action}` };
   }
   if (allowLong) {
     return {
-      text: polishHumanReply(writeCompleteFallback(analysis, facts), message.text, analysis),
+      text: coverEveryAsk(writeCompleteFallback(analysis, facts), message.text, analysis),
       engine: "complete-fallback",
     };
   }

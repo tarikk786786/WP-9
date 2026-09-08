@@ -56,3 +56,43 @@ export function writeCompleteFallback(analysis: MessageAnalysis, extraFacts: str
   if (!lines.length) return "dekh liya. bolo";
   return lines.slice(0, 8).join("\n");
 }
+
+export function factLineForTopic(topic: string): string | undefined {
+  return LINE_FOR[topic] ?? TARIK_PUBLIC_FACTS[topic];
+}
+
+const ASK_TOPIC: Array<{ match: RegExp; topic: string }> = [
+  { match: /rate|price|kitna|quote/i, topic: "pricing" },
+  { match: /kaam kaise|process/i, topic: "process" },
+  { match: /portfolio/i, topic: "portfolio" },
+  { match: /site kahan|website kahan|tarikislam/i, topic: "website" },
+  { match: /dezo/i, topic: "studio" },
+  { match: /time hai|available/i, topic: "availability" },
+  { match: /kitna time|timeline/i, topic: "timeline" },
+  { match: /call|meet/i, topic: "meeting" },
+  { match: /yahin rehta|hours|timing/i, topic: "hours" },
+  { match: /kahan se kaam/i, topic: "location" },
+  { match: /kaun hoon|who/i, topic: "identity" },
+  { match: /kya karta|services/i, topic: "services" },
+  { match: /forensic/i, topic: "forensics" },
+  { match: /security/i, topic: "security" },
+  { match: /kya banana|soch rahe/i, topic: "project" },
+];
+
+export function stitchMissingAsks(text: string, analysis: MessageAnalysis, missed: string[]): string {
+  if (!missed.length) return text;
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  for (const item of missed) {
+    const mapped = ASK_TOPIC.find((row) => row.match.test(item));
+    const topic = mapped?.topic ?? item;
+    const fact = factLineForTopic(topic);
+    if (!fact) continue;
+    if (lines.some((line) => line.toLowerCase() === fact.toLowerCase() || line.includes(fact.slice(0, 18)))) continue;
+    lines.push(fact);
+    if (lines.length >= 6) break;
+  }
+  return lines.join("\n");
+}

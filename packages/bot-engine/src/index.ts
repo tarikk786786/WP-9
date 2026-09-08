@@ -10,6 +10,7 @@ export {
   planReplyEngines,
   writeCompleteFallback,
   scoreReplyCompleteness,
+  missedAsks,
 } from "./ai/provider.ts";
 export { analyzeTurn, planTurn, inferUserStyle } from "./orchestrate/intelligence.ts";
 export { readMessage, splitHumanAsks, inferMood } from "./orchestrate/read.ts";

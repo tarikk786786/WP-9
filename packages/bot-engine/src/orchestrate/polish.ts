@@ -1,6 +1,6 @@
 import { isAskingIfMachine, type MessageAnalysis } from "../ai/analyze.ts";
 
-const SALES = /\b(we can definitely|i'd be happy|feel free|let me know how i can|looking forward|reach out|check kar sakte ho|aage badhenge|audits are my thing|i’ll check my schedule|i'll check my schedule|i'm mostly around|leave a note|note chhod|the best|world-class|guaranteed|brief chahiye|3 lines mein|kis ke liye, kab tak|rate final|rate scope pe depend|on behalf|kaam ho sakta hai)\b/i;
+const SALES = /\b(we can definitely|i'd be happy|feel free|let me know how i can|looking forward|reach out|check kar sakte ho|aage badhenge|audits are my thing|i’ll check my schedule|i'll check my schedule|i'm mostly around|leave a note|note chhod|the best|world-class|guaranteed|brief chahiye|3 lines mein|kis ke liye, kab tak|rate final|rate scope pe depend|scope pe depend|on behalf|kaam ho sakta hai|exactly kya banana)\b/i;
 
 export function polishHumanReply(text: string, incoming: string, analysis: MessageAnalysis): string {
   let out = text.replace(/\r/g, "").trim();
@@ -20,6 +20,8 @@ export function polishHumanReply(text: string, incoming: string, analysis: Messa
   out = out.replace(/\baudits are my thing[.!]?\s*/gi, "");
   out = out.replace(/\bfeel free to (reach out|ask)[^.?\n]*[.!]?\s*/gi, "");
   out = out.replace(/\brate scope pe depend karta hai[^.?\n]*[.!]?\s*/gi, "");
+  out = out.replace(/\bscope pe depend[^.?\n]*[.!]?\s*/gi, "");
+  out = out.replace(/\bexactly kya banana hai[^.?\n]*[.!]?\s*/gi, "");
   out = out.replace(/\bnote chhod dena[^.?\n]*[.!]?\s*/gi, "");
   out = out.replace(/\bwebsite ka kaam ho sakta hai[^.?\n]*[.!]?\s*/gi, "");
   out = out.replace(/\bavailability theek hai[^.?\n]*[.!]?\s*/gi, "");
