@@ -18,17 +18,23 @@ export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
   try {
     const response = await workerFetch("/status");
     const json = (await response.json()) as {
-      health?: { whatsapp?: Partial<ScanSnapshot> & { lastConnectedAt?: string | null } };
+      health?: {
+        whatsapp?: Partial<ScanSnapshot> & {
+          lastConnectedAt?: string | null;
+          connected?: boolean;
+        };
+      };
     };
     const wa = json.health?.whatsapp;
     if (!wa) return emptySnapshot();
+    const connected = Boolean(wa.connected || wa.phase === "ready");
     return {
-      phase: (wa.phase as ScanSnapshot["phase"]) ?? "idle",
+      phase: connected ? "ready" : (wa.phase as ScanSnapshot["phase"]) ?? "idle",
       qrDataUrl: wa.qrDataUrl ?? null,
       phone: wa.phone ?? null,
       error: wa.error ?? null,
-      persisted: Boolean(wa.persisted),
-      savedAt: wa.lastConnectedAt ?? null,
+      persisted: Boolean(wa.persisted || connected),
+      savedAt: wa.lastConnectedAt ?? wa.savedAt ?? null,
       serverless: Boolean(process.env.VERCEL),
       pairingCode: wa.pairingCode ?? null,
     };

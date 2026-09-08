@@ -70,7 +70,32 @@ const manager: Manager = {
 };
 
 export function getSnapshot(): WorkerSnapshot {
-  return manager.snapshot;
+  const snap = manager.snapshot;
+  if (snap.connected && snap.phase !== "ready") {
+    return { ...snap, phase: "ready" };
+  }
+  return snap;
+}
+
+export async function exportAuthArchive() {
+  await persistAuthDir();
+  const files = await loadAuthFiles();
+  return {
+    files,
+    phone: manager.snapshot.phone,
+    savedAt: manager.snapshot.lastConnectedAt ?? new Date().toISOString(),
+  };
+}
+
+export async function importAuthArchive(archive: { files?: Record<string, string> }) {
+  const files = archive.files ?? {};
+  if (!files["creds.json"]) {
+    throw new Error("Saved login invalid hai. creds.json missing.");
+  }
+  await saveAuthFiles(files);
+  await hydrateAuthDir();
+  manager.snapshot.persisted = true;
+  return startWhatsApp();
 }
 
 export function uptimeMs() {

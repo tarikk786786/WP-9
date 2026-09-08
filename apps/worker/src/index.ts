@@ -18,7 +18,7 @@ import {
 } from "@bot/database";
 import { defaultBotSettings, SendMessageBody } from "@bot/shared";
 import { isAuthorizedWorkerRequest } from "./auth.ts";
-import { getSnapshot, logoutWhatsApp, sendWhatsApp, startWhatsApp, uptimeMs } from "./whatsapp.ts";
+import { getSnapshot, logoutWhatsApp, sendWhatsApp, startWhatsApp, uptimeMs, exportAuthArchive, importAuthArchive } from "./whatsapp.ts";
 
 const port = Number(process.env.WORKER_PORT || 8788);
 
@@ -101,10 +101,6 @@ const server = createServer(async (req, res) => {
       unauthorized(res);
       return;
     }
-    if (rateLimited(ip)) {
-      json(res, 429, { error: "Rate limited." });
-      return;
-    }
     if (url.pathname === "/status" && req.method === "GET") {
       json(res, 200, {
         health: { worker: "ok", uptimeMs: uptimeMs(), whatsapp: getSnapshot() },
@@ -113,9 +109,22 @@ const server = createServer(async (req, res) => {
       });
       return;
     }
+    if (rateLimited(ip)) {
+      json(res, 429, { error: "Rate limited." });
+      return;
+    }
     if (url.pathname === "/session/start" && req.method === "POST") {
       const body = (await readBody(req)) as { pair?: string };
       json(res, 200, await startWhatsApp(body.pair));
+      return;
+    }
+    if (url.pathname === "/session/archive" && req.method === "GET") {
+      json(res, 200, await exportAuthArchive());
+      return;
+    }
+    if (url.pathname === "/session/restore" && req.method === "POST") {
+      const body = (await readBody(req)) as { files?: Record<string, string> };
+      json(res, 200, await importAuthArchive(body));
       return;
     }
     if (url.pathname === "/session" && req.method === "DELETE") {

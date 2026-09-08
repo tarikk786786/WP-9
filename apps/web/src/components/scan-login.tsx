@@ -16,8 +16,9 @@ import { copyText, downloadJson } from "@/lib/browser-copy";
 import type { ScanSnapshot } from "@/lib/types";
 
 const STORAGE_KEY = "tarik.whatsapp.session.v1";
+const MARK_KEY = "tarik.whatsapp.linked.v1";
 
-function emptyScan(serverless = false): ScanSnapshot {
+function emptyScan(): ScanSnapshot {
   return {
     phase: "idle",
     qrDataUrl: null,
@@ -25,8 +26,22 @@ function emptyScan(serverless = false): ScanSnapshot {
     error: null,
     persisted: false,
     savedAt: null,
-    serverless,
+    serverless: false,
     pairingCode: null,
+  };
+}
+
+function normalizeScan(raw: Partial<ScanSnapshot> & { connected?: boolean; lastConnectedAt?: string | null }): ScanSnapshot {
+  const connected = Boolean(raw.connected || raw.phase === "ready");
+  return {
+    phase: connected ? "ready" : (raw.phase ?? "idle"),
+    qrDataUrl: raw.qrDataUrl ?? null,
+    phone: raw.phone ?? null,
+    error: raw.error ?? null,
+    persisted: Boolean(raw.persisted || connected),
+    savedAt: raw.savedAt ?? raw.lastConnectedAt ?? null,
+    serverless: Boolean(raw.serverless),
+    pairingCode: raw.pairingCode ?? null,
   };
 }
 
@@ -57,16 +72,34 @@ function writeLocalArchive(archive: unknown) {
   return true;
 }
 
+function rememberLinked(scan: ScanSnapshot) {
+  if (scan.phase !== "ready" || !scan.phone) return;
+  try {
+    localStorage.setItem(MARK_KEY, JSON.stringify({ phone: scan.phone, savedAt: scan.savedAt, persisted: true }));
+  } catch {
+    /* private mode */
+  }
+}
+
+function readLinkedMark(): { phone?: string; savedAt?: string | null } | null {
+  try {
+    const raw = localStorage.getItem(MARK_KEY);
+    return raw ? (JSON.parse(raw) as { phone?: string; savedAt?: string | null }) : null;
+  } catch {
+    return null;
+  }
+}
+
 function clearLocalArchive() {
   try {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(MARK_KEY);
   } catch {
-    // private mode
+    /* private mode */
   }
 }
 
 export function ScanLogin({
-  hostedOnVercel = false,
   initial,
   onInbox,
 }: {
@@ -74,21 +107,41 @@ export function ScanLogin({
   initial?: ScanSnapshot;
   onInbox?: (messages: import("@/lib/types").InboxMessage[]) => void;
 }) {
-  const [scan, setScan] = useState<ScanSnapshot>(() => initial ?? emptyScan(hostedOnVercel));
+  const [scan, setScan] = useState<ScanSnapshot>(() => initial ?? emptyScan());
   const [busy, setBusy] = useState(false);
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [savedHere, setSavedHere] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const phaseRef = useRef(scan.phase);
-  const savedReady = useRef(false);
-  const booted = useRef(false);
-  phaseRef.current = scan.phase;
+  const scanRef = useRef(scan);
+  scanRef.current = scan;
+
+  function applyScan(raw: Partial<ScanSnapshot> & { connected?: boolean; lastConnectedAt?: string | null }, fromStream = false) {
+    const next = normalizeScan(raw);
+    setScan((current) => {
+      if (fromStream && (current.phase === "ready" || current.persisted) && next.phase === "idle") {
+        return current;
+      }
+      return next;
+    });
+    if (next.phone) setPhone(next.phone);
+    if (next.phase === "ready") {
+      rememberLinked(next);
+      setSavedHere(true);
+    }
+  }
 
   function stopLogin() {
     abortRef.current?.abort();
     abortRef.current = null;
+  }
+
+  async function pullStatus() {
+    const response = await fetch("/api/scan", { cache: "no-store" });
+    const json = (await response.json()) as Partial<ScanSnapshot> & { connected?: boolean; lastConnectedAt?: string | null };
+    applyScan(json);
+    return normalizeScan(json);
   }
 
   async function pullAndSaveLogin() {
@@ -99,27 +152,28 @@ export function ScanLogin({
         archive?: unknown;
         snapshot?: ScanSnapshot;
       };
-      if (json.snapshot) setScan(json.snapshot);
+      if (json.snapshot) applyScan(json.snapshot);
       if (writeLocalArchive(json.archive)) setSavedHere(true);
     } catch {
-      // disk or /tmp may still hold it
+      /* worker may not export yet */
     }
   }
 
-  async function readStream(pair?: string, silent = false) {
+  async function readStream(pair?: string) {
+    if (scanRef.current.phase === "ready" && !pair) {
+      await pullStatus();
+      return;
+    }
     stopLogin();
     const controller = new AbortController();
     abortRef.current = controller;
-    setBusy(!silent);
-    if (!silent) {
-      setScan((current) => ({
-        ...current,
-        phase: "connecting",
-        error: null,
-        qrDataUrl: null,
-        pairingCode: null,
-      }));
-    }
+    setBusy(true);
+    setScan((current) => ({
+      ...current,
+      phase: current.phase === "ready" ? "ready" : "connecting",
+      error: null,
+      qrDataUrl: current.phase === "ready" ? current.qrDataUrl : null,
+    }));
 
     try {
       const response = await fetch("/api/scan/stream", {
@@ -129,9 +183,7 @@ export function ScanLogin({
         signal: controller.signal,
       });
       if (!response.ok || !response.body) {
-        throw new Error(
-          "WhatsApp worker reach nahi ho raha. npm run worker chalao, ya Vercel pe WORKER_API_URL set karo.",
-        );
+        throw new Error("WhatsApp worker reach nahi ho raha. Refresh karke dubara Show QR.");
       }
 
       const reader = response.body.getReader();
@@ -145,102 +197,62 @@ export function ScanLogin({
         const chunks = buffer.split("\n\n");
         buffer = chunks.pop() ?? "";
         for (const chunk of chunks) {
-          const line = chunk
-            .split("\n")
-            .find((item) => item.startsWith("data: "));
+          const line = chunk.split("\n").find((item) => item.startsWith("data: "));
           if (!line) continue;
           const payload = JSON.parse(line.slice(6)) as {
-            snapshot?: ScanSnapshot;
+            snapshot?: Partial<ScanSnapshot> & { connected?: boolean };
             inbox?: import("@/lib/types").InboxMessage[];
-          } & Partial<ScanSnapshot>;
-          const snapshot = (payload.snapshot ?? payload) as ScanSnapshot;
-          if (snapshot.phase) setScan(snapshot);
+          };
+          const snapshot = (payload.snapshot ?? payload) as Partial<ScanSnapshot> & { connected?: boolean };
+          applyScan(snapshot, true);
           if (payload.inbox && onInbox) onInbox(payload.inbox);
-          if (snapshot.qrDataUrl || snapshot.pairingCode || snapshot.phase === "ready") {
+          if (snapshot.qrDataUrl || snapshot.pairingCode || snapshot.phase === "ready" || snapshot.connected) {
             setBusy(false);
           }
-          if (snapshot.phase === "ready" && snapshot.persisted && !savedReady.current) {
-            savedReady.current = true;
+          if (snapshot.phase === "ready" || snapshot.connected) {
             void pullAndSaveLogin();
-          }
-          if (snapshot.phase === "logged_out") {
-            savedReady.current = false;
-            setBusy(false);
-            clearLocalArchive();
-            setSavedHere(false);
-            continue;
           }
         }
       }
     } catch (error) {
       if (controller.signal.aborted) return;
+      const live = await pullStatus().catch(() => scanRef.current);
+      if (live.phase === "ready") return;
       setScan((current) => ({
         ...current,
-        phase: current.persisted ? "connecting" : "idle",
-        error: error instanceof Error ? error.message : "Login fail ho gaya.",
+        phase: current.persisted || current.phase === "ready" ? "ready" : "idle",
+        error: live.phase === "ready" ? null : error instanceof Error ? error.message : "Login fail ho gaya.",
       }));
     } finally {
       setBusy(false);
-      if (
-        !controller.signal.aborted &&
-        abortRef.current === controller &&
-        (phaseRef.current === "ready" ||
-          phaseRef.current === "qr" ||
-          phaseRef.current === "connecting")
-      ) {
-        abortRef.current = null;
-        window.setTimeout(() => {
-          if (abortRef.current) return;
-          void readStream(undefined, true);
-        }, 4000);
-      }
     }
   }
 
   useEffect(() => {
-    if (booted.current) return;
-    booted.current = true;
-    if (typeof window !== "undefined") {
-      setSavedHere(Boolean(readLocalArchive()));
+    const mark = readLinkedMark();
+    if (mark?.phone) {
+      setSavedHere(true);
+      setPhone(mark.phone);
     }
+    if (readLocalArchive()) setSavedHere(true);
 
-    void (async () => {
-      try {
-        const response = await fetch("/api/scan", { cache: "no-store" });
-        const server = (await response.json()) as ScanSnapshot;
-        if (server.phase === "ready" || server.persisted) {
-          setScan(server);
-          if (server.phone) setPhone(server.phone);
-          void readStream(undefined, true);
-          void pullAndSaveLogin();
-          return;
-        }
-
-        const archive = readLocalArchive();
-        if (!archive) {
-          setSavedHere(false);
-          return;
-        }
-        const restore = await fetch("/api/scan/restore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(archive),
-        });
-        const snap = (await restore.json()) as ScanSnapshot & { error?: string };
-        if (!restore.ok || !snap.persisted) {
-          clearLocalArchive();
-          setSavedHere(false);
-          return;
-        }
-        setScan(snap);
-        setSavedHere(true);
-        if (snap.phone) setPhone(snap.phone);
-        void readStream(undefined, true);
-      } catch {
-        // First visit — user can Show QR.
+    void pullStatus().then((live) => {
+      if (live.phase === "ready") {
+        void pullAndSaveLogin();
+        return;
       }
-    })();
-    // Boot once on mount; readStream is stable enough for this desk.
+      if (live.phase === "qr" || live.qrDataUrl) {
+        void readStream();
+      }
+    });
+
+    const timer = window.setInterval(() => {
+      void pullStatus();
+    }, 2500);
+    return () => {
+      window.clearInterval(timer);
+      stopLogin();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -252,19 +264,18 @@ export function ScanLogin({
         archive?: { files?: { ["creds.json"]?: string } };
         snapshot?: ScanSnapshot;
       };
-      if (json.snapshot) setScan(json.snapshot);
-      if (!json.archive?.files?.["creds.json"]) {
+      if (json.snapshot) applyScan(json.snapshot);
+      const files = json.archive?.files ?? (json.archive as { files?: Record<string, string> } | undefined)?.files;
+      const archive = files ? json.archive : json.archive;
+      const creds = (archive as { files?: { ["creds.json"]?: string } } | null)?.files?.["creds.json"];
+      if (!creds) {
         setExportNote("Pehle WhatsApp Linked karo, phir Export login.");
         return;
       }
-      if (writeLocalArchive(json.archive)) setSavedHere(true);
-      downloadJson("tarik-whatsapp-login.json", json.archive);
-      const copied = await copyText(JSON.stringify(json.archive));
-      setExportNote(
-        copied
-          ? "Login file download ho gayi, clipboard pe bhi. Vercel env: WHATSAPP_AUTH_JSON."
-          : "Login file download ho gayi.",
-      );
+      if (writeLocalArchive(archive)) setSavedHere(true);
+      downloadJson("tarik-whatsapp-login.json", archive);
+      const copied = await copyText(JSON.stringify(archive));
+      setExportNote(copied ? "Login file download ho gayi, clipboard pe bhi." : "Login file download ho gayi.");
     } catch (error) {
       setExportNote(error instanceof Error ? error.message : "Export fail.");
     }
@@ -285,10 +296,8 @@ export function ScanLogin({
         return;
       }
       if (writeLocalArchive(archive)) setSavedHere(true);
-      setScan(snap);
-      if (snap.phone) setPhone(snap.phone);
-      setExportNote("Login import ho gayi. Reconnect chal raha hai.");
-      void readStream(undefined, true);
+      applyScan(snap);
+      setExportNote("Login import ho gayi. Worker reconnect kar raha hai.");
     } catch {
       setExportNote("JSON file padhi nahi. Export wali file use karo.");
     }
@@ -301,13 +310,13 @@ export function ScanLogin({
       clearLocalArchive();
       setSavedHere(false);
       const response = await fetch("/api/scan", { method: "DELETE" });
-      setScan((await response.json()) as ScanSnapshot);
+      applyScan((await response.json()) as ScanSnapshot);
     } finally {
       setBusy(false);
     }
   }
 
-  const remembered = scan.persisted || savedHere;
+  const remembered = scan.persisted || savedHere || scan.phase === "ready";
 
   return (
     <Card className="lg:col-span-2">
@@ -316,8 +325,7 @@ export function ScanLogin({
           <div>
             <CardTitle>WhatsApp login</CardTitle>
             <CardDescription>
-              Ek baar QR / pairing. Login is device pe save hota hai — refresh
-              ke baad wapas connect. Log out se hi bhoolta hai.
+              Linked session worker pe save hoti hai. Refresh ke baad yahi status dikhega — naya QR tab hi jab logout ho.
             </CardDescription>
           </div>
           <Badge variant={scan.phase === "ready" || remembered ? "default" : "secondary"}>
@@ -327,43 +335,36 @@ export function ScanLogin({
       </CardHeader>
       <CardContent className="grid gap-6 md:grid-cols-[280px_1fr]">
         <div className="flex min-h-[240px] items-center justify-center rounded-2xl border bg-white p-4">
-          {scan.qrDataUrl ? (
+          {scan.qrDataUrl && scan.phase !== "ready" ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={scan.qrDataUrl}
-              alt="WhatsApp QR"
-              className="size-[240px]"
-            />
-          ) : scan.pairingCode ? (
+            <img src={scan.qrDataUrl} alt="WhatsApp QR" className="size-[240px]" />
+          ) : scan.pairingCode && scan.phase !== "ready" ? (
             <div className="text-center">
               <p className="text-xs text-muted-foreground">Phone pe yeh code daalo</p>
-              <p className="mt-2 font-heading text-3xl tracking-[0.25em]">
-                {scan.pairingCode}
-              </p>
+              <p className="mt-2 font-heading text-3xl tracking-[0.25em]">{scan.pairingCode}</p>
             </div>
           ) : scan.phase === "ready" ? (
             <p className="px-4 text-center text-sm font-medium text-primary">
-              Linked{scan.phone ? ` as ${scan.phone}` : ""}. Login saved
+              Linked{scan.phone ? ` as ${scan.phone}` : ""}. Login worker pe save hai
               {scan.savedAt ? ` · ${scan.savedAt.slice(0, 16).replace("T", " ")} UTC` : ""}.
             </p>
           ) : remembered ? (
             <p className="px-4 text-center text-sm font-medium">
-              Saved login mil gaya{scan.phone ? ` (${scan.phone})` : ""}. Reconnect
-              ho raha hai — naya QR nahi.
+              Saved login mil gaya{scan.phone ? ` (${scan.phone})` : ""}. Reconnect ho raha hai.
             </p>
           ) : (
             <p className="px-4 text-center text-sm text-muted-foreground">
               {busy || scan.phase === "connecting"
                 ? "WhatsApp se login maang raha hoon…"
-                : "QR ya pairing se login karo. Phir yeh save ho jayega."}
+                : "Show QR dabao. Scan ke baad Linked · saved dikhega."}
             </p>
           )}
         </div>
         <div className="space-y-3 text-sm leading-6">
           <ol className="list-decimal space-y-1 pl-5">
-            <li>Show QR — 20 second mein code box mein aana chahiye.</li>
+            <li>Show QR — code box mein 20 second mein aana chahiye.</li>
             <li>Phone: Linked devices → Link a device → QR scan.</li>
-            <li>Linked ke baad login disk + is browser mein save. Refresh allowed.</li>
+            <li>Linked ke baad worker session save karta hai. Export se backup file milti hai.</li>
           </ol>
           <div className="space-y-2">
             <Label htmlFor="wa-phone">Phone with country code</Label>
@@ -389,17 +390,8 @@ export function ScanLogin({
             }}
           />
           <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={() => void readStream()}
-              disabled={busy || scan.phase === "ready"}
-            >
-              {busy && !phone
-                ? "QR aa raha hai…"
-                : scan.error
-                  ? "Naya QR"
-                  : remembered
-                    ? "Reconnect"
-                    : "Show QR"}
+            <Button onClick={() => void readStream()} disabled={busy || scan.phase === "ready"}>
+              {busy && !phone ? "QR aa raha hai…" : scan.phase === "ready" ? "Linked" : "Show QR"}
             </Button>
             <Button
               variant="outline"
@@ -411,11 +403,7 @@ export function ScanLogin({
             <Button variant="outline" onClick={() => void exportLogin()} disabled={busy}>
               Export login
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => fileRef.current?.click()}
-              disabled={busy}
-            >
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={busy}>
               Import login
             </Button>
             <Button

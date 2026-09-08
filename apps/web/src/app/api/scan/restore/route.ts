@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
+import { workerFetch } from "@/lib/worker-client";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
-  return NextResponse.json(
-    {
-      error:
-        "Import login on the worker host. Vercel does not store Baileys credentials. Copy creds into the worker data/baileys-auth directory or Supabase baileys_auth table.",
-    },
-    { status: 410 },
-  );
+export async function POST(request: Request) {
+  try {
+    const body = await request.text();
+    const response = await workerFetch("/session/restore", { method: "POST", body: body || "{}" });
+    return NextResponse.json(await response.json(), { status: response.status });
+  } catch {
+    return NextResponse.json({ error: "Worker offline. Import the login on the worker host." }, { status: 503 });
+  }
 }
