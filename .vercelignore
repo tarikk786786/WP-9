@@ -1,0 +1,6 @@
+tools
+apps/worker/cloudflared.bin
+data
+*.log
+.env
+.env.*
