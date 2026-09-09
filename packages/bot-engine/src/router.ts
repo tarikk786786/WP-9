@@ -139,7 +139,7 @@ export function routeMessage(input: {
   }
 
   if (!text && message.type !== "text") {
-    return { action: "reply", text: "haan bhai, aa gaya. text mein likh do kya chahiye", source: "fallback" };
+    return { action: "reply", text: "aa gaya. kripya text mein likh dena kya chahiye", source: "fallback" };
   }
 
   const analysis = analyzeMessage(text, { isFirstMessage: true });

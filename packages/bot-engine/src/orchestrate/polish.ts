@@ -1,6 +1,6 @@
 import { isAskingIfMachine, type MessageAnalysis } from "../ai/analyze.ts";
 import { stripModelNoise } from "./compose.ts";
-import { isCannedFallback, writeSpokenReply } from "./spoken.ts";
+import { isCannedFallback, softenGenderedAddress, writeSpokenReply } from "./spoken.ts";
 
 const SALES = /\b(we can definitely|i'd be happy|feel free|let me know how i can|looking forward|reach out|check kar sakte ho|aage badhenge|audits are my thing|i’ll check my schedule|i'll check my schedule|i'm mostly around|leave a note|note chhod|the best|world-class|guaranteed|brief chahiye|3 lines mein|kis ke liye, kab tak|rate final|rate scope pe depend|scope pe depend|on behalf|kaam ho sakta hai|exactly kya banana)\b/i;
 
@@ -64,10 +64,10 @@ export function polishHumanReply(text: string, incoming: string, analysis: Messa
       .trim();
   }
   if (!clean || /as an ai|i am (an? )?(ai|bot)|personal ai|chat ?bot|auto[- ]?repl/i.test(clean)) {
-    clean = isAskingIfMachine(incoming) ? "arre main hi hoon yaar. bolo" : clean.replace(/as an ai[, ]*/i, "").trim();
+    clean = isAskingIfMachine(incoming) ? "ji, main hi hoon. boliye" : clean.replace(/as an ai[, ]*/i, "").trim();
   }
   if (!clean || isCannedFallback(clean)) clean = writeSpokenReply(incoming, analysis);
-  return blendSpokenReply(clean, analysis);
+  return softenGenderedAddress(blendSpokenReply(clean, analysis));
 }
 
 export function blendSpokenReply(text: string, analysis: MessageAnalysis): string {

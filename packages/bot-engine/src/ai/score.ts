@@ -18,7 +18,7 @@ const TOPIC_SIGNALS: Partial<Record<MessageIntent, RegExp>> = {
   forensics: /\b(forensic|evidence)\b/i,
   security: /\b(security|cyber)\b/i,
   "ai-work": /\b(ai systems|ai pe kaam)\b/i,
-  project: /\b(bata kya soch|soch rahe|sun raha)\b/i,
+  project: /\b(bataiye kya soch|bata kya soch|soch hai|soch rahe|sun raha)\b/i,
   greeting: /\b(hey|haan|hello|salam|bolo|kya ho raha|kya haal)\b/i,
 };
 

@@ -89,7 +89,7 @@ describe("conversation intelligence", () => {
   it("keeps a short hire ask as a person, not a quote form", () => {
     const turn = analyzeTurn("I want to hire you for a website", [], true);
     assert.equal(turn.plan.action, "ask");
-    assert.match(turn.plan.draft ?? "", /bata kya soch/i);
+    assert.match(turn.plan.draft ?? "", /bataiye kya soch|soch hai/i);
     assert.doesNotMatch(turn.plan.draft ?? "", /3 lines|rate scope|brief/i);
   });
 
@@ -105,7 +105,7 @@ describe("conversation intelligence", () => {
   it("acks a bare ok without asking a new question", () => {
     const turn = analyzeTurn("ok", [{ role: "user", text: "brief bhej dena" }], false);
     assert.equal(turn.plan.action, "acknowledge");
-    assert.equal(turn.plan.draft, "ok bhai");
+    assert.equal(turn.plan.draft, "ji, theek");
   });
 
   it("asks what tomorrow is about instead of agreeing blindly", () => {
@@ -122,10 +122,10 @@ describe("conversation intelligence", () => {
     const hi = analyzeTurn("hi", [], true);
     const thanks = analyzeTurn("thanks", [], false);
     assert.equal(hi.plan.action, "acknowledge");
-    assert.match(hi.plan.draft ?? "", /kya haal|bolo/i);
+    assert.match(hi.plan.draft ?? "", /kya haal|boliye|namaste/i);
     assert.doesNotMatch(hi.plan.draft ?? "", /\n/);
     assert.equal(thanks.plan.action, "acknowledge");
-    assert.match(thanks.plan.draft ?? "", /koi baat nahi/i);
+    assert.match(thanks.plan.draft ?? "", /koi baat nahi|shukriya/i);
   });
 
   it("rejects scope-pe-depend and fills a thin typo price+build reply", () => {

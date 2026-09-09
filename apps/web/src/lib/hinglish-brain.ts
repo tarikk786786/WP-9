@@ -26,27 +26,27 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
       /\b(are you (an? )?(ai|bot|chatgpt|llm|robot|chat ?bot|auto[- ]?repl)|tu bot|tum bot|kya (tu|tum|aap) (bot|ai)|chatgpt ho|bot ho kya|insaan ho|real (person|human)|auto reply)\b/,
     )
   ) {
-    return pick(lower, ["arre main hi hoon yaar. bolo", "haan bhai, main hi. kya baat hai", "main yahin hoon yaar. bolo"]);
+    return pick(lower, ["ji, main hi hoon. boliye", "main hi hoon. kya baat hai", "main yahin hoon. boliye"]);
   }
 
   if (has(lower, /\b(horoscope|rashifal|zodiac|kundli|janam ?patri|star sign)\b/)) {
-    return "woh nahi dekhta yaar. jo kaam hai, seedha likh";
+    return "woh nahi dekhta. jo kaam hai, seedha likhiye";
   }
 
   if (/^kya hua( tumhe| tujhe| aapko)?[?.!]*$/i.test(text.trim())) {
-    return "theek hoon bhai. tu bol, kya scene hai";
+    return "theek hoon, shukriya. aap boliye, kya scene hai";
   }
 
   if (/^(bolo|bol)[?.!]*$/i.test(text.trim())) {
-    return "haan bhai, sun raha hoon. kya likhna hai";
+    return "ji, sun raha hoon. kya likhna hai";
   }
 
   if (/^kya[?.!]*$/i.test(text.trim())) {
-    return "haan yaar, kya baat hai";
+    return "ji, kya baat hai";
   }
 
   if (has(lower, /\b(who are you|your name|aap kaun|tum kaun|kaun ho)\b/) || has(text, /कौन हो/)) {
-    return pick(lower, ["tarik hoon yaar. bolo", "main tarik bhai. kya kaam hai", "tarik. haan, sun raha hoon"]);
+    return pick(lower, ["tarik hoon. boliye", "main tarik. kya kaam hai", "tarik. ji, sun raha hoon"]);
   }
 
   if (has(lower, /\b(what do you do|about you|kya karte|kaam kya|services?)\b/)) {
@@ -72,14 +72,14 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
   }
 
   if (has(lower, /\b(available|availability|q3)\b/) && !has(lower, /\b(project|banana|website chahiye)\b/)) {
-    return `${tarik.accepting.toLowerCase()} site pe open hain. yahin bata kya soch rahe ho`;
+    return `${tarik.accepting.toLowerCase()} site pe open hain. yahin bataiye kya soch hai`;
   }
 
   if (has(lower, /\b(hire|hiring|freelance|project|kaam|engage)\b/)) {
     return pick(lower, [
-      "haan bhai, bata kya soch rahe ho",
-      "sun raha hoon yaar. thoda aur bata",
-      "theek bhai. kya soch rahe ho",
+      "ji, bataiye kya soch hai",
+      "sun raha hoon. thoda aur bataiye",
+      "theek hai. kya soch hai",
     ]);
   }
 
@@ -88,7 +88,7 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
   }
 
   if (has(lower, /\b(ai|llm|rag|agent|automation|saas)\b/)) {
-    return "yeh sab karta hoon. kya soch rahe ho, short mein bata";
+    return "yeh sab karta hoon. kya soch hai, short mein bataiye";
   }
 
   if (
@@ -100,39 +100,39 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
   }
 
   if (hint === "price" || has(lower, /\b(price|pricing|cost|rate|fees?|charge|kitna|daam|budget)\b/) || has(text, /कीमत|दाम|रेट/)) {
-    return "rate andaz se nahi bolta bhai";
+    return "rate andaz se nahi bolta, maaf kijiye";
   }
 
   if (has(lower, /assalam|salaam|salam/)) {
-    return "walaikum assalam bhai, kya ho raha hai";
+    return "walaikum assalam. kya ho raha hai";
   }
 
   if (has(lower, /good morning|^gm\b/)) {
-    return "good morning bhai, kya plan hai";
+    return "good morning. kya plan hai";
   }
 
   if (
     hint === "greeting" ||
     has(lower, /^(hi|hii|hello|hey|yo|hola|namaste|namaskar|kaise ho|kya haal|whats?up|how are you)[\s!?.]*$/i)
   ) {
-    const greetings = [`haan bhai, kya haal hai`, `haan yaar, bolo`, `hey, theek ho? scene kya hai`];
+    const greetings = [`namaste, kya haal hai`, `ji, boliye`, `hey, theek ho? scene kya hai`];
     return rules.greetingReply?.length < 40 ? pick(lower, [rules.greetingReply, ...greetings]) : pick(lower, greetings);
   }
 
   if (has(lower, /\b(thank|thanks|thx|shukriya|dhanyavaad|thanku)\b/) || has(text, /शुक्रिया|धन्यवाद/)) {
-    return pick(lower, ["koi baat nahi yaar", "koi nahi bhai", "chill yaar"]);
+    return pick(lower, ["shukriya, koi baat nahi", "koi nahi, ji", "theek hai"]);
   }
 
   if (has(lower, /\b(sorry|maaf|galti|my bad)\b/) || has(text, /माफ|सॉरी/)) {
-    return "koi nahi yaar, chill. phir se likh";
+    return "koi nahi. phir se likhiye, please";
   }
 
   if (has(lower, /\b(ok|okay|oky|done|theek|thik|acha|accha|cool|great)\b/) && text.split(/\s+/).length <= 4) {
-    return "ok bhai";
+    return "ji, theek";
   }
 
   if (has(lower, /\b(call|phone|voice|video|zoom|meet|meeting|milna|baat kar)\b/) || has(text, /कॉल|मीटिंग/)) {
-    return "haan bhai, time bata. confirm karke aata hoon";
+    return "ji, time bataiye. confirm karke aata hoon";
   }
 
   if (has(lower, /\b(where|location|address|map|kahan|kidhar)\b/) || has(text, /कहाँ|पता/)) {
@@ -140,11 +140,11 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
   }
 
   if (has(lower, /\b(help|issue|problem|stuck|urgent|jaldi|please|plz)\b/) || has(text, /मदद|समस्या/)) {
-    return "bata kya tight hai bhai. saath mein nikalte hain";
+    return "boliye kya tight hai. saath mein dekhte hain";
   }
 
   if (has(lower, /\b(bye|good ?night|tc|take care|gn)\b/) || has(text, /अलविदा|शुभ/)) {
-    return "take care bhai. baad mein likhna";
+    return "take care. baad mein likhiye";
   }
 
   const extra = rules.customFacts
@@ -164,7 +164,7 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
     return rules.defaultReply;
   }
 
-  return pick(lower, ["haan bhai, sun raha hoon. thoda aur bata", "ok yaar, sun raha hoon. detail?", "padh liya. agla part likh"]);
+  return pick(lower, ["ji, sun raha hoon. thoda aur bataiye", "sun raha hoon. thoda detail?", "padh liya. agla part likhiye"]);
 }
 
 export function isCannedScript(text: string) {

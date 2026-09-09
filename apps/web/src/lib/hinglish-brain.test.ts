@@ -6,7 +6,8 @@ import { isCannedScript, isLowQualityReply, writeHinglishReply } from "./hinglis
 describe("writeHinglishReply", () => {
   it("greets like a person, not a bio", () => {
     const text = writeHinglishReply("hi", "Amina", defaultRules, "greeting");
-    assert.match(text.toLowerCase(), /hey|haan|bolo|theek|ho raha/);
+    assert.match(text.toLowerCase(), /hey|haan|bolo|theek|ho raha|namaste|haal|boliye|ji/);
+    assert.doesNotMatch(text, /\bbhai\b|\bbro\b|brother/i);
     assert.doesNotMatch(text, /forensics, AI, security/);
     assert.doesNotMatch(text, /tarikislam\.in/);
     assert.doesNotMatch(text, /Amina,/);
@@ -41,7 +42,7 @@ describe("writeHinglishReply", () => {
 
   it("hires in first person, not on behalf", () => {
     const text = writeHinglishReply("I want to hire you", "Amina", defaultRules);
-    assert.match(text.toLowerCase(), /\b(main|haan|bata)\b/);
+    assert.match(text.toLowerCase(), /\b(main|haan|bata|bataiye|ji|soch)\b/);
     assert.doesNotMatch(text, /on behalf/i);
     assert.doesNotMatch(text, /assistant/i);
     assert.doesNotMatch(text, /3 lines|brief|lead|number dunga/i);

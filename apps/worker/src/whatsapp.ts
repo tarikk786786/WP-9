@@ -657,7 +657,7 @@ async function openSocket(pairingPhone?: string) {
           jid,
           fromMe: false,
           pushName: raw.pushName || undefined,
-          message: { conversation: "haan bhai, message aaya. ek line text maar dena" },
+          message: { conversation: "message aa gaya. kripya ek line text likh dena" },
           timestamp: Math.floor(Date.now() / 1000),
         });
         if (!normalized) return;
@@ -703,8 +703,8 @@ async function openSocket(pairingPhone?: string) {
       const person = personForChat(jid, raw.pushName || undefined, phoneHints);
       normalized.text =
         person?.voice === "love"
-          ? "haan meri jaan, sun raha hoon. text mein likh de"
-          : "haan bhai, aa gaya. text mein likh do kya chahiye";
+          ? "haan meri jaan, sun raha hoon. text mein likh dijiye"
+          : "aa gaya. kripya text mein likh dena kya chahiye";
     }
     if (isDuplicate(id)) return;
     manager.snapshot.lastMessageReceivedAt = new Date().toISOString();

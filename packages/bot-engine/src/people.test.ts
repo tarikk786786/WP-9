@@ -55,6 +55,7 @@ describe("DAZy love voice", () => {
     );
     assert.match(prompt.system, /DAZy/);
     assert.match(prompt.system, /love|jaan/i);
-    assert.doesNotMatch(prompt.system, /texting a brother/i);
+    assert.doesNotMatch(prompt.system, /texting a brother|she is|your girl|a man in love/i);
+    assert.doesNotMatch(prompt.system, /\bhe\/she\b.*for DAZy/i);
   });
 });

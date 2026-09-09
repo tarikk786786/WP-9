@@ -167,8 +167,10 @@ describe("router", () => {
     });
     assert.match(prompt.system, /first person/i);
     assert.match(prompt.system, /you ARE tarik islam/i);
-    assert.match(prompt.system, /you are him/i);
+    assert.match(prompt.system, /humble|well-mannered|mannered/i);
     assert.match(prompt.system, /tarikislam\.in/i);
+    assert.doesNotMatch(prompt.system, /you are him|a real man|texting a brother/i);
+    assert.doesNotMatch(prompt.system, /use bhai \/ yaar \/ bro/i);
     assert.match(prompt.user, /Amina/);
   });
 
