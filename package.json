@@ -11,6 +11,7 @@
     "dev:web": "npm run dev --workspace=web",
     "dev:worker": "npm run start --workspace=worker",
     "worker": "npm run start --workspace=worker",
+    "live": "npm run live --workspace=worker",
     "lint": "npm run lint --workspace=web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",

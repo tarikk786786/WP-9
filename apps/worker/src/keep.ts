@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -15,38 +14,6 @@ let stopping = false;
 let booting = false;
 let notReadySince = 0;
 let lockHeld = false;
-let tunnel: ChildProcess | null = null;
-
-function cloudflaredBin() {
-  const fromEnv = process.env.CLOUDFLARED_BIN?.trim();
-  const candidates = [
-    fromEnv,
-    path.join(workerRoot, "..", "..", "tools", "bin", "cloudflared"),
-    path.join(workerRoot, "cloudflared.bin"),
-    "cloudflared",
-  ].filter((row): row is string => Boolean(row));
-  for (const candidate of candidates) {
-    if (candidate === "cloudflared" || existsSync(candidate)) return candidate;
-  }
-  return "cloudflared";
-}
-
-function startNamedTunnel() {
-  const token = process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim();
-  if (!token || tunnel) return;
-  const bin = cloudflaredBin();
-  tunnel = spawn(bin, ["tunnel", "--no-autoupdate", "run", "--token", token], {
-    stdio: "inherit",
-    env: process.env,
-  });
-  tunnel.on("exit", () => {
-    tunnel = null;
-    if (!stopping && process.env.CLOUDFLARE_TUNNEL_TOKEN) {
-      setTimeout(() => startNamedTunnel(), 4000);
-    }
-  });
-  console.log("[keep] named Cloudflare tunnel started (stable hostname)");
-}
 
 async function portHealthy() {
   try {
@@ -111,7 +78,6 @@ async function healthTick() {
 function shutdown() {
   stopping = true;
   child?.kill("SIGTERM");
-  tunnel?.kill("SIGTERM");
   if (lockHeld) releaseWorkerLock(dataDir());
   setTimeout(() => process.exit(0), 1500);
 }
@@ -127,7 +93,6 @@ process.on("uncaughtException", (error) => {
 
 async function main() {
   migrateLegacyAuth();
-  startNamedTunnel();
   for (;;) {
     if (stopping) return;
     const lock = acquireWorkerLock(dataDir());

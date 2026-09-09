@@ -139,8 +139,7 @@ export function routeMessage(input: {
   }
 
   if (!text && message.type !== "text") {
-    if (!settings.replyToMedia) return { action: "skip", text: "", source: "skip" };
-    return { action: "reply", text: "dekh liya. text mein likh do kya chahiye", source: "fallback" };
+    return { action: "reply", text: "haan bhai, aa gaya. text mein likh do kya chahiye", source: "fallback" };
   }
 
   const analysis = analyzeMessage(text, { isFirstMessage: true });

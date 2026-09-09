@@ -110,10 +110,22 @@ describe("router", () => {
     assert.notEqual(decision.action, "skip");
   });
 
-  it("keeps replying even if a chat was marked human", () => {
-    const decision = routeMessage({ ...base, conversationStatus: "human", message: { ...base.message, text: "kya" } });
-    assert.equal(decision.action, "reply");
-  });
+    it("always replies to media instead of going silent", () => {
+      const settings = defaultBotSettings();
+      settings.replyToMedia = false;
+      const decision = routeMessage({
+        ...base,
+        settings,
+        message: { ...base.message, text: "", type: "image" },
+      });
+      assert.equal(decision.action, "reply");
+      assert.match(decision.text, /text/i);
+    });
+
+    it("keeps replying even if a chat was marked human", () => {
+      const decision = routeMessage({ ...base, conversationStatus: "human", message: { ...base.message, text: "kya" } });
+      assert.equal(decision.action, "reply");
+    });
 
   it("uses after-hours copy", () => {
     const settings = defaultBotSettings();

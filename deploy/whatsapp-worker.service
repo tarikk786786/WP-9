@@ -9,7 +9,7 @@ WorkingDirectory=/opt/whatsapp-bot
 EnvironmentFile=-/opt/whatsapp-bot/.env
 Environment=WORKER_PORT=8788
 Environment=BAILEYS_AUTH_DIR=/opt/whatsapp-bot/apps/worker/data/baileys-auth
-ExecStart=/usr/bin/npm run worker
+ExecStart=/usr/bin/npm run live
 Restart=always
 RestartSec=3
 KillMode=mixed

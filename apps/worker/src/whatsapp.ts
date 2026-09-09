@@ -232,13 +232,13 @@ let pulsing = false;
 
 export async function ensureAlwaysOn() {
   const settings = await getSettings();
-  if (!settings.enabled || settings.aiEnabled === false) {
-    await saveSettings({
-      ...settings,
-      enabled: true,
-      aiEnabled: true,
-    });
-  }
+  await saveSettings({
+    ...settings,
+    enabled: true,
+    aiEnabled: true,
+    replyToMedia: true,
+    businessHours: { ...settings.businessHours, enabled: false },
+  });
   migrateLegacyAuth();
   await markPersistedFromDisk();
   await startWhatsApp();
@@ -246,7 +246,7 @@ export async function ensureAlwaysOn() {
   keepAliveStarted = true;
   setInterval(() => {
     void pulseWhatsApp();
-  }, 30_000);
+  }, 20_000);
 }
 
 async function pulseWhatsApp() {
@@ -602,6 +602,40 @@ async function openSocket(pairingPhone?: string) {
     return Date.now() - waTimestampMs(raw) < 2 * 60 * 60 * 1000;
   }
 
+  const decryptWait = new Set<string>();
+
+  function scheduleDecryptWait(jid: string, id: string, raw: WaRaw) {
+    if (decryptWait.has(id)) return;
+    decryptWait.add(id);
+    setTimeout(() => {
+      void (async () => {
+        if (await wasProcessed(`out_${id}`)) return;
+        if (isDuplicate(id)) return;
+        const stored = inboundStore.get(id) as Record<string, unknown> | undefined;
+        if (stored && !isInboundStub(stored)) {
+          await ingestRaw({ ...raw, message: stored }, "update");
+          return;
+        }
+        const normalized = normalizeIncoming({
+          id,
+          jid,
+          fromMe: false,
+          pushName: raw.pushName || undefined,
+          message: { conversation: "haan bhai, message aaya. ek line text maar dena" },
+          timestamp: Math.floor(Date.now() / 1000),
+        });
+        if (!normalized) return;
+        if (isDuplicate(id)) return;
+        manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
+        debounceChat(jid, normalized, (batch) => {
+          void replyToBurst(jid, batch);
+        });
+      })().catch((error) => {
+        console.error("[whatsapp] decrypt wait failed", error);
+      });
+    }, 7000);
+  }
+
   async function ingestRaw(raw: WaRaw, source: "notify" | "append" | "history" | "update") {
     if (generation !== manager.generation || manager.sock !== sock) return;
     touchFrame();
@@ -614,7 +648,10 @@ async function openSocket(pairingPhone?: string) {
     if (source !== "notify" && !isRecentInbound(raw)) return;
     if (await wasProcessed(`out_${id}`)) return;
     const body = (raw.message ?? inboundStore.get(id)) as Record<string, unknown> | undefined;
-    if (isInboundStub(body ?? null)) return;
+    if (isInboundStub(body ?? null)) {
+      scheduleDecryptWait(jid, id, raw);
+      return;
+    }
     const normalized = normalizeIncoming({
       id,
       jid,
@@ -625,7 +662,9 @@ async function openSocket(pairingPhone?: string) {
     });
     if (!normalized) return;
     if (normalized.type === "reaction") return;
-    if (!normalized.text.trim() && (normalized.type === "unknown" || normalized.type === "text")) return;
+    if (!normalized.text.trim()) {
+      normalized.text = "haan bhai, aa gaya. text mein likh do kya chahiye";
+    }
     if (isDuplicate(id)) return;
     manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
     const customer = await upsertCustomer({

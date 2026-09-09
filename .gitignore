@@ -19,3 +19,4 @@ cloudflared.bin
 apps/worker/cloudflared.bin
 /tools/bin/*
 !/tools/bin/.gitkeep
+tools/tunnel-url.txt

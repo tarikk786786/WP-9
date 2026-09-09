@@ -41,7 +41,8 @@ Reconnect uses exponential backoff (capped). Logged-out sessions are wiped and a
 npm install
 cp .env.example .env
 # fill ADMIN_SECRET and WORKER_API_SECRET
-    npm run worker     # persistent WhatsApp worker :8788 (auto-restarts)
+    npm run live       # always-on: worker + tunnel, auto-restart
+    npm run worker     # WhatsApp socket only
     npm run dev:web    # :43217
 ```
 
