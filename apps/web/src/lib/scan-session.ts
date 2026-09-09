@@ -1,42 +1,56 @@
-import { workerFetch } from "@/lib/worker-client";
+import { workerFetch, workerHealth, workerLooksLocal } from "@/lib/worker-client";
 import type { ScanSnapshot } from "@/lib/types";
 
 function emptySnapshot(): ScanSnapshot {
+  const onVercel = Boolean(process.env.VERCEL);
+  const localUrl = workerLooksLocal();
   return {
     phase: "idle",
     qrDataUrl: null,
     phone: null,
-    error: "Worker offline. Run npm run worker.",
+    error: onVercel && localUrl
+      ? "Vercel localhost worker tak nahi pahunchta. WORKER_API_URL pe public worker URL do."
+      : "Worker offline. Run npm run worker.",
     persisted: false,
     savedAt: null,
-    serverless: Boolean(process.env.VERCEL),
+    serverless: onVercel,
     pairingCode: null,
   };
 }
 
 export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
   try {
-    const response = await workerFetch("/status");
-    const json = (await response.json()) as {
-      health?: {
-        whatsapp?: Partial<ScanSnapshot> & {
-          lastConnectedAt?: string | null;
-          connected?: boolean;
+    const health = await workerHealth();
+    const wa = health.whatsapp ?? {};
+    const connected = Boolean(wa.connected || health.whatsappConnection === "ready");
+    let qrDataUrl = wa.qrDataUrl ?? null;
+    let pairingCode = wa.pairingCode ?? null;
+    let error = wa.error ?? null;
+    try {
+      const response = await workerFetch("/status");
+      if (response.ok) {
+        const json = (await response.json()) as {
+          health?: { whatsapp?: Partial<ScanSnapshot> & { lastConnectedAt?: string | null } };
         };
-      };
-    };
-    const wa = json.health?.whatsapp;
-    if (!wa) return emptySnapshot();
-    const connected = Boolean(wa.connected && wa.phase === "ready");
+        const full = json.health?.whatsapp;
+        if (full) {
+          qrDataUrl = full.qrDataUrl ?? qrDataUrl;
+          pairingCode = full.pairingCode ?? pairingCode;
+          error = full.error ?? error;
+        }
+      }
+    } catch {
+      /* health is enough to show linked */
+    }
     return {
-      phase: connected ? "ready" : (wa.phase as ScanSnapshot["phase"]) ?? "idle",
-      qrDataUrl: wa.qrDataUrl ?? null,
+      phase: connected ? "ready" : ((wa.phase as ScanSnapshot["phase"]) ?? "idle"),
+      qrDataUrl,
       phone: wa.phone ?? null,
-      error: wa.error ?? null,
+      error,
       persisted: Boolean(wa.persisted || connected),
-      savedAt: wa.lastConnectedAt ?? wa.savedAt ?? null,
+      savedAt: wa.lastConnectedAt ?? health.lastSuccessfulConnection ?? null,
       serverless: Boolean(process.env.VERCEL),
-      pairingCode: wa.pairingCode ?? null,
+      pairingCode,
     };
   } catch {
     return emptySnapshot();

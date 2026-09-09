@@ -15,3 +15,5 @@ auth_info*
 baileys-auth
 session
 *.pem
+cloudflared.bin
+apps/worker/cloudflared.bin

@@ -1,4 +1,4 @@
-import { workerBase } from "@/lib/worker-client";
+import { workerBase, workerLooksLocal } from "@/lib/worker-client";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -62,6 +62,8 @@ async function proxyStream(request: Request) {
       },
     });
   } catch {
+    const local = workerLooksLocal();
+    const onVercel = Boolean(process.env.VERCEL);
     return new Response(
       `data: ${JSON.stringify({
         snapshot: {
@@ -70,8 +72,11 @@ async function proxyStream(request: Request) {
           phone: null,
           pairingCode: null,
           persisted: false,
-          error:
-            "Worker offline hai. Baileys process chalao (npm run worker) aur Vercel pe WORKER_API_URL do.",
+          error: onVercel && local
+            ? "Vercel is pointing WORKER_API_URL at localhost. Set a public https worker URL."
+            : onVercel
+              ? "Worker URL reach nahi ho raha. Worker process aur tunnel/host online rakho."
+              : "Worker offline hai. npm run worker chalao.",
         },
       })}\n\n`,
       {
