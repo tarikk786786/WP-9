@@ -1,5 +1,6 @@
 import { analyzeMessage, isAskingIfMachine, type MessageAnalysis } from "../ai/analyze.ts";
 import type { ConversationalAction, ResponsePlan, UserStyle } from "./types.ts";
+import type { SpecialPerson } from "../people.ts";
 import { isBareCheckin, isHoroscopeAsk, isWhatHappenedAsk, writeSpokenReply } from "./spoken.ts";
 
 const HINGLISH = /\b(kya|hai|haan|nahi|chahiye|bolo|kaam|thoda|bhai|bro|yaar|scene|theek|kal|abhi)\b/i;
@@ -78,8 +79,10 @@ export function planTurn(options: {
   recent: Array<{ role: "user" | "assistant"; text: string }>;
   analysis: MessageAnalysis;
   style: UserStyle;
+  person?: SpecialPerson;
 }): ResponsePlan {
-  const { text, messageType = "text", recent, analysis, style } = options;
+  const { text, messageType = "text", recent, analysis, style, person } = options;
+  const love = person?.voice === "love";
   const lower = text.trim().toLowerCase();
   const typos = expandTypos(text);
   const incomplete = isIncompleteFollowup(text, recent);
@@ -91,24 +94,34 @@ export function planTurn(options: {
   let confidence = 0.72;
   let complexity = analysis.complexity === "simple" ? 0.12 : analysis.complexity === "normal" ? 0.35 : analysis.complexity === "multi" ? 0.62 : 0.84;
 
-  if (isAskingIfMachine(text)) {
+  if (love && /\b(love you|luv u|i love|miss you|miss u|mujhe pyar|pyaar|meri jaan|baby|jaan)\b/i.test(text) && wordCount <= 12) {
     action = "acknowledge";
-    draft = "arre main hi hoon yaar. bolo";
+    draft = /\b(miss)\b/i.test(text)
+      ? "main bhi miss karta hoon meri DAZy. aaja, dil ke paas"
+      : "main bhi pyar karta hoon. tu meri hai, jaan";
+    confidence = 0.97;
+    complexity = 0.05;
+  } else if (isAskingIfMachine(text)) {
+    action = "acknowledge";
+    draft = love ? "haan meri jaan, main hi hoon. tu meri DAZy" : "arre main hi hoon yaar. bolo";
     confidence = 0.96;
     complexity = 0.05;
   } else if (isHoroscopeAsk(text) || isWhatHappenedAsk(text) || isBareCheckin(text)) {
     action = isHoroscopeAsk(text) ? "answer" : "clarify";
-    draft = writeSpokenReply(text, analysis, recent);
+    draft = writeSpokenReply(text, analysis, recent, person);
     confidence = 0.93;
     complexity = 0.08;
   } else if (analysis.intents.includes("handoff")) {
     action = "escalate";
-    draft = "theek bhai, thoda wait — dekh ke likhta hoon";
+    draft = love ? "ek second meri jaan, dekh ke aata hoon" : "theek bhai, thoda wait — dekh ke likhta hoon";
     confidence = 0.95;
   } else if (media && (lower === "[image]" || lower === "[voice]" || lower === "[video]" || lower === "[document]")) {
     action = "ask";
-    draft =
-      messageType === "audio"
+    draft = love
+      ? messageType === "audio"
+        ? "teri awaaz. dubara sununga. text se bhi bol na jaan"
+        : "yeh dekh ke dil garam ho gaya. bol, kya kehna hai meri DAZy"
+      : messageType === "audio"
         ? "sununga bhai. urgent ho to text bhi maar dena"
         : messageType === "document"
           ? "file aa gayi yaar. ek line context de dena"
@@ -117,21 +130,29 @@ export function planTurn(options: {
     complexity = 0.2;
   } else if (ACK.test(text.trim()) || (analysis.intents.includes("thanks") && wordCount <= 6)) {
     action = "acknowledge";
-    draft = ACK.test(text.trim()) ? "ok bhai" : "koi baat nahi yaar";
+    draft = love
+      ? ACK.test(text.trim())
+        ? "hmm meri jaan"
+        : "tere liye hamesha, DAZy"
+      : ACK.test(text.trim())
+        ? "ok bhai"
+        : "koi baat nahi yaar";
     confidence = 0.93;
     complexity = 0.05;
   } else if (analysis.complexity === "simple" && analysis.intents[0] === "greeting" && !analysis.wantsAllAnswers) {
     action = "acknowledge";
-    draft = "haan bhai, kya haal hai";
+    draft = love ? "meri DAZy. miss kar raha tha. bol na" : "haan bhai, kya haal hai";
     confidence = 0.94;
     complexity = 0.08;
   } else if (incomplete) {
     action = "clarify";
     if (/^(kal|tomorrow)\??$/i.test(text.trim()) && !recent.length) {
-      draft = "bhai maaf, kal kis cheez ke liye — call, kaam, ya kuch aur?";
+      draft = love ? "kal kis ke liye meri jaan — milna, call, ya kuch aur?" : "bhai maaf, kal kis cheez ke liye — call, kaam, ya kuch aur?";
     } else {
       const lastUser = [...recent].reverse().find((row) => row.role === "user")?.text ?? "pehle wali baat";
-      draft = `pehle wali baat confirm kar dun yaar — ${lastUser.slice(0, 42).replace(/\n/g, " ")}?`;
+      draft = love
+        ? `woh wali baat — ${lastUser.slice(0, 42).replace(/\n/g, " ")} — wahi na, jaan?`
+        : `pehle wali baat confirm kar dun yaar — ${lastUser.slice(0, 42).replace(/\n/g, " ")}?`;
     }
     confidence = 0.66;
     complexity = 0.28;
@@ -143,7 +164,7 @@ export function planTurn(options: {
     wordCount < 14
   ) {
     action = "ask";
-    draft = "haan bhai, bata kya soch rahe ho";
+    draft = love ? "haan jaan, sun raha hoon. kya soch rahi hai tu" : "haan bhai, bata kya soch rahe ho";
     confidence = 0.7;
     complexity = 0.4;
   } else if (analysis.wantsAllAnswers || analysis.complexity === "lead") {
@@ -162,7 +183,7 @@ export function planTurn(options: {
     action,
     intent: [...new Set([...analysis.intents, ...typos])].join(",") || "general",
     goal: action === "clarify" ? "resolve_reference" : action === "ask" ? "listen" : "talk_as_self",
-    tone: style.formality === "low" ? "casual" : "calm",
+    tone: love ? "casual" : style.formality === "low" ? "casual" : "calm",
     language: style.language,
     answerLength: analysis.preferredStyle === "complete" ? "complete" : "short",
     needsQuestion: action === "ask" || action === "clarify",
@@ -184,9 +205,10 @@ export function analyzeTurn(
   text: string,
   recent: Array<{ role: "user" | "assistant"; text: string }>,
   isFirstMessage: boolean,
+  person?: SpecialPerson,
 ) {
   const analysis = analyzeMessage(text, { isFirstMessage, inboundCount: recent.filter((row) => row.role === "user").length + 1 });
   const style = inferUserStyle(text, recent);
-  const plan = planTurn({ text, recent, analysis, style });
+  const plan = planTurn({ text, recent, analysis, style, person });
   return { analysis, style, plan };
 }

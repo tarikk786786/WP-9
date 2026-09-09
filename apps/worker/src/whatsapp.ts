@@ -22,6 +22,7 @@ import {
 } from "@bot/database";
 import type { NormalizedMessage } from "@bot/shared";
 import { analyzeMessage, combineBurstText, debounceChat, forgetDuplicate, generateBestHumanReply, isCannedFallback, isDuplicate, isInboundStub, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback, writeSpokenReply, avoidRepeat } from "@bot/engine";
+import { personForChat } from "./people-map.ts";
 import { authDir, migrateLegacyAuth } from "./paths.ts";
 import { credsAreLinked, phoneFromCreds, shouldWipeAuth } from "./session-policy.ts";
 
@@ -318,6 +319,8 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   }
   const last = batch[batch.length - 1];
   const combined = { ...last, text: combineBurstText(batch.map((row) => row.text)) || last.text };
+  const person = personForChat(jid, combined.fromName);
+  if (person) combined.fromName = person.name;
   let settings = await getSettings();
   if (!settings.enabled) {
     settings = { ...settings, enabled: true, aiEnabled: true };
@@ -326,8 +329,8 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   const rules = await getRules();
   const faqs = await getFaqs();
   const customer = await upsertCustomer({
-    number: jid.replace(/@s\.whatsapp\.net$/, ""),
-    name: combined.fromName,
+    number: jid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
+    name: person?.name ?? combined.fromName,
   });
   const convo = await upsertConversation(customer.id, jid);
   if (convo.status !== "bot") {
@@ -362,7 +365,7 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   const ruleFacts = matchAllRules(combined.text, rules)
     .filter((r) => !/agent|human/.test(r.triggerValue))
     .map((r) => r.response);
-  const spoken = writeSpokenReply(combined.text, analysis, recent);
+  const spoken = writeSpokenReply(combined.text, analysis, recent, person ?? undefined);
   const suggested = analysis.wantsAllAnswers
     ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge], combined.text)
     : isCannedFallback(routed.text)
@@ -373,7 +376,7 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
       ? await withTimeout(
           generateBestHumanReply(combined, {
             settings,
-            customerName: combined.fromName,
+            customerName: person?.name ?? combined.fromName,
             recent,
             faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
             knowledge: [...knowledge, ...ruleFacts],
@@ -382,6 +385,7 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
             analysis,
             isFirstMessage: inboundCount <= batch.length,
             messageType: combined.type,
+            person: person ?? undefined,
           }),
           7500,
         )

@@ -1,6 +1,7 @@
 import type { MessageAnalysis } from "../ai/analyze.ts";
 import { analyzeMessage } from "../ai/analyze.ts";
 import { TARIK_PUBLIC_FACTS } from "../ai/facts.ts";
+import type { SpecialPerson } from "../people.ts";
 
 const CANNED = /^dekh liya\.?\s*bolo[.!]*$/i;
 
@@ -130,14 +131,43 @@ export function writeSpokenReply(
   text: string,
   analysis?: MessageAnalysis,
   recent: Array<{ role: "user" | "assistant"; text: string }> = [],
+  person?: SpecialPerson,
 ): string {
   const incoming = text.trim();
   const n = compact(incoming);
   const parsed = analysis ?? analyzeMessage(incoming);
   const en = useEnglish(parsed, incoming);
+  const love = person?.voice === "love";
   const slang = /\b(bro|bhai|yaar|dude)\b/i.test(incoming);
   let reply: string | null = null;
 
+  if (love) {
+    if (/\b(love you|luv u|i love|pyar|pyaar)\b/i.test(incoming) && incoming.split(/\s+/).length <= 12) {
+      reply = en ? "i love you too, my DAZy. you're mine" : "main bhi pyar karta hoon. tu meri hai, jaan";
+    } else if (/\b(miss you|miss u|yaad)\b/i.test(incoming)) {
+      reply = en ? "i miss you more, jaan. come closer" : "main bhi miss karta hoon meri DAZy. aaja, dil ke paas";
+    } else if (isHoroscopeAsk(incoming)) {
+      reply = "jaan, yeh nahi dekhta. tu bol, dil mein kya hai";
+    } else if (isWhatHappenedAsk(incoming) || /^(kya hua)$/.test(n)) {
+      reply = "theek hoon meri jaan. tu theek hai na? bol";
+    } else if (/^(bolo|bol)$/.test(n) || /^kya$/.test(n)) {
+      reply = "haan meri DAZy, sun raha hoon. bol na";
+    } else if (/^(gn|good night|goodnight|tc|take care|bye)$/.test(n)) {
+      reply = en ? "good night my love. dream of me" : "good night meri jaan. sapne mein milte hain";
+    } else if (/^(gm|good morning)$/.test(n)) {
+      reply = en ? "morning meri DAZy. missed you already" : "good morning meri love. uth gyi? miss kar raha tha";
+    } else if (/\b(assalam|salaam|salam)\b/.test(n)) {
+      reply = "walaikum assalam meri jaan. kaisi hai tu";
+    } else if (parsed.intents[0] === "greeting" && parsed.complexity === "simple") {
+      reply = pickUnused(n, ["meri DAZy. miss kar raha tha. bol na", "haan jaan, yahin hoon. tu bol", "hey meri love. dil kaisa hai"], recent);
+    } else if (parsed.intents[0] === "thanks") {
+      reply = "tere liye hamesha, DAZy";
+    } else if (parsed.mood === "stressed" || parsed.mood === "frustrated") {
+      reply = "main hoon na meri jaan. bol kya tight hai, saath mein nikalte hain";
+    }
+  }
+
+  if (!love) {
   if (isHoroscopeAsk(incoming)) {
     reply = en ? "that's not my lane bro. if there's real work, write it straight" : "woh nahi dekhta yaar. jo kaam hai, seedha likh";
   } else if (isWhatHappenedAsk(incoming)) {
@@ -167,6 +197,7 @@ export function writeSpokenReply(
   } else {
     reply = continueThread(incoming, recent, en);
   }
+  }
 
   if (!reply) {
     const topics = (parsed.topics.length ? parsed.topics : parsed.intents).filter(
@@ -185,22 +216,38 @@ export function writeSpokenReply(
   if (!reply) {
     const lastUser = [...recent].reverse().find((row) => row.role === "user")?.text;
     if (parsed.mood === "stressed" || parsed.mood === "frustrated") {
-      reply = en ? "tell me what's stuck. i'm with you" : "bata kya tight hai bhai. saath mein nikalte hain";
+      reply = love
+        ? "main hoon na meri jaan. bol kya tight hai"
+        : en
+          ? "tell me what's stuck. i'm with you"
+          : "bata kya tight hai bhai. saath mein nikalte hain";
     } else if (lastUser && incoming.split(/\s+/).length <= 5 && recent.length) {
-      reply = en
-        ? `on that last bit — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — what should i look at, bro`
-        : `pehle wali baat pe — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — kya dekhun yaar`;
+      reply = love
+        ? `woh baat — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — wahi na, jaan?`
+        : en
+          ? `on that last bit — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — what should i look at, bro`
+          : `pehle wali baat pe — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — kya dekhun yaar`;
     } else if (/\?/.test(incoming) || /^(kya|kaun|kab|kahan|kaise|kitna|kyu|kyun|why|what|where|when|how|who)\b/i.test(incoming)) {
-      reply = en
-        ? "i won't guess that, brother. say the actual thing you need"
-        : "andaz nahi ghadta yaar. jo poochna hai seedha likh — main dimaag laga ke dekhun";
+      reply = love
+        ? "andaz nahi lagaunga meri jaan. jo dil mein hai, seedha bol"
+        : en
+          ? "i won't guess that, brother. say the actual thing you need"
+          : "andaz nahi ghadta yaar. jo poochna hai seedha likh — main dimaag laga ke dekhun";
     } else {
-      reply = en ? "i hear you bro. say what you need in one line" : "sun raha hoon bhai. ek line mein likh kya chahiye";
+      reply = love
+        ? "sun raha hoon meri DAZy. ek line mein bol, dil se"
+        : en
+          ? "i hear you bro. say what you need in one line"
+          : "sun raha hoon bhai. ek line mein likh kya chahiye";
     }
   }
 
   if (!reply || isCannedFallback(reply)) {
-    reply = en ? "yeah bro, i'm here. what's up" : "haan bhai, sun raha hoon";
+    reply = love
+      ? "yahin hoon meri jaan. bol"
+      : en
+        ? "yeah bro, i'm here. what's up"
+        : "haan bhai, sun raha hoon";
   }
   return avoidRepeat(reply, recent);
 }

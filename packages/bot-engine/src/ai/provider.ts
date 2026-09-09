@@ -11,6 +11,7 @@ import { stripModelNoise } from "../orchestrate/compose.ts";
 import { checkReplyQuality } from "../orchestrate/quality.ts";
 import { avoidRepeat, isCannedFallback, writeSpokenReply } from "../orchestrate/spoken.ts";
 import type { ResponsePlan, UserStyle } from "../orchestrate/types.ts";
+import { DAZY_LOVE_SYSTEM, findSpecialPerson, type SpecialPerson } from "../people.ts";
 
 export type { MessageAnalysis } from "./analyze.ts";
 export { analyzeMessage, detectIntent, isAskingIfMachine, splitAsks } from "./analyze.ts";
@@ -31,6 +32,7 @@ export type AiContext = {
   messageType?: string;
   plan?: ResponsePlan;
   style?: UserStyle;
+  person?: SpecialPerson;
 };
 
 const HUMAN_SYSTEM = [
@@ -55,6 +57,7 @@ function isBadAiText(text: string, allowLong: boolean) {
 }
 
 export function buildPrompt(message: NormalizedMessage, ctx: AiContext) {
+  const person = ctx.person ?? findSpecialPerson({ jid: message.chatId, fromName: ctx.customerName, number: message.sender });
   const inbound = ctx.recent.filter((row) => row.role === "user").length;
   const analysis =
     ctx.analysis ??
@@ -72,9 +75,13 @@ export function buildPrompt(message: NormalizedMessage, ctx: AiContext) {
     .map((row) => row.text)
     .join("\n")
     .toLowerCase();
-  const facts = already
-    ? factsRaw.filter((fact) => !already.includes(fact.slice(0, 22).toLowerCase()))
-    : factsRaw;
+  const facts = (person?.voice === "love" && !analysis.topics.some((topic) =>
+    ["pricing", "website", "studio", "services", "process", "portfolio", "credentials", "availability"].includes(topic),
+  )
+    ? []
+    : already
+      ? factsRaw.filter((fact) => !already.includes(fact.slice(0, 22).toLowerCase()))
+      : factsRaw);
   const checklist = (analysis.asks.length > 1 ? analysis.asks : analysis.questions.length > 1 ? analysis.questions : analysis.topics)
     .map((item, index) => `${index + 1}. ${item}`)
     .join("\n");
@@ -118,12 +125,15 @@ export function buildPrompt(message: NormalizedMessage, ctx: AiContext) {
       ? `Their style: language=${ctx.style.language}, formality=${ctx.style.formality}, slang=${ctx.style.usesSlang}, emoji=${ctx.style.usesEmoji}. Match it.`
       : "",
     ctx.plan?.summary && ctx.plan.summary !== "No prior thread." ? `Thread:\n${ctx.plan.summary}` : "",
+    person?.voice === "love" ? `She is ${person.name}. Speak only as her lover Tarik.` : "",
   ]
     .filter(Boolean)
     .join("\n");
 
+  const systemCore = person?.voice === "love" ? DAZY_LOVE_SYSTEM : HUMAN_SYSTEM;
+  const brief = person?.voice === "love" ? "Work facts only if she asked work. Default is love, not the studio." : tarikSiteBrief();
   return {
-    system: [HUMAN_SYSTEM, tarikSiteBrief(), style, `Preferred language: ${analysis.language}.`, extra].join("\n"),
+    system: [systemCore, brief, style, `Preferred language: ${analysis.language}.`, extra].join("\n"),
     user: `${history}\nuser (${ctx.customerName}): ${message.text}`.trim(),
     analysis,
   };
@@ -330,8 +340,9 @@ export async function generateBestHumanReply(
   message: NormalizedMessage,
   ctx: AiContext,
 ): Promise<ProviderHit | null> {
+  const person = ctx.person ?? findSpecialPerson({ jid: message.chatId, fromName: ctx.customerName, number: message.sender });
   const inbound = ctx.recent.filter((row) => row.role === "user").length;
-  const turn = analyzeTurn(message.text, ctx.recent, ctx.isFirstMessage ?? inbound <= 1);
+  const turn = analyzeTurn(message.text, ctx.recent, ctx.isFirstMessage ?? inbound <= 1, person);
   const analysis = ctx.analysis ?? turn.analysis;
   const plan = ctx.plan ?? turn.plan;
   const facts = [...ctx.faqs, ...ctx.knowledge, ctx.suggested ?? ""];
@@ -347,7 +358,7 @@ export async function generateBestHumanReply(
     return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
   }
 
-  const prompt = buildPrompt(message, { ...ctx, analysis, plan, style: ctx.style ?? turn.style });
+  const prompt = buildPrompt(message, { ...ctx, analysis, plan, style: ctx.style ?? turn.style, person });
   const allowLong = analysis.preferredStyle === "complete" || plan.answerLength === "complete";
   const plans = planReplyEngines(analysis, plan);
   let best: ProviderHit | null = null;
@@ -393,7 +404,7 @@ export async function generateBestHumanReply(
 
   if (best) {
     const covered = coverEveryAsk(best.text, message.text, analysis);
-    return { ...best, text: avoidRepeat(isCannedFallback(covered) ? writeSpokenReply(message.text, analysis, ctx.recent) : covered, ctx.recent) };
+    return { ...best, text: avoidRepeat(isCannedFallback(covered) ? writeSpokenReply(message.text, analysis, ctx.recent, person) : covered, ctx.recent) };
   }
   if (plan.draft && (plan.action === "ask" || plan.action === "clarify")) {
     return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
@@ -401,7 +412,7 @@ export async function generateBestHumanReply(
   if (allowLong) {
     const complete = coverEveryAsk(writeCompleteFallback(analysis, facts, message.text), message.text, analysis);
     return {
-      text: avoidRepeat(isCannedFallback(complete) ? writeSpokenReply(message.text, analysis, ctx.recent) : complete, ctx.recent),
+      text: avoidRepeat(isCannedFallback(complete) ? writeSpokenReply(message.text, analysis, ctx.recent, person) : complete, ctx.recent),
       engine: "complete-fallback",
     };
   }
@@ -409,7 +420,7 @@ export async function generateBestHumanReply(
     return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
   }
   return {
-    text: writeSpokenReply(message.text, analysis, ctx.recent),
+    text: writeSpokenReply(message.text, analysis, ctx.recent, person),
     engine: "spoken",
   };
 }

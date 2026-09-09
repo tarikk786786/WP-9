@@ -14,6 +14,7 @@ export {
 } from "./ai/provider.ts";
 export { TARIK_PUBLIC, TARIK_PUBLIC_FACTS, TARIK_SITE, tarikSiteBrief } from "./ai/facts.ts";
 export { analyzeTurn, planTurn, inferUserStyle } from "./orchestrate/intelligence.ts";
+export { findSpecialPerson, SPECIAL_PEOPLE } from "./people.ts";
 export { readMessage, splitHumanAsks, inferMood } from "./orchestrate/read.ts";
 export { debounceChat, combineBurstText } from "./orchestrate/debounce.ts";
 export { avoidRepeat, isCannedFallback, isHoroscopeAsk, isBareCheckin, writeSpokenReply } from "./orchestrate/spoken.ts";
