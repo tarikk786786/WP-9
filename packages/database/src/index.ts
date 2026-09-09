@@ -199,7 +199,7 @@ export async function addMessage(row: Omit<StoredMessage, "id" | "created_at">):
     return (data as StoredMessage) ?? stored;
   }
   memory.messages.unshift(stored);
-  memory.processed.add(row.whatsapp_message_id);
+  if (row.direction === "out") memory.processed.add(row.whatsapp_message_id);
   return stored;
 }
 

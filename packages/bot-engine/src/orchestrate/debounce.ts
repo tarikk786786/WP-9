@@ -3,7 +3,7 @@ export type BurstItem<T> = { item: T; at: number };
 const bursts = new Map<string, { timer: ReturnType<typeof setTimeout>; items: BurstItem<unknown>[] }>();
 
 /** Combine rapid messages from the same chat into one flush. */
-export function debounceChat<T>(key: string, item: T, flush: (items: T[]) => void, waitMs = 1600) {
+export function debounceChat<T>(key: string, item: T, flush: (items: T[]) => void, waitMs = 400) {
   const existing = bursts.get(key);
   if (existing) clearTimeout(existing.timer);
   const items = [...((existing?.items as BurstItem<T>[] | undefined) ?? []), { item, at: Date.now() }] as BurstItem<T>[];

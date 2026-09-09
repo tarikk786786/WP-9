@@ -10,7 +10,7 @@ export function normalizeIncoming(input: {
 }): NormalizedMessage | null {
   if (input.fromMe) return null;
   const jid = input.jid;
-  if (!jid || jid === "status@broadcast" || jid.endsWith("@broadcast")) return null;
+  if (!jid || jid === "status@broadcast" || jid.endsWith("@broadcast") || jid.endsWith("@newsletter")) return null;
   const msg = unwrapMessage(input.message ?? {});
   const type = detectType(msg);
   const text = extractText(msg);
@@ -19,7 +19,7 @@ export function normalizeIncoming(input: {
     whatsappMessageId: input.id,
     sender: jid,
     chatId: jid,
-    fromName: input.pushName || jid.replace(/@s\.whatsapp\.net$/, ""),
+    fromName: input.pushName || jid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
     type,
     text,
     timestamp: new Date((input.timestamp || Date.now() / 1000) * 1000).toISOString(),
@@ -82,6 +82,10 @@ export function isDuplicate(whatsappMessageId: string): boolean {
     if (first) seen.delete(first);
   }
   return false;
+}
+
+export function forgetDuplicate(whatsappMessageId: string) {
+  seen.delete(whatsappMessageId);
 }
 
 export function resetDuplicates() {

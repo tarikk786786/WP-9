@@ -1,4 +1,4 @@
-export { normalizeIncoming, isDuplicate, resetDuplicates } from "./parser.ts";
+export { normalizeIncoming, isDuplicate, forgetDuplicate, resetDuplicates } from "./parser.ts";
 export { routeMessage, matchRule, matchFaq, matchAllFaqs, matchAllRules, isWithinBusinessHours } from "./router.ts";
 export {
   generateOpenAiReply,

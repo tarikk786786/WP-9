@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
   analyticsSnapshot,
@@ -211,30 +210,15 @@ const server = createServer(async (req, res) => {
   }
 });
 
-function startListening() {
-  server.listen(port, "0.0.0.0", () => {
-    console.log(`[worker] Baileys worker on http://127.0.0.1:${port}`);
-    void ensureAlwaysOn();
-  });
-}
-
-let tookOver = false;
 server.on("error", (error: NodeJS.ErrnoException) => {
-  if (error.code === "EADDRINUSE" && !tookOver) {
-    tookOver = true;
-    console.error(`[worker] ${port} busy — taking over so WhatsApp stays on this process`);
-    try {
-      execFileSync("fuser", ["-k", `${port}/tcp`], { stdio: "ignore" });
-    } catch {
-      /* old process already gone */
-    }
-    setTimeout(startListening, 400);
-    return;
-  }
   if (error.code === "EADDRINUSE") {
-    process.exit(0);
+    console.error(`[worker] port ${port} already in use`);
+    process.exit(1);
   }
   throw error;
 });
 
-startListening();
+server.listen(port, "0.0.0.0", () => {
+  console.log(`[worker] Baileys worker on http://127.0.0.1:${port}`);
+  void ensureAlwaysOn();
+});

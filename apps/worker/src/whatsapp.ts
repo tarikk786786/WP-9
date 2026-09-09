@@ -20,7 +20,7 @@ import {
   wasProcessed,
 } from "@bot/database";
 import type { NormalizedMessage } from "@bot/shared";
-import { analyzeMessage, combineBurstText, debounceChat, generateBestHumanReply, isCannedFallback, isDuplicate, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback, writeSpokenReply, avoidRepeat } from "@bot/engine";
+import { analyzeMessage, combineBurstText, debounceChat, forgetDuplicate, generateBestHumanReply, isCannedFallback, isDuplicate, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback, writeSpokenReply, avoidRepeat } from "@bot/engine";
 
 type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
 
@@ -39,6 +39,46 @@ export type WorkerSnapshot = {
 
 const AUTH_DIR = path.join(process.cwd(), "data", "baileys-auth");
 const startedAt = Date.now();
+
+const pendingReplies = new Map<string, NormalizedMessage[]>();
+const inboundStore = new Map<string, Record<string, unknown>>();
+
+function chatJid(raw: { key: { remoteJid?: string | null; remoteJidAlt?: string | null; participant?: string | null } }) {
+  const jid = raw.key.remoteJid || raw.key.remoteJidAlt || raw.key.participant || "";
+  return jid;
+}
+
+async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    task
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(null);
+      });
+  });
+}
+
+async function sendText(jid: string, text: string) {
+  const sock = manager.sock;
+  if (!sock) throw new Error("WhatsApp socket down");
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await sock.sendMessage(jid, { text });
+      manager.snapshot.lastMessageSentAt = new Date().toISOString();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("send failed");
+}
 
 type Manager = {
   snapshot: WorkerSnapshot;
@@ -232,8 +272,12 @@ export async function sendWhatsApp(chatId: string, text: string) {
 }
 
 async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
-  const sock = manager.sock;
-  if (!sock || !batch.length) return;
+  if (!batch.length) return;
+  if (!manager.sock) {
+    pendingReplies.set(jid, batch);
+    scheduleReconnect();
+    return;
+  }
   const last = batch[batch.length - 1];
   const combined = { ...last, text: combineBurstText(batch.map((row) => row.text)) || last.text };
   let settings = await getSettings();
@@ -288,18 +332,21 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
       : routed.text;
   const ai =
     settings.aiEnabled !== false
-      ? await generateBestHumanReply(combined, {
-          settings,
-          customerName: combined.fromName,
-          recent,
-          faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
-          knowledge: [...knowledge, ...ruleFacts],
-          intent: analysis.intents.join(","),
-          suggested,
-          analysis,
-          isFirstMessage: inboundCount <= batch.length,
-          messageType: combined.type,
-        })
+      ? await withTimeout(
+          generateBestHumanReply(combined, {
+            settings,
+            customerName: combined.fromName,
+            recent,
+            faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
+            knowledge: [...knowledge, ...ruleFacts],
+            intent: analysis.intents.join(","),
+            suggested,
+            analysis,
+            isFirstMessage: inboundCount <= batch.length,
+            messageType: combined.type,
+          }),
+          8000,
+        )
       : null;
   let text =
     ai?.text ||
@@ -309,9 +356,10 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   if (!text || isCannedFallback(text)) text = spoken;
   text = avoidRepeat(text, recent);
   if (!text) text = spoken || "haan, sun raha hoon";
+  pendingReplies.set(jid, batch);
   try {
-    await sock.sendMessage(jid, { text });
-    manager.snapshot.lastMessageSentAt = new Date().toISOString();
+    await sendText(jid, text);
+    pendingReplies.delete(jid);
     await addMessage({
       conversation_id: convo.id,
       whatsapp_message_id: `out_${combined.whatsappMessageId}`,
@@ -324,6 +372,7 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
     });
   } catch (error) {
     manager.snapshot.connected = false;
+    for (const row of batch) forgetDuplicate(row.whatsappMessageId);
     await addLog("error", "whatsapp", error instanceof Error ? error.message : "send failed");
     scheduleReconnect();
   }
@@ -384,9 +433,19 @@ async function openSocket(pairingPhone?: string) {
     ...(version ? { version } : {}),
     auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
     browser: Browsers.ubuntu("Chrome"),
-    syncFullHistory: false,
+    retryRequestDelayMs: 400,
+    maxMsgRetryCount: 5,
+    keepAliveIntervalMs: 10_000,
+    connectTimeoutMs: 20_000,
+    defaultQueryTimeoutMs: 60_000,
     markOnlineOnConnect: true,
     emitOwnEvents: false,
+    syncFullHistory: false,
+    shouldIgnoreJid: (jid: string) => Boolean(jid?.endsWith("@broadcast") || jid?.endsWith("@newsletter")),
+    getMessage: async (key: { id?: string | null }) => {
+      const stored = key.id ? inboundStore.get(key.id) : undefined;
+      return stored as never;
+    },
   });
   manager.sock = sock;
 
@@ -431,6 +490,14 @@ async function openSocket(pairingPhone?: string) {
         lastConnectedAt: new Date().toISOString(),
       };
       await addLog("info", "whatsapp", `Linked ${phone ?? ""}`.trim());
+      try {
+        await sock.sendPresenceUpdate("available");
+      } catch {
+        /* presence is best-effort */
+      }
+      for (const [jid, batch] of pendingReplies) {
+        void replyToBurst(jid, batch);
+      }
     }
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output
@@ -465,21 +532,26 @@ async function openSocket(pairingPhone?: string) {
   sock.ev.on("messages.upsert", async ({ messages }) => {
     for (const raw of messages) {
       try {
-        const jid = raw.key.remoteJid;
+        const jid = chatJid(raw);
         if (!jid || !raw.key.id) continue;
-        if (await wasProcessed(raw.key.id) || isDuplicate(raw.key.id)) continue;
+        if (raw.message && raw.key.id) inboundStore.set(raw.key.id, raw.message as Record<string, unknown>);
+        if (inboundStore.size > 500) inboundStore.delete(inboundStore.keys().next().value ?? "");
+        if (await wasProcessed(`out_${raw.key.id}`)) continue;
+        if (isDuplicate(raw.key.id)) continue;
+        const fromMe = Boolean(raw.key.fromMe);
         const normalized = normalizeIncoming({
           id: raw.key.id,
           jid,
-          fromMe: Boolean(raw.key.fromMe),
+          fromMe,
           pushName: raw.pushName || undefined,
           message: raw.message as Record<string, unknown> | undefined,
           timestamp: Number(raw.messageTimestamp || 0),
         });
         if (!normalized) continue;
+        if (normalized.type === "reaction") continue;
         manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
         const customer = await upsertCustomer({
-          number: jid.replace(/@s\.whatsapp\.net$/, ""),
+          number: jid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
           name: normalized.fromName,
         });
         const convo = await upsertConversation(customer.id, jid);
@@ -497,6 +569,7 @@ async function openSocket(pairingPhone?: string) {
           void replyToBurst(jid, batch);
         });
       } catch (error) {
+        if (raw.key.id) forgetDuplicate(raw.key.id);
         await addLog("error", "whatsapp", error instanceof Error ? error.message : "message failed");
       }
     }
