@@ -19,7 +19,7 @@ export function AdminLoginForm() {
         <CardHeader>
           <CardTitle>Admin access</CardTitle>
           <CardDescription>
-            Password is <code>ADMIN_SECRET</code>. Local default: <code>dev-admin-secret-change-me</code>.
+            Password is your <code>ADMIN_SECRET</code>.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -38,7 +38,7 @@ export function AdminLoginForm() {
               if (!response.ok) {
                 const json = (await response.json().catch(() => ({}))) as { error?: string };
                 setBusy(false);
-                setError(json.error || "Secret did not match. Try dev-admin-secret-change-me");
+                setError(json.error || "Secret did not match.");
                 return;
               }
               window.location.assign(params.get("next") || "/admin/dashboard");

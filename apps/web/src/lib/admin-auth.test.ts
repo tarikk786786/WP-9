@@ -11,6 +11,14 @@ describe("admin authentication", () => {
     assert.equal(isValidAdminSecret("nope"), false);
   });
 
+  it("on Vercel accepts only ADMIN_SECRET", () => {
+    process.env.VERCEL = "1";
+    process.env.ADMIN_SECRET = "prod-only-secret";
+    assert.equal(isValidAdminSecret("prod-only-secret"), true);
+    assert.equal(isValidAdminSecret("dev-admin-secret-change-me"), false);
+    delete process.env.VERCEL;
+  });
+
   it("validates the session cookie token", () => {
     process.env.ADMIN_SECRET = "desk-admin-secret";
     assert.equal(isValidAdminToken(adminSessionToken()), true);

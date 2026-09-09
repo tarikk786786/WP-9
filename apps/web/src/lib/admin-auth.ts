@@ -5,6 +5,7 @@ export const DEFAULT_ADMIN_SECRET = "dev-admin-secret-change-me";
 
 function acceptedSecrets() {
   const env = process.env.ADMIN_SECRET?.trim();
+  if (env && process.env.VERCEL) return [env];
   return [...new Set([env, DEFAULT_ADMIN_SECRET].filter((value): value is string => Boolean(value)))];
 }
 
