@@ -340,7 +340,7 @@ export async function generateBestHumanReply(
   message: NormalizedMessage,
   ctx: AiContext,
 ): Promise<ProviderHit | null> {
-  const person = ctx.person ?? findSpecialPerson({ jid: message.chatId, fromName: ctx.customerName, number: message.sender });
+  const person = ctx.person ?? findSpecialPerson({ jid: message.chatId, fromName: ctx.customerName, number: message.sender }) ?? undefined;
   const inbound = ctx.recent.filter((row) => row.role === "user").length;
   const turn = analyzeTurn(message.text, ctx.recent, ctx.isFirstMessage ?? inbound <= 1, person);
   const analysis = ctx.analysis ?? turn.analysis;
