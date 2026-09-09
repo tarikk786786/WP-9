@@ -1,0 +1,28 @@
+name: GitHub tools
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - scripts/install-tools.sh
+      - .github/workflows/tools.yml
+      - Dockerfile
+  pull_request:
+    paths:
+      - scripts/install-tools.sh
+      - .github/workflows/tools.yml
+      - Dockerfile
+  workflow_dispatch:
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CLIs from GitHub releases
+        run: bash scripts/install-tools.sh
+      - name: Prove binaries run
+        run: |
+          tools/bin/cloudflared --version
+          tools/bin/flyctl version
+          tools/bin/railway --version

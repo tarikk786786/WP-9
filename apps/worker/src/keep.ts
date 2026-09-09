@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -16,10 +17,24 @@ let notReadySince = 0;
 let lockHeld = false;
 let tunnel: ChildProcess | null = null;
 
+function cloudflaredBin() {
+  const fromEnv = process.env.CLOUDFLARED_BIN?.trim();
+  const candidates = [
+    fromEnv,
+    path.join(workerRoot, "..", "..", "tools", "bin", "cloudflared"),
+    path.join(workerRoot, "cloudflared.bin"),
+    "cloudflared",
+  ].filter((row): row is string => Boolean(row));
+  for (const candidate of candidates) {
+    if (candidate === "cloudflared" || existsSync(candidate)) return candidate;
+  }
+  return "cloudflared";
+}
+
 function startNamedTunnel() {
   const token = process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim();
   if (!token || tunnel) return;
-  const bin = process.env.CLOUDFLARED_BIN || "cloudflared";
+  const bin = cloudflaredBin();
   tunnel = spawn(bin, ["tunnel", "--no-autoupdate", "run", "--token", token], {
     stdio: "inherit",
     env: process.env,

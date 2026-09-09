@@ -17,3 +17,5 @@ session
 *.pem
 cloudflared.bin
 apps/worker/cloudflared.bin
+/tools/bin/*
+!/tools/bin/.gitkeep

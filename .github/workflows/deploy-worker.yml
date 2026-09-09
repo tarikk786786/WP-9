@@ -1,0 +1,30 @@
+name: Deploy worker
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - apps/worker/**
+      - packages/**
+      - Dockerfile
+      - fly.toml
+      - scripts/install-tools.sh
+
+jobs:
+  fly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install flyctl from GitHub
+        run: bash scripts/install-tools.sh
+      - name: Deploy to Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "FLY_API_TOKEN is not set. Skipping Fly deploy."
+            exit 0
+          fi
+          export PATH="$PWD/tools/bin:$PATH"
+          flyctl deploy --remote-only --app whatsapp-baileys-worker

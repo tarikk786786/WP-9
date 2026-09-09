@@ -47,6 +47,17 @@ cp .env.example .env
 
 Or `docker compose up`.
 
+Install operator CLIs from GitHub (cloudflared, flyctl, railway) into `tools/bin`:
+
+```bash
+npm run tools
+export PATH="$PWD/tools/bin:$PATH"
+```
+
+GitHub Actions install the same binaries on every tools-path change. Fly deploy is `workflow_dispatch` (needs repo secret `FLY_API_TOKEN`).
+
+Open http://127.0.0.1:43217
+
 Open http://127.0.0.1:43217 (overview), `/admin` (desk), `/desk` (Hinglish simulator). Default local secrets are in `.env.example` comments — change them.
 
 Without Supabase, state lives in worker memory plus the local `data/` directory. Sessions survive worker restarts only if `data/baileys-auth` is on a persistent volume.
