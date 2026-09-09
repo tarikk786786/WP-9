@@ -16,10 +16,5 @@ export { TARIK_PUBLIC, TARIK_PUBLIC_FACTS, TARIK_SITE, tarikSiteBrief } from "./
 export { analyzeTurn, planTurn, inferUserStyle } from "./orchestrate/intelligence.ts";
 export { readMessage, splitHumanAsks, inferMood } from "./orchestrate/read.ts";
 export { debounceChat, combineBurstText } from "./orchestrate/debounce.ts";
-export {
-  writeSpokenReply,
-  avoidRepeat,
-  isCannedFallback,
-  isHoroscopeAsk,
-  isBareCheckin,
-} from "./orchestrate/spoken.ts";
+export { avoidRepeat, isCannedFallback, isHoroscopeAsk, isBareCheckin, writeSpokenReply } from "./orchestrate/spoken.ts";
+export { stripModelNoise } from "./orchestrate/compose.ts";

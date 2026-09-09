@@ -7,6 +7,8 @@ import { combineBurstText } from "./orchestrate/debounce.ts";
 import { analyzeMessage } from "./ai/analyze.ts";
 import { missedAsks } from "./ai/score.ts";
 import { stitchMissingAsks } from "./ai/fallback.ts";
+import { writeSpokenReply } from "./orchestrate/spoken.ts";
+import { stripModelNoise } from "./orchestrate/compose.ts";
 
 describe("conversation intelligence", () => {
   it("acknowledges a thanks without needing a model", () => {
@@ -176,5 +178,32 @@ describe("conversation intelligence", () => {
     const analysis = analyzeMessage("kya");
     const check = checkReplyQuality("dekh liya. bolo", analysis, []);
     assert.equal(check.ok, false);
+  });
+
+  it("answers real asks from facts instead of stalling", () => {
+    const price = writeSpokenReply("kitna lagega website ka?", analyzeMessage("kitna lagega website ka?"));
+    assert.match(price, /andaz/i);
+    assert.doesNotMatch(price, /^dekh liya/i);
+    const site = writeSpokenReply("portfolio kahan dekhun", analyzeMessage("portfolio kahan dekhun"));
+    assert.match(site, /tarikislam\.in/i);
+    const english = writeSpokenReply(
+      "How much does a website cost roughly?",
+      analyzeMessage("How much does a website cost roughly?"),
+    );
+    assert.match(english, /rate|quote|offhand/i);
+    assert.doesNotMatch(english, /sun raha hoon\. thoda clearly/i);
+  });
+
+  it("follows a short 'and the site' after a work thread", () => {
+    const reply = writeSpokenReply("aur site?", analyzeMessage("aur site?"), [
+      { role: "user", text: "website banana hai" },
+      { role: "assistant", text: "haan, bata kya soch rahe ho" },
+    ]);
+    assert.match(reply, /tarikislam\.in|dezo/i);
+  });
+
+  it("strips model thinking junk", () => {
+    const clean = stripModelNoise("<think>plan the reply</think>\n**haan**, sun raha hoon");
+    assert.equal(clean, "haan, sun raha hoon");
   });
 });

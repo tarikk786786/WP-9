@@ -1,10 +1,11 @@
 import { isAskingIfMachine, type MessageAnalysis } from "../ai/analyze.ts";
+import { stripModelNoise } from "./compose.ts";
 import { isCannedFallback, writeSpokenReply } from "./spoken.ts";
 
 const SALES = /\b(we can definitely|i'd be happy|feel free|let me know how i can|looking forward|reach out|check kar sakte ho|aage badhenge|audits are my thing|i’ll check my schedule|i'll check my schedule|i'm mostly around|leave a note|note chhod|the best|world-class|guaranteed|brief chahiye|3 lines mein|kis ke liye, kab tak|rate final|rate scope pe depend|scope pe depend|on behalf|kaam ho sakta hai|exactly kya banana)\b/i;
 
 export function polishHumanReply(text: string, incoming: string, analysis: MessageAnalysis): string {
-  let out = text.replace(/\r/g, "").trim();
+  let out = stripModelNoise(text.replace(/\r/g, "").trim());
   out = out.replace(/^[A-Z][a-z]{1,12},\s+/, "");
   out = out.replace(/^ayaan[,:]?\s*/i, "");
   out = out.replace(/^bolo[!.]?\s*/i, "");

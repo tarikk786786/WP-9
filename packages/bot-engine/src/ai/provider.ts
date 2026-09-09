@@ -7,6 +7,7 @@ import { planReplyEngines, type EnginePlan, type ReplyEngineId } from "./select-
 import { recordFailure, recordSuccess } from "../orchestrate/health.ts";
 import { analyzeTurn } from "../orchestrate/intelligence.ts";
 import { polishHumanReply } from "../orchestrate/polish.ts";
+import { stripModelNoise } from "../orchestrate/compose.ts";
 import { checkReplyQuality } from "../orchestrate/quality.ts";
 import { avoidRepeat, isCannedFallback, writeSpokenReply } from "../orchestrate/spoken.ts";
 import type { ResponsePlan, UserStyle } from "../orchestrate/types.ts";
@@ -40,10 +41,13 @@ const HUMAN_SYSTEM = [
   "Only true things from tarikislam.in. If you do not know, say you do not know yet. Never invent prices, dates, or results.",
   "Never mention AI, bots, ChatGPT, models, automation, auto-reply, CRM, or that a machine is writing. If they ask whether you are any of those, just be Tarik: you are him. Do not name the tech. Do not confess. Do not lecture.",
   "Do not use their name unless they used yours in a way that needs a reply. If they already said hi, do not greet again.",
+  "Examples of your voice: hi → haan, kya haal hai. website kitna → haan, bata kya soch rahe ho. rate andaz se nahi bolta. are you a bot → main hi hoon. bolo. thanks → koi baat nahi.",
+  "Never stall with 'dekh liya. bolo' or empty 'seedha likh' when you already know a public fact that answers them.",
 ].join(" ");
 
 function isBadAiText(text: string, allowLong: boolean) {
   if (!text) return true;
+  if (/<think>|<\/think>/i.test(text)) return true;
   if (text.length > (allowLong ? 900 : 320)) return true;
   return /as an ai|language model|how can i help you today|thanks for reaching out|on behalf of|personal assistant|personal ai|i('m| am) (an? )?(ai|bot|chatgpt|chat ?bot|language model)|auto[- ]?repl|chatbot|system prompt|api key/i.test(
     text,
@@ -163,8 +167,10 @@ async function openAiCompatible(options: {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const text = data.choices?.[0]?.message?.content?.trim();
-    if (!text || isBadAiText(text, options.allowLong)) return null;
-    return { text, engine: options.engine };
+    if (!text) return null;
+    const clean = stripModelNoise(text);
+    if (!clean || isBadAiText(clean, options.allowLong)) return null;
+    return { text: clean, engine: options.engine };
   } catch {
     return null;
   }
@@ -200,8 +206,10 @@ async function anthropicReply(
       content?: Array<{ text?: string }>;
     };
     const text = data.content?.map((p) => p.text ?? "").join("").trim();
-    if (!text || isBadAiText(text, allowLong)) return null;
-    return { text, engine: "claude" };
+    if (!text) return null;
+    const clean = stripModelNoise(text);
+    if (!clean || isBadAiText(clean, allowLong)) return null;
+    return { text: clean, engine: "claude" };
   } catch {
     return null;
   }
@@ -234,8 +242,10 @@ async function geminiReply(
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
     };
     const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim();
-    if (!text || isBadAiText(text, allowLong)) return null;
-    return { text, engine: "gemini" };
+    if (!text) return null;
+    const clean = stripModelNoise(text);
+    if (!clean || isBadAiText(clean, allowLong)) return null;
+    return { text: clean, engine: "gemini" };
   } catch {
     return null;
   }

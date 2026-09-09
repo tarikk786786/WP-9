@@ -381,7 +381,7 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
             isFirstMessage: inboundCount <= batch.length,
             messageType: combined.type,
           }),
-          4000,
+          7500,
         )
       : null;
   let text =

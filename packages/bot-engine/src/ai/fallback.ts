@@ -37,6 +37,14 @@ export function writeCompleteFallback(
     return "koi baat nahi";
   }
 
+  const spoken = writeSpokenReply(incoming || analysis.asks.join(" ") || analysis.meaning, analysis);
+  if (spoken && analysis.topics.filter((t) => t !== "greeting").length <= 1) {
+    return spoken;
+  }
+  if (spoken && analysis.preferredStyle === "complete" && spoken.split("\n").length >= 2) {
+    return spoken;
+  }
+
   const lines: string[] = [];
   if (analysis.isFirstMessage && analysis.intents.includes("greeting") && !analysis.wantsAllAnswers) {
     lines.push(LINE_FOR.greeting);
