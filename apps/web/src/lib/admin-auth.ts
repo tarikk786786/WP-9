@@ -3,10 +3,17 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 const COOKIE = "admin_session";
 export const DEFAULT_ADMIN_SECRET = "dev-admin-secret-change-me";
 
+function envSecrets() {
+  return [process.env.ADMIN_SECRET, process.env.ADMIN_SECRET_ALT]
+    .flatMap((value) => (value ?? "").split(/[,;\n]+/))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 function acceptedSecrets() {
-  const env = process.env.ADMIN_SECRET?.trim();
-  if (env && process.env.VERCEL) return [env];
-  return [...new Set([env, DEFAULT_ADMIN_SECRET].filter((value): value is string => Boolean(value)))];
+  const fromEnv = envSecrets();
+  if (fromEnv.length && process.env.VERCEL) return [...new Set(fromEnv)];
+  return [...new Set([...fromEnv, DEFAULT_ADMIN_SECRET])];
 }
 
 function hashSecret(value: string) {

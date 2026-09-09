@@ -19,6 +19,15 @@ describe("admin authentication", () => {
     delete process.env.VERCEL;
   });
 
+  it("accepts comma-separated dashboard keys", () => {
+    process.env.VERCEL = "1";
+    process.env.ADMIN_SECRET = "key-one, key-two";
+    assert.equal(isValidAdminSecret("key-one"), true);
+    assert.equal(isValidAdminSecret("key-two"), true);
+    assert.equal(isValidAdminSecret("key-three"), false);
+    delete process.env.VERCEL;
+  });
+
   it("validates the session cookie token", () => {
     process.env.ADMIN_SECRET = "desk-admin-secret";
     assert.equal(isValidAdminToken(adminSessionToken()), true);
