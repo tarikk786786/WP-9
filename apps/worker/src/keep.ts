@@ -1,47 +1,57 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { execFileSync } from "node:child_process";
+import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+import { dataDir, migrateLegacyAuth } from "./paths.ts";
+import { acquireWorkerLock, releaseWorkerLock } from "./singleton.ts";
 
 const port = Number(process.env.WORKER_PORT || 8788);
 const healthUrl = `http://127.0.0.1:${port}/health`;
+const workerRoot = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 
 let child: ChildProcess | null = null;
 let stopping = false;
 let booting = false;
 let notReadySince = 0;
+let lockHeld = false;
+let tunnel: ChildProcess | null = null;
 
-function pidsOnPort(): number[] {
-  try {
-    const out = execFileSync("lsof", ["-ti", `tcp:${port}`], { encoding: "utf8" }).trim();
-    return out
-      .split(/\s+/)
-      .map((row) => Number(row))
-      .filter((pid) => Number.isFinite(pid) && pid > 0);
-  } catch {
-    return [];
-  }
+function startNamedTunnel() {
+  const token = process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim();
+  if (!token || tunnel) return;
+  const bin = process.env.CLOUDFLARED_BIN || "cloudflared";
+  tunnel = spawn(bin, ["tunnel", "--no-autoupdate", "run", "--token", token], {
+    stdio: "inherit",
+    env: process.env,
+  });
+  tunnel.on("exit", () => {
+    tunnel = null;
+    if (!stopping && process.env.CLOUDFLARE_TUNNEL_TOKEN) {
+      setTimeout(() => startNamedTunnel(), 4000);
+    }
+  });
+  console.log("[keep] named Cloudflare tunnel started (stable hostname)");
 }
 
-function freePort() {
-  for (const pid of pidsOnPort()) {
-    if (pid === process.pid) continue;
-    try {
-      process.kill(pid, "SIGTERM");
-    } catch {
-      /* already gone */
-    }
+async function portHealthy() {
+  try {
+    const res = await fetch(healthUrl, { signal: AbortSignal.timeout(2500) });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 
 async function boot() {
   if (stopping || booting || child) return;
+  if (await portHealthy()) {
+    console.log("[keep] WhatsApp worker already healthy on", port, "— not starting a second socket");
+    return;
+  }
   booting = true;
   try {
-    freePort();
-    await delay(1500);
-    if (stopping) return;
     child = spawn("npx", ["tsx", "src/index.ts"], {
-      cwd: process.cwd(),
+      cwd: workerRoot,
       stdio: "inherit",
       env: process.env,
     });
@@ -50,7 +60,7 @@ async function boot() {
       child = null;
       if (stopping) return;
       console.error(`[keep] worker stopped (${code ?? signal ?? "exit"}). restarting`);
-      void delay(2000).then(boot);
+      void delay(2500).then(boot);
     });
   } finally {
     booting = false;
@@ -72,7 +82,7 @@ async function healthTick() {
       return;
     }
     if (!notReadySince) notReadySince = Date.now();
-    const waitMs = connecting ? 90_000 : 60_000;
+    const waitMs = connecting ? 120_000 : 90_000;
     if (Date.now() - notReadySince > waitMs && child?.pid) {
       console.error("[keep] WhatsApp stayed down — restarting worker");
       notReadySince = 0;
@@ -86,6 +96,8 @@ async function healthTick() {
 function shutdown() {
   stopping = true;
   child?.kill("SIGTERM");
+  tunnel?.kill("SIGTERM");
+  if (lockHeld) releaseWorkerLock(dataDir());
   setTimeout(() => process.exit(0), 1500);
 }
 
@@ -98,7 +110,25 @@ process.on("uncaughtException", (error) => {
   console.error("[keep] uncaughtException (kept alive)", error);
 });
 
-void boot();
-setInterval(() => {
-  void healthTick();
-}, 12_000);
+async function main() {
+  migrateLegacyAuth();
+  startNamedTunnel();
+  for (;;) {
+    if (stopping) return;
+    const lock = acquireWorkerLock(dataDir());
+    if (!lock.ok) {
+      console.log(`[keep] another supervisor holds the lock (pid ${lock.pid}). waiting — will not kill WhatsApp`);
+      await delay(8000);
+      continue;
+    }
+    lockHeld = true;
+    console.log("[keep] exclusive lock taken. one WhatsApp socket only.");
+    await boot();
+    setInterval(() => {
+      void healthTick();
+    }, 12_000);
+    return;
+  }
+}
+
+void main();

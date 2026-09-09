@@ -64,19 +64,25 @@ pgvector is enabled for optional RAG embeddings (`knowledge_documents.embedding`
 
 Hybrid router (`AI_POLICY=hybrid`): greetings/thanks stay off-model; Groq/Gemini/other cheap models handle ordinary chat; GPT-4o/Claude only on hard questions. Replies are Tarik in first person — not a lead desk or a business bot. Set `GROQ_API_KEY` on the **worker** and Vercel. Optional: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`. If every cloud key fails, the engine still answers from facts and fallback copy. It will not invent prices.
 
-## Worker setup (required in production)
+## Worker setup (this is production — not optional)
 
-Host `apps/worker` as a **persistent** Node process:
+Baileys is a **single always-on process**. It cannot live on Vercel, and it cannot live on an ephemeral cloud-agent VM or a `trycloudflare.com` URL. Those die, WhatsApp drops, and the desk looks “offline”.
 
-- **Docker:** `docker build -t wa-worker . && docker run -p 8788:8788 --env-file .env -v wa-data:/app/data wa-worker`
-- **Railway / Render / Fly:** start command `npm run worker`, attach a volume at `/app/data`
-- **VPS:** `npm run worker` under systemd
+Run **one** replica with a **disk**:
 
-Protect `WORKER_API_SECRET`. Do not expose the Baileys socket. Only the HTTP API (`/health` public, everything else authenticated) should be reachable, preferably on a private network.
+| Host | How |
+| --- | --- |
+| **Fly.io** | `fly launch` using `fly.toml` (volume `/app/data`, machine never auto-stops) |
+| **Render** | `render.yaml` Docker web service + disk at `/app/data` |
+| **Railway** | Dockerfile, 1 replica, restart always, volume `/app/data` |
+| **Docker** | `docker compose up -d worker` |
+| **VPS** | copy `deploy/whatsapp-worker.service` into systemd |
 
-The worker supervisor (`npm run worker`) keeps a single Baileys process alive: it restarts on crash, does not exit on WhatsApp query timeouts, replies to recent offline/history messages after reconnect, and waits for decrypt before treating a chat as handled.
+Then set Vercel `WORKER_API_URL` to that **stable https URL** (same `WORKER_API_SECRET`). Optional: a **named** Cloudflare tunnel (`CLOUDFLARE_TUNNEL_TOKEN`) if the box has no public IP. Quick tunnels are not production.
 
-Health: `GET /worker/health` (also `/health`). `connected: true` means the socket is live. `lastMessageReceivedAt` / `lastMessageSentAt` should move when someone texts.
+The supervisor takes a file lock (`data/worker.lock`). A second `npm run worker` **waits** — it does not kill the live WhatsApp socket. Login files live in `BAILEYS_AUTH_DIR` (default `apps/worker/data/baileys-auth`, Docker/Fly `/app/data/baileys-auth`).
+
+Health: `GET /health`. `connected: true` means the socket is live.
 
 ## Vercel setup
 
@@ -102,9 +108,10 @@ See `.env.example`. Never commit `.env`. Never log secrets. Sentry is optional (
 
 ## Deployment checklist
 
-- [ ] Worker process is always on, with a persistent volume
-- [ ] Supabase migration applied
+- [ ] Worker is on Fly / Render / Railway / a VPS with a disk — not this laptop and not a trycloudflare URL
+- [ ] `WORKER_API_URL` on Vercel is that stable https host
 - [ ] `WORKER_API_SECRET` matches on Vercel and the worker
+- [ ] WhatsApp linked once; `creds.json` on the volume (`BAILEYS_AUTH_DIR`)
 - [ ] Admin secret set; dashboard not public without it
 - [ ] OpenAI key only on the worker
 - [ ] WhatsApp linked once; session files in Supabase

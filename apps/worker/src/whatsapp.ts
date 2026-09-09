@@ -22,6 +22,7 @@ import {
 } from "@bot/database";
 import type { NormalizedMessage } from "@bot/shared";
 import { analyzeMessage, combineBurstText, debounceChat, forgetDuplicate, generateBestHumanReply, isCannedFallback, isDuplicate, isInboundStub, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback, writeSpokenReply, avoidRepeat } from "@bot/engine";
+import { authDir, migrateLegacyAuth } from "./paths.ts";
 import { credsAreLinked, phoneFromCreds, shouldWipeAuth } from "./session-policy.ts";
 
 type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
@@ -39,7 +40,7 @@ export type WorkerSnapshot = {
   lastMessageSentAt: string | null;
 };
 
-const AUTH_DIR = path.join(process.cwd(), "data", "baileys-auth");
+const AUTH_DIR = authDir();
 const startedAt = Date.now();
 
 const pendingReplies = new Map<string, NormalizedMessage[]>();
@@ -238,13 +239,14 @@ export async function ensureAlwaysOn() {
       aiEnabled: true,
     });
   }
+  migrateLegacyAuth();
   await markPersistedFromDisk();
   await startWhatsApp();
   if (keepAliveStarted) return;
   keepAliveStarted = true;
   setInterval(() => {
     void pulseWhatsApp();
-  }, 8_000);
+  }, 30_000);
 }
 
 async function pulseWhatsApp() {

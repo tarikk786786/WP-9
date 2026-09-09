@@ -7,6 +7,8 @@ services:
       - .env
     volumes:
       - worker-auth:/app/data
+    environment:
+      BAILEYS_AUTH_DIR: /app/data/baileys-auth
     restart: unless-stopped
 
   web:
@@ -23,6 +25,7 @@ services:
       - worker
     environment:
       WORKER_API_URL: http://worker:8788
+    restart: unless-stopped
 
 volumes:
   worker-auth:

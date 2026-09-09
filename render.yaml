@@ -1,13 +1,15 @@
 services:
   - type: web
     name: whatsapp-baileys-worker
-    runtime: node
-    buildCommand: npm install
-    startCommand: npm run worker
+    runtime: docker
+    dockerfilePath: Dockerfile
     plan: starter
+    healthCheckPath: /health
     envVars:
       - key: WORKER_PORT
-        value: 8788
+        value: "8788"
+      - key: BAILEYS_AUTH_DIR
+        value: /app/data/baileys-auth
     disk:
       name: baileys-auth
       mountPath: /app/data
