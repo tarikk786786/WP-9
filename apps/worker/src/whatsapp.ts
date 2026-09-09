@@ -20,7 +20,7 @@ import {
   wasProcessed,
 } from "@bot/database";
 import type { NormalizedMessage } from "@bot/shared";
-import { analyzeMessage, combineBurstText, debounceChat, forgetDuplicate, generateBestHumanReply, isCannedFallback, isDuplicate, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback, writeSpokenReply, avoidRepeat } from "@bot/engine";
+import { analyzeMessage, combineBurstText, debounceChat, forgetDuplicate, generateBestHumanReply, isCannedFallback, isDuplicate, isInboundStub, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback, writeSpokenReply, avoidRepeat } from "@bot/engine";
 
 type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
 
@@ -111,10 +111,16 @@ const manager: Manager = {
   reconnectDelay: 1500,
 };
 
+let lastFrameAt = Date.now();
+function touchFrame() {
+  lastFrameAt = Date.now();
+}
+
 function isSocketLive() {
   const sock = manager.sock as { user?: { id?: string }; ws?: { readyState?: number } } | null;
   if (!sock?.user) return false;
   if (typeof sock.ws?.readyState === "number" && sock.ws.readyState !== 1) return false;
+  if (Date.now() - lastFrameAt > 70_000) return false;
   return manager.snapshot.connected === true;
 }
 
@@ -200,6 +206,7 @@ function scheduleReconnect() {
 }
 
 let keepAliveStarted = false;
+let pulsing = false;
 
 export async function ensureAlwaysOn() {
   const settings = await getSettings();
@@ -215,23 +222,34 @@ export async function ensureAlwaysOn() {
   keepAliveStarted = true;
   setInterval(() => {
     void pulseWhatsApp();
-  }, 12_000);
+  }, 8_000);
 }
 
 async function pulseWhatsApp() {
-  if (manager.snapshot.phase === "logged_out") return;
-  if (isSocketLive()) {
-    try {
-      await manager.sock?.sendPresenceUpdate("available");
-    } catch {
+  if (pulsing) return;
+  pulsing = true;
+  try {
+    if (manager.snapshot.phase === "logged_out") return;
+    if (isSocketLive()) {
+      const ok = await withTimeout(
+        Promise.resolve(manager.sock?.sendPresenceUpdate("available")).then(() => true),
+        4000,
+      );
+      if (ok) {
+        touchFrame();
+        return;
+      }
       manager.snapshot.connected = false;
       scheduleReconnect();
+      return;
     }
-    return;
+    if (manager.starting) return;
+    if (manager.snapshot.phase === "qr" && manager.sock) return;
+    manager.snapshot.connected = false;
+    await startWhatsApp();
+  } finally {
+    pulsing = false;
   }
-  if (manager.starting) return;
-  if (manager.snapshot.phase === "qr" && manager.sock) return;
-  await startWhatsApp();
 }
 
 export async function logoutWhatsApp() {
@@ -249,7 +267,7 @@ export async function logoutWhatsApp() {
 }
 
 export async function sendWhatsApp(chatId: string, text: string) {
-  if (!manager.sock || manager.snapshot.phase !== "ready") {
+  if (!isSocketLive() || !manager.sock) {
     throw new Error("WhatsApp is not linked.");
   }
   await manager.sock.sendMessage(chatId, { text });
@@ -345,7 +363,7 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
             isFirstMessage: inboundCount <= batch.length,
             messageType: combined.type,
           }),
-          8000,
+          4000,
         )
       : null;
   let text =
@@ -435,16 +453,17 @@ async function openSocket(pairingPhone?: string) {
     browser: Browsers.ubuntu("Chrome"),
     retryRequestDelayMs: 400,
     maxMsgRetryCount: 5,
-    keepAliveIntervalMs: 10_000,
-    connectTimeoutMs: 20_000,
-    defaultQueryTimeoutMs: 60_000,
+    keepAliveIntervalMs: 15_000,
+    connectTimeoutMs: 30_000,
+    defaultQueryTimeoutMs: 120_000,
+    fireInitQueries: true,
     markOnlineOnConnect: true,
     emitOwnEvents: false,
     syncFullHistory: false,
     shouldIgnoreJid: (jid: string) => Boolean(jid?.endsWith("@broadcast") || jid?.endsWith("@newsletter")),
     getMessage: async (key: { id?: string | null }) => {
       const stored = key.id ? inboundStore.get(key.id) : undefined;
-      return stored as never;
+      return (stored ?? { conversation: "" }) as never;
     },
   });
   manager.sock = sock;
@@ -475,6 +494,7 @@ async function openSocket(pairingPhone?: string) {
       };
     }
     if (connection === "open") {
+      touchFrame();
       const phone = sock.user?.id?.split(":")[0] ?? sock.user?.id ?? null;
       manager.reconnectDelay = 1500;
       await persistAuthDir();
@@ -492,6 +512,7 @@ async function openSocket(pairingPhone?: string) {
       await addLog("info", "whatsapp", `Linked ${phone ?? ""}`.trim());
       try {
         await sock.sendPresenceUpdate("available");
+        touchFrame();
       } catch {
         /* presence is best-effort */
       }
@@ -529,49 +550,123 @@ async function openSocket(pairingPhone?: string) {
     }
   });
 
-  sock.ev.on("messages.upsert", async ({ messages }) => {
-    for (const raw of messages) {
-      try {
-        const jid = chatJid(raw);
-        if (!jid || !raw.key.id) continue;
-        if (raw.message && raw.key.id) inboundStore.set(raw.key.id, raw.message as Record<string, unknown>);
-        if (inboundStore.size > 500) inboundStore.delete(inboundStore.keys().next().value ?? "");
-        if (await wasProcessed(`out_${raw.key.id}`)) continue;
-        if (isDuplicate(raw.key.id)) continue;
-        const fromMe = Boolean(raw.key.fromMe);
-        const normalized = normalizeIncoming({
-          id: raw.key.id,
-          jid,
-          fromMe,
-          pushName: raw.pushName || undefined,
-          message: raw.message as Record<string, unknown> | undefined,
-          timestamp: Number(raw.messageTimestamp || 0),
-        });
-        if (!normalized) continue;
-        if (normalized.type === "reaction") continue;
-        manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
-        const customer = await upsertCustomer({
-          number: jid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
-          name: normalized.fromName,
-        });
-        const convo = await upsertConversation(customer.id, jid);
-        await addMessage({
-          conversation_id: convo.id,
-          whatsapp_message_id: raw.key.id,
-          direction: "in",
-          message_type: normalized.type,
-          text: normalized.text,
-          media_reference: null,
-          ai_generated: false,
-          intent: null,
-        });
-        debounceChat(jid, normalized, (batch) => {
-          void replyToBurst(jid, batch);
-        });
-      } catch (error) {
-        if (raw.key.id) forgetDuplicate(raw.key.id);
-        await addLog("error", "whatsapp", error instanceof Error ? error.message : "message failed");
+  type WaRaw = {
+    key: {
+      id?: string | null;
+      fromMe?: boolean | null;
+      remoteJid?: string | null;
+      remoteJidAlt?: string | null;
+      participant?: string | null;
+    };
+    pushName?: string | null;
+    message?: Record<string, unknown> | null;
+    messageTimestamp?: number | { toNumber?: () => number } | null;
+  };
+
+  function waTimestampMs(raw: WaRaw) {
+    const ts = raw.messageTimestamp;
+    const n = typeof ts === "number" ? ts : typeof ts?.toNumber === "function" ? ts.toNumber() : 0;
+    if (!n) return Date.now();
+    return n > 1e12 ? n : n * 1000;
+  }
+
+  function isRecentInbound(raw: WaRaw) {
+    return Date.now() - waTimestampMs(raw) < 2 * 60 * 60 * 1000;
+  }
+
+  async function ingestRaw(raw: WaRaw, source: "notify" | "append" | "history" | "update") {
+    if (generation !== manager.generation || manager.sock !== sock) return;
+    touchFrame();
+    const jid = chatJid(raw);
+    const id = raw.key.id;
+    if (!jid || !id) return;
+    if (raw.message) inboundStore.set(id, raw.message);
+    if (inboundStore.size > 500) inboundStore.delete(inboundStore.keys().next().value ?? "");
+    if (raw.key.fromMe) return;
+    if (source !== "notify" && !isRecentInbound(raw)) return;
+    if (await wasProcessed(`out_${id}`)) return;
+    const body = (raw.message ?? inboundStore.get(id)) as Record<string, unknown> | undefined;
+    if (isInboundStub(body ?? null)) return;
+    const normalized = normalizeIncoming({
+      id,
+      jid,
+      fromMe: Boolean(raw.key.fromMe),
+      pushName: raw.pushName || undefined,
+      message: body,
+      timestamp: Math.floor(waTimestampMs(raw) / 1000),
+    });
+    if (!normalized) return;
+    if (normalized.type === "reaction") return;
+    if (!normalized.text.trim() && (normalized.type === "unknown" || normalized.type === "text")) return;
+    if (isDuplicate(id)) return;
+    manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
+    const customer = await upsertCustomer({
+      number: jid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
+      name: normalized.fromName,
+    });
+    const convo = await upsertConversation(customer.id, jid);
+    await addMessage({
+      conversation_id: convo.id,
+      whatsapp_message_id: id,
+      direction: "in",
+      message_type: normalized.type,
+      text: normalized.text,
+      media_reference: null,
+      ai_generated: false,
+      intent: null,
+    });
+    debounceChat(jid, normalized, (batch) => {
+      void replyToBurst(jid, batch);
+    });
+  }
+
+  sock.ev.on("messages.upsert", ({ messages, type }) => {
+    const source = type === "append" ? "append" : "notify";
+    void (async () => {
+      for (const raw of messages) {
+        try {
+          await ingestRaw(raw as WaRaw, source);
+        } catch (error) {
+          const id = raw.key.id;
+          if (id) forgetDuplicate(id);
+          await addLog("error", "whatsapp", error instanceof Error ? error.message : "message failed");
+        }
       }
-    }
+    })().catch((error) => {
+      console.error("[whatsapp] upsert failed", error);
+    });
+  });
+
+  sock.ev.on("messages.update", (updates) => {
+    void (async () => {
+      for (const row of updates) {
+        const message = (row.update as { message?: Record<string, unknown> } | undefined)?.message;
+        if (!message) continue;
+        try {
+          await ingestRaw({ key: row.key, message, messageTimestamp: Date.now() / 1000 }, "update");
+        } catch (error) {
+          const id = row.key.id;
+          if (id) forgetDuplicate(id);
+          await addLog("error", "whatsapp", error instanceof Error ? error.message : "message update failed");
+        }
+      }
+    })().catch((error) => {
+      console.error("[whatsapp] messages.update failed", error);
+    });
+  });
+
+  sock.ev.on("messaging-history.set", (payload) => {
+    const messages = (payload as { messages?: WaRaw[] }).messages ?? [];
+    void (async () => {
+      for (const raw of messages) {
+        try {
+          await ingestRaw(raw, "history");
+        } catch {
+          /* catch-up is best-effort */
+        }
+      }
+    })().catch((error) => {
+      console.error("[whatsapp] history catch-up failed", error);
+    });
   });
 }

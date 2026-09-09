@@ -28,14 +28,33 @@ export function normalizeIncoming(input: {
   };
 }
 
-function unwrapMessage(message: Record<string, unknown>): Record<string, unknown> {
+const STUB_KEYS = new Set([
+  "protocolMessage",
+  "senderKeyDistributionMessage",
+  "messageStubType",
+  "encReactionMessage",
+  "encCommentMessage",
+]);
+
+/** Encrypted/offline stubs have no user text yet — do not mark them handled. */
+export function isInboundStub(message?: Record<string, unknown> | null): boolean {
+  if (!message || Object.keys(message).length === 0) return true;
+  const msg = unwrapMessage(message);
+  const keys = Object.keys(msg).filter((k) => k !== "messageContextInfo");
+  if (!keys.length) return true;
+  return keys.every((k) => STUB_KEYS.has(k));
+}
+
+export function unwrapMessage(message: Record<string, unknown>): Record<string, unknown> {
   const nested =
     (message.ephemeralMessage as { message?: Record<string, unknown> } | undefined)?.message ??
     (message.viewOnceMessage as { message?: Record<string, unknown> } | undefined)?.message ??
     (message.viewOnceMessageV2 as { message?: Record<string, unknown> } | undefined)?.message ??
     (message.viewOnceMessageV2Extension as { message?: Record<string, unknown> } | undefined)?.message ??
     (message.documentWithCaptionMessage as { message?: Record<string, unknown> } | undefined)?.message ??
-    (message.editedMessage as { message?: Record<string, unknown> } | undefined)?.message;
+    (message.editedMessage as { message?: Record<string, unknown> } | undefined)?.message ??
+    (message.deviceSentMessage as { message?: Record<string, unknown> } | undefined)?.message ??
+    (message.associatedChildMessage as { message?: Record<string, unknown> } | undefined)?.message;
   return nested ? unwrapMessage(nested) : message;
 }
 
@@ -69,6 +88,19 @@ function extractText(message: Record<string, unknown>): string {
   if (message.stickerMessage) return "[sticker]";
   if (message.locationMessage) return "[location]";
   if (message.contactMessage) return "[contact]";
+  const buttons = message.buttonsResponseMessage as { selectedDisplayText?: string; selectedButtonId?: string } | undefined;
+  if (buttons?.selectedDisplayText || buttons?.selectedButtonId) {
+    return buttons.selectedDisplayText || buttons.selectedButtonId || "";
+  }
+  const list = message.listResponseMessage as {
+    title?: string;
+    singleSelectReply?: { selectedRowId?: string };
+  } | undefined;
+  if (list?.title || list?.singleSelectReply?.selectedRowId) {
+    return list.title || list.singleSelectReply?.selectedRowId || "";
+  }
+  const template = message.templateButtonReplyMessage as { selectedDisplayText?: string } | undefined;
+  if (template?.selectedDisplayText) return template.selectedDisplayText;
   return "";
 }
 

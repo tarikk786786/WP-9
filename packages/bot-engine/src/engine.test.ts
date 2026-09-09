@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { defaultAutomationRules, defaultBotSettings, defaultFaqs } from "@bot/shared";
-import { isDuplicate, normalizeIncoming, resetDuplicates } from "./parser.ts";
+import { isDuplicate, isInboundStub, normalizeIncoming, resetDuplicates } from "./parser.ts";
 import { isWithinBusinessHours, matchFaq, matchRule, routeMessage } from "./router.ts";
 import { analyzeMessage, buildPrompt, missedAsks, planReplyEngines, scoreReplyCompleteness, writeCompleteFallback } from "./ai/provider.ts";
 import { stitchMissingAsks } from "./ai/fallback.ts";
@@ -33,6 +33,35 @@ describe("parser", () => {
     resetDuplicates();
     assert.equal(isDuplicate("m1"), false);
     assert.equal(isDuplicate("m1"), true);
+  });
+
+  it("treats offline protocol stubs as not yet readable", () => {
+    assert.equal(isInboundStub(null), true);
+    assert.equal(isInboundStub({}), true);
+    assert.equal(isInboundStub({ protocolMessage: { type: 0 } }), true);
+    assert.equal(isInboundStub({ senderKeyDistributionMessage: { axolotlSenderKeyDistributionMessage: {} } }), true);
+    assert.equal(isInboundStub({ conversation: "kya hua" }), false);
+    assert.equal(
+      isInboundStub({ deviceSentMessage: { message: { conversation: "bolo" } } }),
+      false,
+    );
+  });
+
+  it("reads list and button replies", () => {
+    const button = normalizeIncoming({
+      id: "btn",
+      jid: "9198@s.whatsapp.net",
+      fromMe: false,
+      message: { buttonsResponseMessage: { selectedDisplayText: "yes" } },
+    });
+    assert.equal(button?.text, "yes");
+    const list = normalizeIncoming({
+      id: "list",
+      jid: "9198@s.whatsapp.net",
+      fromMe: false,
+      message: { listResponseMessage: { title: "pricing", singleSelectReply: { selectedRowId: "p1" } } },
+    });
+    assert.equal(list?.text, "pricing");
   });
 });
 

@@ -20,6 +20,18 @@ import { defaultBotSettings, SendMessageBody } from "@bot/shared";
 import { isAuthorizedWorkerRequest } from "./auth.ts";
 import { ensureAlwaysOn, getSnapshot, logoutWhatsApp, sendWhatsApp, startWhatsApp, uptimeMs, exportAuthArchive, importAuthArchive } from "./whatsapp.ts";
 
+function keepProcessAlive(kind: string, error: unknown) {
+  const text = error instanceof Error ? error.stack || error.message : String(error);
+  console.error(`[worker] ${kind} (kept alive)`, text);
+}
+
+process.on("unhandledRejection", (reason) => {
+  keepProcessAlive("unhandledRejection", reason);
+});
+process.on("uncaughtException", (error) => {
+  keepProcessAlive("uncaughtException", error);
+});
+
 const port = Number(process.env.WORKER_PORT || 8788);
 
 function unauthorized(res: ServerResponse) {

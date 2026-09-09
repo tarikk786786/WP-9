@@ -74,7 +74,9 @@ Host `apps/worker` as a **persistent** Node process:
 
 Protect `WORKER_API_SECRET`. Do not expose the Baileys socket. Only the HTTP API (`/health` public, everything else authenticated) should be reachable, preferably on a private network.
 
-Health: `GET /worker/health` (also `/health`).
+The worker supervisor (`npm run worker`) keeps a single Baileys process alive: it restarts on crash, does not exit on WhatsApp query timeouts, replies to recent offline/history messages after reconnect, and waits for decrypt before treating a chat as handled.
+
+Health: `GET /worker/health` (also `/health`). `connected: true` means the socket is live. `lastMessageReceivedAt` / `lastMessageSentAt` should move when someone texts.
 
 ## Vercel setup
 

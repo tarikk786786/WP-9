@@ -7,6 +7,7 @@ const healthUrl = `http://127.0.0.1:${port}/health`;
 
 let child: ChildProcess | null = null;
 let stopping = false;
+let booting = false;
 let notReadySince = 0;
 
 function pidsOnPort(): number[] {
@@ -32,21 +33,28 @@ function freePort() {
   }
 }
 
-function boot() {
-  if (stopping) return;
-  freePort();
-  child = spawn("npx", ["tsx", "src/index.ts"], {
-    cwd: process.cwd(),
-    stdio: "inherit",
-    env: process.env,
-  });
-  console.log(`[keep] WhatsApp worker pid ${child.pid}`);
-  child.on("exit", (code, signal) => {
-    child = null;
+async function boot() {
+  if (stopping || booting || child) return;
+  booting = true;
+  try {
+    freePort();
+    await delay(1500);
     if (stopping) return;
-    console.error(`[keep] worker stopped (${code ?? signal ?? "exit"}). restarting`);
-    void delay(2000).then(boot);
-  });
+    child = spawn("npx", ["tsx", "src/index.ts"], {
+      cwd: process.cwd(),
+      stdio: "inherit",
+      env: process.env,
+    });
+    console.log(`[keep] WhatsApp worker pid ${child.pid}`);
+    child.on("exit", (code, signal) => {
+      child = null;
+      if (stopping) return;
+      console.error(`[keep] worker stopped (${code ?? signal ?? "exit"}). restarting`);
+      void delay(2000).then(boot);
+    });
+  } finally {
+    booting = false;
+  }
 }
 
 async function healthTick() {
@@ -58,18 +66,20 @@ async function healthTick() {
     };
     const ready = json.whatsapp?.connected === true || json.whatsappConnection === "ready";
     const waitingScan = json.whatsappConnection === "qr" || json.whatsapp?.phase === "qr";
+    const connecting = json.whatsappConnection === "connecting" || json.whatsapp?.phase === "connecting";
     if (ready || waitingScan) {
       notReadySince = 0;
       return;
     }
     if (!notReadySince) notReadySince = Date.now();
-    if (Date.now() - notReadySince > 45_000 && child?.pid) {
+    const waitMs = connecting ? 90_000 : 60_000;
+    if (Date.now() - notReadySince > waitMs && child?.pid) {
       console.error("[keep] WhatsApp stayed down — restarting worker");
       notReadySince = 0;
       child.kill("SIGTERM");
     }
   } catch {
-    if (!child && !stopping) boot();
+    if (!child && !stopping) void boot();
   }
 }
 
@@ -81,8 +91,14 @@ function shutdown() {
 
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+process.on("unhandledRejection", (reason) => {
+  console.error("[keep] unhandledRejection (kept alive)", reason);
+});
+process.on("uncaughtException", (error) => {
+  console.error("[keep] uncaughtException (kept alive)", error);
+});
 
-boot();
+void boot();
 setInterval(() => {
   void healthTick();
 }, 12_000);
