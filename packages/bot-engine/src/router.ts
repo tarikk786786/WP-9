@@ -5,7 +5,8 @@ import { writeCompleteFallback } from "./ai/fallback.ts";
 import { isCannedFallback, writeSpokenReply } from "./orchestrate/spoken.ts";
 
 const COMMANDS = /^(help|stop|start|menu)$/i;
-const HANDOFF = /\b(agent|human|person|staff|talk to (a )?human)\b/i;
+const HANDOFF =
+  /\b(talk to (a )?(human|person|real agent)|human agent|real (agent|person)|kisi (insaan|agent) se|insaan se baat)\b/i;
 
 export function isWithinBusinessHours(settings: BotSettings, now = new Date()): boolean {
   const hours = settings.businessHours;
@@ -117,15 +118,9 @@ export function routeMessage(input: {
   knowledgeHits?: string[];
   aiReply?: string | null;
 }): BotDecision {
-  const { message, settings, rules, faqs, conversationStatus, knowledgeHits, aiReply } = input;
+  const { message, settings, rules, faqs, knowledgeHits, aiReply } = input;
   if (!settings.enabled) {
     return { action: "skip", text: "", source: "skip", intent: "disabled" };
-  }
-  if (conversationStatus === "human" || conversationStatus === "closed") {
-    return { action: "skip", text: "", source: "skip", intent: conversationStatus };
-  }
-  if (conversationStatus === "waiting_human") {
-    return { action: "skip", text: "", source: "handoff", intent: "waiting_human" };
   }
   if (message.isGroup && !settings.replyToGroups) {
     return { action: "skip", text: "", source: "skip", intent: "group" };
@@ -135,14 +130,8 @@ export function routeMessage(input: {
   if (COMMANDS.test(text)) {
     return { action: "reply", text: settings.welcomeMessage, source: "command", intent: "help" };
   }
-  if (HANDOFF.test(text) || /human|agent/.test(matchRule(text, rules)?.id ?? "")) {
-    const rule = matchRule(text, rules);
-    if (rule && /agent|human/.test(rule.triggerValue)) {
-      return { action: "handoff", text: settings.humanHandoffMessage, source: "handoff", intent: "human" };
-    }
-    if (HANDOFF.test(text)) {
-      return { action: "handoff", text: settings.humanHandoffMessage, source: "handoff", intent: "human" };
-    }
+  if (HANDOFF.test(text)) {
+    return { action: "reply", text: settings.humanHandoffMessage, source: "handoff", intent: "human" };
   }
 
   if (!isWithinBusinessHours(settings)) {

@@ -27,7 +27,7 @@ export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
     };
     const wa = json.health?.whatsapp;
     if (!wa) return emptySnapshot();
-    const connected = Boolean(wa.connected || wa.phase === "ready");
+    const connected = Boolean(wa.connected && wa.phase === "ready");
     return {
       phase: connected ? "ready" : (wa.phase as ScanSnapshot["phase"]) ?? "idle",
       qrDataUrl: wa.qrDataUrl ?? null,

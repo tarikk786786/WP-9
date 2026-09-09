@@ -20,6 +20,13 @@ describe("parser", () => {
     assert.equal(msg?.text, "hello");
     assert.equal(msg?.type, "text");
     assert.equal(normalizeIncoming({ id: "x", jid: "a@s.whatsapp.net", fromMe: true }), null);
+    const wrapped = normalizeIncoming({
+      id: "eph",
+      jid: "9198@s.whatsapp.net",
+      fromMe: false,
+      message: { ephemeralMessage: { message: { conversation: "kya haal" } } },
+    });
+    assert.equal(wrapped?.text, "kya haal");
   });
 
   it("deduplicates WhatsApp ids", () => {
@@ -59,14 +66,24 @@ describe("router", () => {
     assert.equal(faq?.id, "who");
   });
 
-  it("hands off to a human", () => {
+  it("still answers when someone asks for a person", () => {
     const decision = routeMessage({ ...base, message: { ...base.message, text: "I need a human agent" } });
-    assert.equal(decision.action, "handoff");
+    assert.equal(decision.action, "reply");
+    assert.equal(decision.source, "handoff");
   });
 
-  it("skips when a human owns the chat", () => {
-    const decision = routeMessage({ ...base, conversationStatus: "human" });
-    assert.equal(decision.action, "skip");
+  it("does not mute the chat after the word agent", () => {
+    const decision = routeMessage({
+      ...base,
+      message: { ...base.message, text: "can you build an ai agent" },
+    });
+    assert.notEqual(decision.action, "handoff");
+    assert.notEqual(decision.action, "skip");
+  });
+
+  it("keeps replying even if a chat was marked human", () => {
+    const decision = routeMessage({ ...base, conversationStatus: "human", message: { ...base.message, text: "kya" } });
+    assert.equal(decision.action, "reply");
   });
 
   it("uses after-hours copy", () => {

@@ -1,5 +1,5 @@
 import { discoverLocalLlms } from "@/lib/local-llm";
-import { hydrateScanSnapshot } from "@/lib/scan-session";
+import { hydrateScanSnapshot, startScanSession } from "@/lib/scan-session";
 import { flushStore } from "@/lib/store";
 import { getTarikProfile, scheduleProfileRefresh } from "@/lib/tarik-profile";
 import type { LiveStatus } from "@/lib/types";
@@ -31,4 +31,5 @@ export async function getLiveStatus(): Promise<LiveStatus> {
 
 export async function keepAliveTick() {
   await flushStore();
+  await startScanSession();
 }

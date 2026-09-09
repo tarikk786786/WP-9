@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -20,22 +20,31 @@ export function LocalBrain({ initial }: { initial: LiveStatus }) {
     setLive((await response.json()) as LiveStatus);
   }
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 15_000);
+    void refresh();
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const waLive = live.whatsapp.phase === "ready";
+
   return (
     <Card className="overflow-hidden lg:col-span-2">
       <div className="h-1 bg-gradient-to-r from-emerald-400 via-teal-400 to-lime-300" />
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle>Saari brains live hain</CardTitle>
+            <CardTitle>WhatsApp always on</CardTitle>
             <CardDescription>
-              Yeh Tarik Islam ki live messaging brain hai. Facts
-              tarikislam.in se aate hain. Extra local models tab join
-              karte hain jab woh on hon.
+              Worker khud WhatsApp jodta rehta hai. Drop ho to wapas
+              connect karta hai, aur har inbound ka jawab jata hai.
             </CardDescription>
           </div>
-          <Badge className="gap-1.5">
+          <Badge className="gap-1.5" variant={waLive ? "default" : "secondary"}>
             <span className="size-1.5 animate-pulse rounded-full bg-primary-foreground" />
-            All live
+            {waLive ? `Live · ${live.whatsapp.phone ?? "linked"}` : live.whatsapp.phase}
           </Badge>
         </div>
       </CardHeader>

@@ -128,7 +128,7 @@ export const defaultAutomationRules = (): AutomationRule[] => [
   { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "haan, bolo", priority: 10, enabled: true },
   { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "rate andaz se nahi bolta", priority: 20, enabled: true },
   { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "ist. aksar din mein yahin, avg 24 ghante ke andar", priority: 20, enabled: true },
-  { id: "agent", name: "Human", triggerType: "keyword", triggerValue: "agent", response: "theek, thoda wait, dekh ke likhta hoon", priority: 5, enabled: true },
+  { id: "human", name: "Human", triggerType: "keyword", triggerValue: "talk to a human", response: "theek, thoda wait, dekh ke likhta hoon", priority: 5, enabled: true },
 ];
 
 export const defaultFaqs = (): Faq[] => [

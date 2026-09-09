@@ -13,6 +13,7 @@ import {
   loadAuthFiles,
   recentMessages,
   saveAuthFiles,
+  saveSettings,
   setConversationStatus,
   upsertConversation,
   upsertCustomer,
@@ -70,12 +71,25 @@ const manager: Manager = {
   reconnectDelay: 1500,
 };
 
+function isSocketLive() {
+  const sock = manager.sock as { user?: { id?: string }; ws?: { readyState?: number } } | null;
+  if (!sock?.user) return false;
+  if (typeof sock.ws?.readyState === "number" && sock.ws.readyState !== 1) return false;
+  return manager.snapshot.connected === true;
+}
+
 export function getSnapshot(): WorkerSnapshot {
   const snap = manager.snapshot;
-  if (snap.connected && snap.phase !== "ready") {
-    return { ...snap, phase: "ready" };
+  if (isSocketLive()) {
+    return { ...snap, phase: "ready", connected: true, error: null };
   }
-  return snap;
+  if (snap.phase === "qr" && snap.qrDataUrl) return { ...snap, connected: false };
+  if (manager.starting) return { ...snap, phase: "connecting", connected: false };
+  return {
+    ...snap,
+    connected: false,
+    phase: snap.persisted ? "connecting" : snap.phase === "logged_out" ? "logged_out" : snap.phase,
+  };
 }
 
 export async function exportAuthArchive() {
@@ -136,12 +150,48 @@ function persistAuthDirSoon() {
 
 function scheduleReconnect() {
   if (manager.reconnectTimer || manager.starting) return;
+  if (manager.snapshot.phase === "logged_out") return;
   const delay = manager.reconnectDelay;
   manager.reconnectTimer = setTimeout(() => {
     manager.reconnectTimer = null;
-    manager.reconnectDelay = Math.min(delay * 2, 20_000);
+    manager.reconnectDelay = Math.min(delay * 2, 15_000);
     void startWhatsApp();
   }, delay);
+}
+
+let keepAliveStarted = false;
+
+export async function ensureAlwaysOn() {
+  const settings = await getSettings();
+  if (!settings.enabled || settings.aiEnabled === false) {
+    await saveSettings({
+      ...settings,
+      enabled: true,
+      aiEnabled: true,
+    });
+  }
+  await startWhatsApp();
+  if (keepAliveStarted) return;
+  keepAliveStarted = true;
+  setInterval(() => {
+    void pulseWhatsApp();
+  }, 12_000);
+}
+
+async function pulseWhatsApp() {
+  if (manager.snapshot.phase === "logged_out") return;
+  if (isSocketLive()) {
+    try {
+      await manager.sock?.sendPresenceUpdate("available");
+    } catch {
+      manager.snapshot.connected = false;
+      scheduleReconnect();
+    }
+    return;
+  }
+  if (manager.starting) return;
+  if (manager.snapshot.phase === "qr" && manager.sock) return;
+  await startWhatsApp();
 }
 
 export async function logoutWhatsApp() {
@@ -185,8 +235,12 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   const sock = manager.sock;
   if (!sock || !batch.length) return;
   const last = batch[batch.length - 1];
-  const combined = { ...last, text: combineBurstText(batch.map((row) => row.text)) };
-  const settings = await getSettings();
+  const combined = { ...last, text: combineBurstText(batch.map((row) => row.text)) || last.text };
+  let settings = await getSettings();
+  if (!settings.enabled) {
+    settings = { ...settings, enabled: true, aiEnabled: true };
+    await saveSettings(settings);
+  }
   const rules = await getRules();
   const faqs = await getFaqs();
   const customer = await upsertCustomer({
@@ -194,13 +248,20 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
     name: combined.fromName,
   });
   const convo = await upsertConversation(customer.id, jid);
+  if (convo.status !== "bot") {
+    await setConversationStatus(convo.id, "bot");
+    convo.status = "bot";
+  }
   const history = await recentMessages(convo.id);
   const knowledge = await knowledgeSearch(combined.text);
   const inboundCount = history.filter((m) => m.direction === "in").length;
   const recent = history
     .slice()
     .reverse()
-    .map((m) => ({ role: (m.direction === "in" ? "user" : "assistant") as const, text: m.text }));
+    .map((m) => ({
+      role: m.direction === "in" ? ("user" as const) : ("assistant" as const),
+      text: m.text,
+    }));
   const analysis = analyzeMessage(combined.text, {
     isFirstMessage: inboundCount <= batch.length,
     inboundCount,
@@ -210,15 +271,11 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
     settings,
     rules,
     faqs,
-    conversationStatus: convo.status,
+    conversationStatus: "bot",
     knowledgeHits: knowledge,
     aiReply: null,
   });
-  if (routed.action === "handoff") {
-    await setConversationStatus(convo.id, "waiting_human");
-  }
-  if (routed.action === "skip") return;
-  if (settings.enabled === false) return;
+  if (routed.action === "skip" && routed.intent === "group") return;
   const faqFacts = matchAllFaqs(combined.text, faqs).map((f) => `${f.question}: ${f.answer}`);
   const ruleFacts = matchAllRules(combined.text, rules)
     .filter((r) => !/agent|human/.test(r.triggerValue))
@@ -251,26 +308,31 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
       : spoken);
   if (!text || isCannedFallback(text)) text = spoken;
   text = avoidRepeat(text, recent);
-  if (!text) return;
-  await sock.sendMessage(jid, { text });
-  manager.snapshot.lastMessageSentAt = new Date().toISOString();
-  await addMessage({
-    conversation_id: convo.id,
-    whatsapp_message_id: `out_${combined.whatsappMessageId}`,
-    direction: "out",
-    message_type: "text",
-    text,
-    media_reference: null,
-    ai_generated: Boolean(ai),
-    intent: routed.intent ?? routed.source,
-  });
+  if (!text) text = spoken || "haan, sun raha hoon";
+  try {
+    await sock.sendMessage(jid, { text });
+    manager.snapshot.lastMessageSentAt = new Date().toISOString();
+    await addMessage({
+      conversation_id: convo.id,
+      whatsapp_message_id: `out_${combined.whatsappMessageId}`,
+      direction: "out",
+      message_type: "text",
+      text,
+      media_reference: null,
+      ai_generated: Boolean(ai),
+      intent: routed.intent ?? routed.source,
+    });
+  } catch (error) {
+    manager.snapshot.connected = false;
+    await addLog("error", "whatsapp", error instanceof Error ? error.message : "send failed");
+    scheduleReconnect();
+  }
 }
 
 export async function startWhatsApp(pairingPhone?: string) {
-  if (manager.sock && (manager.snapshot.phase === "ready" || manager.snapshot.phase === "qr")) {
-    return manager.snapshot;
-  }
-  if (manager.starting) return manager.snapshot;
+  if (isSocketLive()) return getSnapshot();
+  if (manager.snapshot.phase === "qr" && manager.sock && manager.starting) return getSnapshot();
+  if (manager.starting) return getSnapshot();
   manager.starting = true;
   manager.snapshot = { ...manager.snapshot, phase: "connecting", error: null };
   try {
@@ -323,7 +385,8 @@ async function openSocket(pairingPhone?: string) {
     auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
     browser: Browsers.ubuntu("Chrome"),
     syncFullHistory: false,
-    markOnlineOnConnect: false,
+    markOnlineOnConnect: true,
+    emitOwnEvents: false,
   });
   manager.sock = sock;
 
@@ -390,14 +453,11 @@ async function openSocket(pairingPhone?: string) {
         return;
       }
       manager.snapshot.connected = false;
-      if (manager.snapshot.persisted) {
-        manager.snapshot.phase = "ready";
-        manager.snapshot.error = null;
-      } else {
-        manager.snapshot.phase = "connecting";
-        manager.snapshot.qrDataUrl = null;
-        manager.snapshot.error = "QR expire / drop. Naya QR aa raha hai.";
-      }
+      manager.snapshot.phase = manager.snapshot.persisted ? "connecting" : "connecting";
+      manager.snapshot.qrDataUrl = null;
+      manager.snapshot.error = manager.snapshot.persisted
+        ? "WhatsApp drop ho gaya. Wapas jod raha hoon."
+        : "QR expire / drop. Naya QR aa raha hai.";
       scheduleReconnect();
     }
   });

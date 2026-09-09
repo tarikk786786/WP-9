@@ -11,7 +11,7 @@ export function normalizeIncoming(input: {
   if (input.fromMe) return null;
   const jid = input.jid;
   if (!jid || jid === "status@broadcast" || jid.endsWith("@broadcast")) return null;
-  const msg = input.message ?? {};
+  const msg = unwrapMessage(input.message ?? {});
   const type = detectType(msg);
   const text = extractText(msg);
   return {
@@ -26,6 +26,17 @@ export function normalizeIncoming(input: {
     isGroup: jid.endsWith("@g.us"),
     metadata: { rawKeys: Object.keys(msg) },
   };
+}
+
+function unwrapMessage(message: Record<string, unknown>): Record<string, unknown> {
+  const nested =
+    (message.ephemeralMessage as { message?: Record<string, unknown> } | undefined)?.message ??
+    (message.viewOnceMessage as { message?: Record<string, unknown> } | undefined)?.message ??
+    (message.viewOnceMessageV2 as { message?: Record<string, unknown> } | undefined)?.message ??
+    (message.viewOnceMessageV2Extension as { message?: Record<string, unknown> } | undefined)?.message ??
+    (message.documentWithCaptionMessage as { message?: Record<string, unknown> } | undefined)?.message ??
+    (message.editedMessage as { message?: Record<string, unknown> } | undefined)?.message;
+  return nested ? unwrapMessage(nested) : message;
 }
 
 function detectType(message: Record<string, unknown>): NormalizedMessage["type"] {
