@@ -237,8 +237,8 @@ export function ScanLogin({
     if (readLocalArchive()) setSavedHere(true);
 
     void pullStatus().then((live) => {
-      if (live.phase === "ready") {
-        void pullAndSaveLogin();
+      if (live.phase === "ready" || live.persisted) {
+        if (live.phase === "ready") void pullAndSaveLogin();
         return;
       }
       if (live.phase === "qr" || live.qrDataUrl) {

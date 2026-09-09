@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import pino from "pino";
@@ -21,6 +22,7 @@ import {
 } from "@bot/database";
 import type { NormalizedMessage } from "@bot/shared";
 import { analyzeMessage, combineBurstText, debounceChat, forgetDuplicate, generateBestHumanReply, isCannedFallback, isDuplicate, isInboundStub, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback, writeSpokenReply, avoidRepeat } from "@bot/engine";
+import { credsAreLinked, phoneFromCreds, shouldWipeAuth } from "./session-policy.ts";
 
 type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
 
@@ -120,8 +122,7 @@ function isSocketLive() {
   const sock = manager.sock as { user?: { id?: string }; ws?: { readyState?: number } } | null;
   if (!sock?.user) return false;
   if (typeof sock.ws?.readyState === "number" && sock.ws.readyState !== 1) return false;
-  if (Date.now() - lastFrameAt > 70_000) return false;
-  return manager.snapshot.connected === true;
+  return manager.snapshot.phase === "ready" || manager.snapshot.connected === true;
 }
 
 export function getSnapshot(): WorkerSnapshot {
@@ -154,7 +155,7 @@ export async function importAuthArchive(archive: { files?: Record<string, string
     throw new Error("Saved login invalid hai. creds.json missing.");
   }
   await saveAuthFiles(files);
-  await hydrateAuthDir();
+  await hydrateAuthDir({ overwrite: true });
   manager.snapshot.persisted = true;
   return startWhatsApp();
 }
@@ -163,13 +164,33 @@ export function uptimeMs() {
   return Date.now() - startedAt;
 }
 
-async function hydrateAuthDir() {
+async function hydrateAuthDir(opts?: { overwrite?: boolean }) {
   await mkdir(AUTH_DIR, { recursive: true });
+  const diskPath = path.join(AUTH_DIR, "creds.json");
+  const diskRaw = existsSync(diskPath) ? await readFile(diskPath, "utf8").catch(() => "") : "";
+  if (!opts?.overwrite && diskRaw && credsAreLinked(diskRaw)) {
+    manager.snapshot.persisted = true;
+    manager.snapshot.phone = manager.snapshot.phone ?? phoneFromCreds(diskRaw);
+    return;
+  }
   const files = await loadAuthFiles();
   for (const [rel, b64] of Object.entries(files)) {
     if (rel.includes("..")) continue;
     await writeFile(path.join(AUTH_DIR, rel), Buffer.from(b64, "base64"));
   }
+}
+
+async function markPersistedFromDisk() {
+  const diskPath = path.join(AUTH_DIR, "creds.json");
+  if (!existsSync(diskPath)) return false;
+  const raw = await readFile(diskPath, "utf8").catch(() => "");
+  if (!raw || !credsAreLinked(raw)) return false;
+  manager.snapshot.persisted = true;
+  manager.snapshot.phone = manager.snapshot.phone ?? phoneFromCreds(raw);
+  if (manager.snapshot.phase === "idle" || manager.snapshot.phase === "logged_out") {
+    manager.snapshot.phase = "connecting";
+  }
+  return true;
 }
 
 async function persistAuthDir() {
@@ -217,6 +238,7 @@ export async function ensureAlwaysOn() {
       aiEnabled: true,
     });
   }
+  await markPersistedFromDisk();
   await startWhatsApp();
   if (keepAliveStarted) return;
   keepAliveStarted = true;
@@ -230,22 +252,18 @@ async function pulseWhatsApp() {
   pulsing = true;
   try {
     if (manager.snapshot.phase === "logged_out") return;
-    if (isSocketLive()) {
+    const sock = manager.sock as { user?: { id?: string }; ws?: { readyState?: number } } | null;
+    const wsOpen = Boolean(sock?.user) && (typeof sock?.ws?.readyState !== "number" || sock.ws.readyState === 1);
+    if (wsOpen) {
       const ok = await withTimeout(
         Promise.resolve(manager.sock?.sendPresenceUpdate("available")).then(() => true),
         4000,
       );
-      if (ok) {
-        touchFrame();
-        return;
-      }
-      manager.snapshot.connected = false;
-      scheduleReconnect();
+      if (ok) touchFrame();
       return;
     }
     if (manager.starting) return;
     if (manager.snapshot.phase === "qr" && manager.sock) return;
-    manager.snapshot.connected = false;
     await startWhatsApp();
   } finally {
     pulsing = false;
@@ -400,8 +418,17 @@ export async function startWhatsApp(pairingPhone?: string) {
   if (isSocketLive()) return getSnapshot();
   if (manager.snapshot.phase === "qr" && manager.sock && manager.starting) return getSnapshot();
   if (manager.starting) return getSnapshot();
+  const sock = manager.sock as { user?: { id?: string }; ws?: { readyState?: number } } | null;
+  if (sock?.user && (typeof sock.ws?.readyState !== "number" || sock.ws.readyState === 1)) {
+    return getSnapshot();
+  }
   manager.starting = true;
-  manager.snapshot = { ...manager.snapshot, phase: "connecting", error: null };
+  await markPersistedFromDisk();
+  manager.snapshot = {
+    ...manager.snapshot,
+    phase: manager.snapshot.persisted ? "connecting" : "connecting",
+    error: null,
+  };
   try {
     await openSocket(pairingPhone);
   } catch (error) {
@@ -418,7 +445,6 @@ async function openSocket(pairingPhone?: string) {
   const {
     default: makeWASocket,
     Browsers,
-    DisconnectReason,
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore,
     useMultiFileAuthState,
@@ -455,8 +481,8 @@ async function openSocket(pairingPhone?: string) {
     maxMsgRetryCount: 5,
     keepAliveIntervalMs: 15_000,
     connectTimeoutMs: 30_000,
-    defaultQueryTimeoutMs: 120_000,
-    fireInitQueries: true,
+    defaultQueryTimeoutMs: 60_000,
+    fireInitQueries: false,
     markOnlineOnConnect: true,
     emitOwnEvents: false,
     syncFullHistory: false,
@@ -486,12 +512,15 @@ async function openSocket(pairingPhone?: string) {
     if (generation !== manager.generation || manager.sock !== sock) return;
     const { connection, lastDisconnect, qr } = update;
     if (qr && manager.snapshot.phase !== "ready") {
-      manager.snapshot = {
-        ...manager.snapshot,
-        phase: "qr",
-        qrDataUrl: await QRCode.toDataURL(qr, { width: 280, margin: 1 }),
-        error: null,
-      };
+      const saved = manager.snapshot.persisted || Boolean(state.creds.registered);
+      if (!saved) {
+        manager.snapshot = {
+          ...manager.snapshot,
+          phase: "qr",
+          qrDataUrl: await QRCode.toDataURL(qr, { width: 280, margin: 1 }),
+          error: null,
+        };
+      }
     }
     if (connection === "open") {
       touchFrame();
@@ -524,10 +553,7 @@ async function openSocket(pairingPhone?: string) {
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output
         ?.statusCode;
       if (manager.sock === sock) manager.sock = null;
-      const dead =
-        statusCode === DisconnectReason.loggedOut ||
-        statusCode === DisconnectReason.badSession ||
-        statusCode === DisconnectReason.forbidden;
+      const dead = shouldWipeAuth(statusCode);
       if (dead) {
         await rm(AUTH_DIR, { recursive: true, force: true });
         await clearAuthFiles();

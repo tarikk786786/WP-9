@@ -156,7 +156,7 @@ const server = createServer(async (req, res) => {
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
       });
-      void startWhatsApp(pair);
+      void (getSnapshot().connected ? Promise.resolve() : startWhatsApp(pair));
       const timer = setInterval(() => {
         res.write(`data: ${JSON.stringify({ snapshot: getSnapshot() })}\n\n`);
       }, 700);

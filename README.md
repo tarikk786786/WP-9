@@ -132,7 +132,7 @@ See `.env.example`. Never commit `.env`. Never log secrets. Sentry is optional (
 
 ## Session persistence
 
-Order of truth: WhatsApp → Baileys multi-file auth in `data/baileys-auth` → base64 rows in `baileys_auth`. The worker hydrates the directory before `useMultiFileAuthState`. `creds.update` is debounced so writes do not race.
+Order of truth: WhatsApp → Baileys multi-file auth in `data/baileys-auth` → base64 rows in `baileys_auth`. Disk login wins on reboot so a reconnect does not wipe a good session. Auth files are deleted only after WhatsApp returns logged-out (`401`) or you tap Log out. Desk live polling never starts a new QR session.
 
 ## Production checklist
 
