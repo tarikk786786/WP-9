@@ -138,7 +138,6 @@ export function writeSpokenReply(
   const parsed = analysis ?? analyzeMessage(incoming);
   const en = useEnglish(parsed, incoming);
   const love = person?.voice === "love";
-  const slang = /\b(bro|bhai|yaar|dude)\b/i.test(incoming);
   let reply: string | null = null;
 
   if (love) {
