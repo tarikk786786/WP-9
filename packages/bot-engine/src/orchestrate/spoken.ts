@@ -5,30 +5,30 @@ import { TARIK_PUBLIC_FACTS } from "../ai/facts.ts";
 const CANNED = /^dekh liya\.?\s*bolo[.!]*$/i;
 
 const RECOVERY = [
-  "maaf, pehle wala phas gaya. ab sun raha hoon — kya likhna hai",
-  "stuck ho gaya tha. seedha bol, kya chahiye",
-  "woh line dobara nahi. tu bol",
+  "maaf bhai, pehle wala phas gaya. ab sun raha hoon — bol",
+  "stuck ho gaya tha yaar. seedha bol, kya chahiye",
+  "woh line dobara nahi. tu bol, main yahin hoon",
 ];
 
 const TOPIC_LINES: Record<string, { hi: string; en: string }> = {
-  identity: { hi: TARIK_PUBLIC_FACTS.identity, en: "it's tarik" },
-  services: { hi: TARIK_PUBLIC_FACTS.services, en: "forensics, cybersecurity, ai systems, products — public stuff is on tarikislam.in" },
-  website: { hi: TARIK_PUBLIC_FACTS.website, en: "public work is on tarikislam.in" },
-  portfolio: { hi: TARIK_PUBLIC_FACTS.portfolio, en: "portfolio on tarikislam.in, studio on dezo.in" },
-  studio: { hi: TARIK_PUBLIC_FACTS.studio, en: "dezo is my studio, dezo.in — ai-native, secure-by-design products" },
-  pricing: { hi: TARIK_PUBLIC_FACTS.pricing, en: "i don't quote a rate offhand" },
+  identity: { hi: TARIK_PUBLIC_FACTS.identity, en: "it's tarik, brother" },
+  services: { hi: TARIK_PUBLIC_FACTS.services, en: "forensics, cyber, ai systems, products — public truth is on tarikislam.in" },
+  website: { hi: TARIK_PUBLIC_FACTS.website, en: "public stuff is on tarikislam.in, bro" },
+  portfolio: { hi: TARIK_PUBLIC_FACTS.portfolio, en: "portfolio on tarikislam.in, studio on dezo.in — have a look" },
+  studio: { hi: TARIK_PUBLIC_FACTS.studio, en: "dezo is my studio, dezo.in. tell me what you're thinking" },
+  pricing: { hi: TARIK_PUBLIC_FACTS.pricing, en: "i don't invent a rate offhand, bro" },
   availability: { hi: TARIK_PUBLIC_FACTS.availability, en: "q3 2026 high-stakes work is open on the site. tell me what you're thinking" },
-  process: { hi: TARIK_PUBLIC_FACTS.process, en: "i listen first, then i only say what's actually clear" },
-  timeline: { hi: TARIK_PUBLIC_FACTS.timeline, en: "i don't invent a date" },
+  process: { hi: TARIK_PUBLIC_FACTS.process, en: "i listen first, then i only say what's actually clear — no drama" },
+  timeline: { hi: TARIK_PUBLIC_FACTS.timeline, en: "i don't invent a date. let's understand the work first" },
   meeting: { hi: TARIK_PUBLIC_FACTS.meeting, en: "send a time, i'll check and confirm" },
   hours: { hi: TARIK_PUBLIC_FACTS.hours, en: "ist. i'm usually around in the day, typically under 24 hours" },
   location: { hi: TARIK_PUBLIC_FACTS.location, en: "i work from bhubaneswar, india" },
   contact: { hi: TARIK_PUBLIC_FACTS.contact, en: TARIK_PUBLIC_FACTS.contact },
   credentials: { hi: TARIK_PUBLIC_FACTS.credentials, en: TARIK_PUBLIC_FACTS.credentials },
-  forensics: { hi: TARIK_PUBLIC_FACTS.forensics, en: "i work on forensics and digital evidence" },
-  security: { hi: TARIK_PUBLIC_FACTS.security, en: "i do cybersecurity engineering" },
-  "ai-work": { hi: TARIK_PUBLIC_FACTS["ai-work"], en: "i build ai systems" },
-  project: { hi: TARIK_PUBLIC_FACTS.project, en: "yeah, tell me what you're thinking" },
+  forensics: { hi: TARIK_PUBLIC_FACTS.forensics, en: "yeah, forensics and digital evidence is my work. what happened — short" },
+  security: { hi: TARIK_PUBLIC_FACTS.security, en: "i do cybersecurity engineering. what's the scene" },
+  "ai-work": { hi: TARIK_PUBLIC_FACTS["ai-work"], en: "i build ai systems. what's on your mind" },
+  project: { hi: TARIK_PUBLIC_FACTS.project, en: "yeah bro, tell me what you're thinking" },
 };
 
 function compact(text: string): string {
@@ -139,31 +139,31 @@ export function writeSpokenReply(
   let reply: string | null = null;
 
   if (isHoroscopeAsk(incoming)) {
-    reply = en ? "i don't do that. if there's work, write it straight" : "woh nahi dekhta. jo kaam hai, seedha likh";
+    reply = en ? "that's not my lane bro. if there's real work, write it straight" : "woh nahi dekhta yaar. jo kaam hai, seedha likh";
   } else if (isWhatHappenedAsk(incoming)) {
-    reply = slang ? "theek hoon bhai. tu bol" : en ? "i'm alright. what's going on" : "theek hoon. tu bol, kya scene hai";
+    reply = en ? "i'm good bro. what's going on" : "theek hoon bhai. tu bol, kya scene hai";
   } else if (/^(bolo|bol)$/.test(n)) {
-    reply = "haan, sun raha hoon. kya likhna hai";
+    reply = "haan bhai, sun raha hoon. kya likhna hai";
   } else if (/^kya$/.test(n)) {
-    reply = "haan, kya baat hai";
+    reply = "haan yaar, kya baat hai";
   } else if (/^(kya baat|kya scene|kya baat hai)$/.test(n)) {
-    reply = "haan, bol";
+    reply = "haan bol, main yahin hoon";
   } else if (/^(suna|sun|reply kar|jawab de|dekh|padha|message (dekha|padha)|you there|sun raha)$/.test(n)) {
-    reply = pickUnused(n, ["haan, sun raha hoon", "haan, yahin hoon. bol", "padh liya. bol"], recent);
+    reply = pickUnused(n, ["haan bhai, sun raha hoon", "yahin hoon yaar. bol", "padh liya. bol"], recent);
   } else if (/^(gn|good night|goodnight|tc|take care|bye)$/.test(n)) {
-    reply = en ? "take care. write later" : "take care. baad mein likhna";
+    reply = en ? "take care brother. write later" : "take care bhai. baad mein likhna";
   } else if (/^(gm|good morning)$/.test(n)) {
-    reply = en ? "morning, what's the plan" : "good morning, kya plan hai";
+    reply = en ? "morning bro, what's the plan" : "good morning bhai, kya plan hai";
   } else if (/\b(assalam|salaam|salam)\b/.test(n)) {
-    reply = "walaikum assalam, kya ho raha hai";
+    reply = "walaikum assalam bhai, kya ho raha hai";
   } else if (/^(kaise ho|kya haal|how are you|whats?up)$/.test(n)) {
-    reply = slang ? "theek hoon yaar. tu bol" : en ? "i'm good. you?" : "theek hoon. tu bata";
+    reply = en ? "i'm good brother. you?" : "theek hoon yaar. tu bata";
   } else if (/^(kya kar rahe ho|kya chal raha|busy ho|free ho)$/.test(n)) {
-    reply = "yahin hoon. tu bol kya scene hai";
+    reply = "yahin hoon bhai. tu bol kya scene hai";
   } else if (parsed.intents[0] === "greeting" && parsed.complexity === "simple") {
-    reply = slang ? "haan bro, bolo" : "haan, kya haal hai";
+    reply = pickUnused(n, ["haan bhai, kya haal hai", "haan yaar, bolo", "hey, theek ho? scene kya hai"], recent);
   } else if (parsed.intents[0] === "thanks") {
-    reply = slang ? "koi baat nahi bro" : "koi baat nahi";
+    reply = "koi baat nahi yaar";
   } else {
     reply = continueThread(incoming, recent, en);
   }
@@ -185,22 +185,22 @@ export function writeSpokenReply(
   if (!reply) {
     const lastUser = [...recent].reverse().find((row) => row.role === "user")?.text;
     if (parsed.mood === "stressed" || parsed.mood === "frustrated") {
-      reply = en ? "tell me what's stuck. i'm here" : "bata kya tight hai. dekh raha hoon";
+      reply = en ? "tell me what's stuck. i'm with you" : "bata kya tight hai bhai. saath mein nikalte hain";
     } else if (lastUser && incoming.split(/\s+/).length <= 5 && recent.length) {
       reply = en
-        ? `on that last bit — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — what should i look at`
-        : `pehle wali baat pe — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — kya dekhun`;
+        ? `on that last bit — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — what should i look at, bro`
+        : `pehle wali baat pe — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — kya dekhun yaar`;
     } else if (/\?/.test(incoming) || /^(kya|kaun|kab|kahan|kaise|kitna|kyu|kyun|why|what|where|when|how|who)\b/i.test(incoming)) {
       reply = en
-        ? "i won't guess that. say the actual thing you need"
-        : "jo poochna hai woh likh — kaam, sawaal, jo bhi. andaz nahi ghadta";
+        ? "i won't guess that, brother. say the actual thing you need"
+        : "andaz nahi ghadta yaar. jo poochna hai seedha likh — main dimaag laga ke dekhun";
     } else {
-      reply = en ? "i hear you. say what you need in one line" : "sun raha hoon. ek line mein likh kya chahiye";
+      reply = en ? "i hear you bro. say what you need in one line" : "sun raha hoon bhai. ek line mein likh kya chahiye";
     }
   }
 
   if (!reply || isCannedFallback(reply)) {
-    reply = en ? "yeah, i'm here. what's up" : "haan, sun raha hoon";
+    reply = en ? "yeah bro, i'm here. what's up" : "haan bhai, sun raha hoon";
   }
   return avoidRepeat(reply, recent);
 }

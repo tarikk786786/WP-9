@@ -3,7 +3,7 @@ import { TARIK_PUBLIC_FACTS } from "./facts.ts";
 import { writeSpokenReply } from "../orchestrate/spoken.ts";
 
 const LINE_FOR: Record<string, string> = {
-  greeting: "haan, sun raha hoon",
+  greeting: "haan bhai, sun raha hoon",
   identity: TARIK_PUBLIC_FACTS.identity,
   services: TARIK_PUBLIC_FACTS.services,
   website: TARIK_PUBLIC_FACTS.website,
@@ -31,10 +31,10 @@ export function writeCompleteFallback(
   incoming = "",
 ): string {
   if (analysis.complexity === "simple" && analysis.intents[0] === "greeting") {
-    return "haan, kya haal hai";
+    return "haan bhai, kya haal hai";
   }
   if (analysis.complexity === "simple" && analysis.intents[0] === "thanks") {
-    return "koi baat nahi";
+    return "koi baat nahi yaar";
   }
 
   const spoken = writeSpokenReply(incoming || analysis.asks.join(" ") || analysis.meaning, analysis);

@@ -105,7 +105,7 @@ describe("conversation intelligence", () => {
   it("acks a bare ok without asking a new question", () => {
     const turn = analyzeTurn("ok", [{ role: "user", text: "brief bhej dena" }], false);
     assert.equal(turn.plan.action, "acknowledge");
-    assert.equal(turn.plan.draft, "ok");
+    assert.equal(turn.plan.draft, "ok bhai");
   });
 
   it("asks what tomorrow is about instead of agreeing blindly", () => {

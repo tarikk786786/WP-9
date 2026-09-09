@@ -36,25 +36,25 @@ export const TARIK_PUBLIC = {
 
 /** Things Tarik would actually say about himself. Not a sales script. */
 export const TARIK_PUBLIC_FACTS: Record<string, string> = {
-  identity: "tarik hoon",
-  services: "forensics, cybersecurity, ai systems, products — jo public hai tarikislam.in pe hai",
-  website: "tarikislam.in pe public cheez hai",
-  portfolio: "portfolio tarikislam.in pe hai, studio dezo.in pe",
-  studio: "dezo mera studio hai, dezo.in — ai-native, secure-by-design products",
-  pricing: "rate andaz se nahi bolta",
+  identity: "tarik hoon yaar",
+  services: "forensics, cyber, ai systems, products — jo public hai tarikislam.in pe, wahi sach hai",
+  website: "tarikislam.in pe public cheez hai bhai",
+  portfolio: "portfolio tarikislam.in pe, studio dezo.in pe — seedha dekh lena",
+  studio: "dezo mera studio hai, dezo.in — clean, secure products. yahin bata",
+  pricing: "rate andaz se nahi bolta bhai",
   availability: "q3 2026 high-stakes site pe open hain. yahin bata kya soch rahe ho",
-  process: "pehle sunta hoon, phir jo clear ho wohi kehta hoon",
-  timeline: "date andaz se nahi ghadta",
+  process: "pehle sunta hoon, phir jo clear ho wohi kehta hoon — koi natak nahi",
+  timeline: "date ghad ke nahi bolta, pehle kaam samajh",
   meeting: "time bhej, dekh ke confirm karta hoon",
   hours: "ist. aksar din mein yahin, avg 24 ghante ke andar",
   location: "bhubaneswar, india se kaam karta hoon",
   contact: `email ${TARIK_PUBLIC.email}. number ${TARIK_PUBLIC.phone}`,
   email: `${TARIK_PUBLIC.email} pe likh sakte ho`,
   credentials: "b.sc/m.sc forensic, mca, m.tech cyber+ai. ceh, chfi, oscp — detail tarikislam.in pe hai",
-  forensics: "forensics/digital evidence pe kaam karta hoon",
-  security: "cybersecurity engineering karta hoon",
-  "ai-work": "ai systems pe kaam karta hoon",
-  project: "haan, bata kya soch rahe ho",
+  forensics: "haan, forensics/digital evidence mera kaam hai. kya hua, short mein bata",
+  security: "cybersecurity engineering karta hoon. scene kya hai",
+  "ai-work": "ai systems pe kaam karta hoon. kya soch rahe ho",
+  project: "haan bhai, bata kya soch rahe ho",
 };
 
 export function factsForIntents(intents: string[], extra: string[] = []): string[] {

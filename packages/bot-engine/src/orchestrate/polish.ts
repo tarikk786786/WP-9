@@ -64,7 +64,7 @@ export function polishHumanReply(text: string, incoming: string, analysis: Messa
       .trim();
   }
   if (!clean || /as an ai|i am (an? )?(ai|bot)|personal ai|chat ?bot|auto[- ]?repl/i.test(clean)) {
-    clean = isAskingIfMachine(incoming) ? "main hi hoon. bolo" : clean.replace(/as an ai[, ]*/i, "").trim();
+    clean = isAskingIfMachine(incoming) ? "arre main hi hoon yaar. bolo" : clean.replace(/as an ai[, ]*/i, "").trim();
   }
   if (!clean || isCannedFallback(clean)) clean = writeSpokenReply(incoming, analysis);
   return blendSpokenReply(clean, analysis);

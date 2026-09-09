@@ -93,7 +93,7 @@ export function planTurn(options: {
 
   if (isAskingIfMachine(text)) {
     action = "acknowledge";
-    draft = style.usesSlang ? "main hi hoon bhai. bolo" : "main hi hoon. bolo";
+    draft = "arre main hi hoon yaar. bolo";
     confidence = 0.96;
     complexity = 0.05;
   } else if (isHoroscopeAsk(text) || isWhatHappenedAsk(text) || isBareCheckin(text)) {
@@ -103,35 +103,35 @@ export function planTurn(options: {
     complexity = 0.08;
   } else if (analysis.intents.includes("handoff")) {
     action = "escalate";
-    draft = "theek, thoda wait, dekh ke likhta hoon";
+    draft = "theek bhai, thoda wait — dekh ke likhta hoon";
     confidence = 0.95;
   } else if (media && (lower === "[image]" || lower === "[voice]" || lower === "[video]" || lower === "[document]")) {
     action = "ask";
     draft =
       messageType === "audio"
-        ? "sununga. urgent ho to text bhi maar dena"
+        ? "sununga bhai. urgent ho to text bhi maar dena"
         : messageType === "document"
-          ? "file mil gayi. context ek line mein de dena"
-          : "pic/file aa gayi. text mein likh do kya dekhna hai";
+          ? "file aa gayi yaar. ek line context de dena"
+          : "pic aa gayi. text mein likh do kya dekhna hai";
     confidence = 0.9;
     complexity = 0.2;
   } else if (ACK.test(text.trim()) || (analysis.intents.includes("thanks") && wordCount <= 6)) {
     action = "acknowledge";
-    draft = ACK.test(text.trim()) ? "ok" : style.usesSlang ? "koi baat nahi bro" : "koi baat nahi";
+    draft = ACK.test(text.trim()) ? "ok bhai" : "koi baat nahi yaar";
     confidence = 0.93;
     complexity = 0.05;
   } else if (analysis.complexity === "simple" && analysis.intents[0] === "greeting" && !analysis.wantsAllAnswers) {
     action = "acknowledge";
-    draft = style.usesSlang ? "haan bro, bolo" : "haan, kya haal hai";
+    draft = "haan bhai, kya haal hai";
     confidence = 0.94;
     complexity = 0.08;
   } else if (incomplete) {
     action = "clarify";
     if (/^(kal|tomorrow)\??$/i.test(text.trim()) && !recent.length) {
-      draft = "maaf, kal kis cheez ke liye — call, kaam, ya kuch aur?";
+      draft = "bhai maaf, kal kis cheez ke liye — call, kaam, ya kuch aur?";
     } else {
       const lastUser = [...recent].reverse().find((row) => row.role === "user")?.text ?? "pehle wali baat";
-      draft = `pehle wali baat confirm kar dun — ${lastUser.slice(0, 42).replace(/\n/g, " ")}?`;
+      draft = `pehle wali baat confirm kar dun yaar — ${lastUser.slice(0, 42).replace(/\n/g, " ")}?`;
     }
     confidence = 0.66;
     complexity = 0.28;
@@ -143,7 +143,7 @@ export function planTurn(options: {
     wordCount < 14
   ) {
     action = "ask";
-    draft = "haan, bata kya soch rahe ho";
+    draft = "haan bhai, bata kya soch rahe ho";
     confidence = 0.7;
     complexity = 0.4;
   } else if (analysis.wantsAllAnswers || analysis.complexity === "lead") {

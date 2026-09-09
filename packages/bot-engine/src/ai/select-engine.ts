@@ -86,7 +86,7 @@ export function planReplyEngines(analysis: MessageAnalysis, turn?: ResponsePlan)
   const have = new Set(availableEngines());
   const policy = aiPolicy();
   const maxTokens = tokenBudget(analysis, turn);
-  const temperature = analysis.wantsAllAnswers || turn?.requiresReasoning ? 0.4 : 0.55;
+  const temperature = analysis.wantsAllAnswers || turn?.requiresReasoning ? 0.52 : 0.68;
   const strong = Boolean(
     turn?.requiresReasoning ||
       turn?.confidence && turn.confidence < 0.62 ||
