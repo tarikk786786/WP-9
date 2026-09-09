@@ -29,14 +29,14 @@ export function rememberPersonJid(jid: string, personId: string) {
   saveAliases(map);
 }
 
-export function personForChat(jid: string, fromName?: string) {
+export function personForChat(jid: string, fromName?: string, phoneHints?: string) {
   const map = loadAliases();
   const mapped = map[jid] ? SPECIAL_PEOPLE.find((row) => row.id === map[jid]) : null;
   if (mapped) return mapped;
   const found = findSpecialPerson({
     jid,
     fromName,
-    number: jid,
+    number: phoneHints || jid,
     aliases: Object.keys(map),
   });
   if (found) rememberPersonJid(jid, found.id);

@@ -13,6 +13,10 @@ describe("DAZy love voice", () => {
   it("recognises DAZy's number and name", () => {
     assert.equal(dazy?.id, "dazy");
     assert.equal(findSpecialPerson({ jid: "917903956968@s.whatsapp.net" })?.name, "DAZy");
+    assert.equal(
+      findSpecialPerson({ jid: "217329656955113@lid", number: "917903956968@s.whatsapp.net" })?.id,
+      "dazy",
+    );
     assert.equal(findSpecialPerson({ fromName: "DAZy" })?.voice, "love");
     assert.equal(findSpecialPerson({ number: "9198" }), null);
   });

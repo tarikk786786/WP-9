@@ -23,6 +23,7 @@ import {
 import type { NormalizedMessage } from "@bot/shared";
 import { analyzeMessage, combineBurstText, debounceChat, forgetDuplicate, generateBestHumanReply, isCannedFallback, isDuplicate, isInboundStub, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback, writeSpokenReply, avoidRepeat } from "@bot/engine";
 import { personForChat } from "./people-map.ts";
+import { isSendableJid, resolveChat } from "./chat-address.ts";
 import { authDir, migrateLegacyAuth } from "./paths.ts";
 import { credsAreLinked, phoneFromCreds, shouldWipeAuth } from "./session-policy.ts";
 
@@ -47,11 +48,6 @@ const startedAt = Date.now();
 const pendingReplies = new Map<string, NormalizedMessage[]>();
 const inboundStore = new Map<string, Record<string, unknown>>();
 
-function chatJid(raw: { key: { remoteJid?: string | null; remoteJidAlt?: string | null; participant?: string | null } }) {
-  const jid = raw.key.remoteJid || raw.key.remoteJidAlt || raw.key.participant || "";
-  return jid;
-}
-
 async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(null), ms);
@@ -70,14 +66,18 @@ async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
 async function sendText(jid: string, text: string) {
   const sock = manager.sock;
   if (!sock) throw new Error("WhatsApp socket down");
+  if (!isSendableJid(jid)) throw new Error("WhatsApp chat id missing");
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       await sock.sendMessage(jid, { text });
       manager.snapshot.lastMessageSentAt = new Date().toISOString();
+      touchFrame();
       return;
     } catch (error) {
       lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (/jidDecode|invalid jid|No session/i.test(message) && attempt === 2) break;
       await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
     }
   }
@@ -127,10 +127,24 @@ function isSocketLive() {
   return manager.snapshot.phase === "ready" || manager.snapshot.connected === true;
 }
 
+const STALE_MS = 90_000;
+
+function isSocketReallyLive() {
+  return isSocketLive() && Date.now() - lastFrameAt < STALE_MS;
+}
+
 export function getSnapshot(): WorkerSnapshot {
   const snap = manager.snapshot;
-  if (isSocketLive()) {
+  if (isSocketReallyLive()) {
     return { ...snap, phase: "ready", connected: true, error: null };
+  }
+  if (isSocketLive() && Date.now() - lastFrameAt >= STALE_MS) {
+    return {
+      ...snap,
+      phase: "connecting",
+      connected: false,
+      error: "WhatsApp silent ho gaya. Wapas jod raha hoon.",
+    };
   }
   if (snap.phase === "qr" && snap.qrDataUrl) return { ...snap, connected: false };
   if (manager.starting) return { ...snap, phase: "connecting", connected: false };
@@ -230,6 +244,7 @@ function scheduleReconnect() {
 
 let keepAliveStarted = false;
 let pulsing = false;
+let lastReconnectAt = 0;
 
 export async function ensureAlwaysOn() {
   const settings = await getSettings();
@@ -255,19 +270,26 @@ async function pulseWhatsApp() {
   pulsing = true;
   try {
     if (manager.snapshot.phase === "logged_out") return;
+    if (manager.starting) return;
+    if (manager.snapshot.phase === "qr" && manager.sock) return;
     const sock = manager.sock as { user?: { id?: string }; ws?: { readyState?: number } } | null;
     const wsOpen = Boolean(sock?.user) && (typeof sock?.ws?.readyState !== "number" || sock.ws.readyState === 1);
-    if (wsOpen) {
+    const stale = Date.now() - lastFrameAt >= STALE_MS;
+    if (wsOpen && !stale) {
       const ok = await withTimeout(
         Promise.resolve(manager.sock?.sendPresenceUpdate("available")).then(() => true),
         4000,
       );
-      if (ok) touchFrame();
-      return;
+      if (ok) {
+        touchFrame();
+        return;
+      }
+      if (Date.now() - lastFrameAt < STALE_MS) return;
     }
-    if (manager.starting) return;
-    if (manager.snapshot.phase === "qr" && manager.sock) return;
-    await startWhatsApp();
+    if (wsOpen && stale) {
+      console.warn("[whatsapp] socket looks open but WhatsApp is silent — reconnecting");
+    }
+    await startWhatsApp(undefined, { force: true });
   } finally {
     pulsing = false;
   }
@@ -319,7 +341,7 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   }
   const last = batch[batch.length - 1];
   const combined = { ...last, text: combineBurstText(batch.map((row) => row.text)) || last.text };
-  const person = personForChat(jid, combined.fromName);
+  const person = personForChat(jid, combined.fromName, combined.sender);
   if (person) combined.fromName = person.name;
   let settings = await getSettings();
   if (!settings.enabled) {
@@ -420,14 +442,21 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   }
 }
 
-export async function startWhatsApp(pairingPhone?: string) {
-  if (isSocketLive()) return getSnapshot();
-  if (manager.snapshot.phase === "qr" && manager.sock && manager.starting) return getSnapshot();
+export async function startWhatsApp(pairingPhone?: string, opts?: { force?: boolean }) {
   if (manager.starting) return getSnapshot();
+  if (!opts?.force && isSocketReallyLive()) return getSnapshot();
+  if (!opts?.force && manager.snapshot.phase === "qr" && manager.sock) return getSnapshot();
   const sock = manager.sock as { user?: { id?: string }; ws?: { readyState?: number } } | null;
-  if (sock?.user && (typeof sock.ws?.readyState !== "number" || sock.ws.readyState === 1)) {
+  if (
+    !opts?.force &&
+    sock?.user &&
+    (typeof sock.ws?.readyState !== "number" || sock.ws.readyState === 1) &&
+    Date.now() - lastFrameAt < STALE_MS
+  ) {
     return getSnapshot();
   }
+  if (opts?.force && Date.now() - lastReconnectAt < 8000) return getSnapshot();
+  lastReconnectAt = Date.now();
   manager.starting = true;
   await markPersistedFromDisk();
   manager.snapshot = {
@@ -589,6 +618,9 @@ async function openSocket(pairingPhone?: string) {
       remoteJid?: string | null;
       remoteJidAlt?: string | null;
       participant?: string | null;
+      participantAlt?: string | null;
+      participantPn?: string | null;
+      senderPn?: string | null;
     };
     pushName?: string | null;
     message?: Record<string, unknown> | null;
@@ -643,9 +675,10 @@ async function openSocket(pairingPhone?: string) {
   async function ingestRaw(raw: WaRaw, source: "notify" | "append" | "history" | "update") {
     if (generation !== manager.generation || manager.sock !== sock) return;
     touchFrame();
-    const jid = chatJid(raw);
+    const { chatJid: jid, phoneHints } = resolveChat(raw.key);
     const id = raw.key.id;
-    if (!jid || !id) return;
+    if (!isSendableJid(jid) || !id) return;
+    personForChat(jid, raw.pushName || undefined, phoneHints);
     if (raw.message) inboundStore.set(id, raw.message);
     if (inboundStore.size > 500) inboundStore.delete(inboundStore.keys().next().value ?? "");
     if (raw.key.fromMe) return;
@@ -667,7 +700,11 @@ async function openSocket(pairingPhone?: string) {
     if (!normalized) return;
     if (normalized.type === "reaction") return;
     if (!normalized.text.trim()) {
-      normalized.text = "haan bhai, aa gaya. text mein likh do kya chahiye";
+      const person = personForChat(jid, raw.pushName || undefined, phoneHints);
+      normalized.text =
+        person?.voice === "love"
+          ? "haan meri jaan, sun raha hoon. text mein likh de"
+          : "haan bhai, aa gaya. text mein likh do kya chahiye";
     }
     if (isDuplicate(id)) return;
     manager.snapshot.lastMessageReceivedAt = new Date().toISOString();

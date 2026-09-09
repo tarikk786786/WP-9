@@ -35,6 +35,8 @@ let worker: ChildProcess | null = null;
 let tunnel: ChildProcess | null = null;
 let lastTunnelUrl = existsSync(tunnelUrlFile) ? readFileSync(tunnelUrlFile, "utf8").trim() : "";
 let stopping = false;
+let tunnelFails = 0;
+let syncingUrl = "";
 
 function cloudflaredBin() {
   const fromEnv = process.env.CLOUDFLARED_BIN?.trim();
@@ -62,7 +64,8 @@ async function workerHealthy() {
 }
 
 function startWorker() {
-  if (stopping || worker) return;
+  if (stopping || pidAlive(worker?.pid)) return;
+  worker = null;
   console.log("[live] starting WhatsApp worker");
   worker = spawn("npm", ["run", "worker"], {
     cwd: repoRoot,
@@ -78,22 +81,70 @@ function startWorker() {
   });
 }
 
+function pidAlive(pid?: number) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function rememberTunnelUrl(text: string) {
   const match = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
   if (!match) return;
   const url = match[0];
   if (url === lastTunnelUrl) return;
   lastTunnelUrl = url;
+  tunnelFails = 0;
   try {
     writeFileSync(tunnelUrlFile, `${url}\n`);
   } catch {
     /* ignore */
   }
   console.log("[live] public worker URL", url);
+  void syncPublicWorkerUrl(url);
+}
+
+function syncPublicWorkerUrl(url: string) {
+  if (!process.env.VERCEL_TOKEN || syncingUrl === url) return;
+  syncingUrl = url;
+  const child = spawn("bash", [path.join(repoRoot, "scripts", "sync-worker-url.sh"), url], {
+    cwd: repoRoot,
+    env: process.env,
+    stdio: "inherit",
+  });
+  child.on("exit", (code) => {
+    if (code !== 0) console.error("[live] Vercel worker URL sync failed", code);
+  });
+}
+
+async function publicTunnelHealthy() {
+  if (!lastTunnelUrl) return false;
+  try {
+    const res = await fetch(`${lastTunnelUrl.replace(/\/$/, "")}/health`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+function killTunnel() {
+  const current = tunnel;
+  tunnel = null;
+  try {
+    current?.kill("SIGTERM");
+  } catch {
+    /* ignore */
+  }
 }
 
 function startTunnel() {
-  if (stopping || tunnel) return;
+  if (stopping || pidAlive(tunnel?.pid)) return;
+  tunnel = null;
   const token = process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim();
   const bin = cloudflaredBin();
   const args = token
@@ -123,8 +174,26 @@ function startTunnel() {
 
 async function tick() {
   if (stopping) return;
+  if (!pidAlive(worker?.pid)) worker = null;
   if (!(await workerHealthy())) startWorker();
-  if (!tunnel && !stopping) startTunnel();
+  if (!pidAlive(tunnel?.pid)) {
+    tunnel = null;
+    startTunnel();
+    return;
+  }
+  const localOk = await workerHealthy();
+  if (!localOk) return;
+  const publicOk = await publicTunnelHealthy();
+  if (publicOk) {
+    tunnelFails = 0;
+    return;
+  }
+  tunnelFails += 1;
+  if (tunnelFails < 2) return;
+  console.error("[live] public tunnel dead while worker is up — restarting cloudflared");
+  tunnelFails = 0;
+  killTunnel();
+  startTunnel();
 }
 
 function shutdown() {
