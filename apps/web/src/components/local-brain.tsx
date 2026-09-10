@@ -21,11 +21,31 @@ export function LocalBrain({ initial }: { initial: LiveStatus }) {
   }
 
   useEffect(() => {
+    let active = true;
+    async function fetchLive() {
+      try {
+        const response = await fetch("/api/live");
+        if (response.ok && active) {
+          setLive((await response.json()) as LiveStatus);
+        }
+      } catch {
+        // ignore network error
+      }
+    }
+
     const timer = window.setInterval(() => {
-      void refresh();
+      void fetchLive();
     }, 15_000);
-    void refresh();
-    return () => window.clearInterval(timer);
+
+    const initialTimer = setTimeout(() => {
+      void fetchLive();
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      clearTimeout(initialTimer);
+    };
   }, []);
 
   const waLive = live.whatsapp.phase === "ready";
