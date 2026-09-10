@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const ConversationStatus = z.enum(["bot", "waiting_human", "human", "closed"]);
+export const ConversationStatus = z.enum(["bot", "waiting_human", "human", "paused", "closed"]);
 export type ConversationStatus = z.infer<typeof ConversationStatus>;
 
 export const MessageType = z.enum([

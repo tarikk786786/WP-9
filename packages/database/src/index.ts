@@ -23,7 +23,7 @@ export type Conversation = {
   id: string;
   user_id: string;
   chat_id: string;
-  status: "bot" | "waiting_human" | "human" | "closed";
+  status: "bot" | "waiting_human" | "human" | "paused" | "closed";
   assigned_agent_id: string | null;
   current_intent: string | null;
   ai_enabled: boolean;

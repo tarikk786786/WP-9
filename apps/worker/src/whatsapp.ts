@@ -369,10 +369,9 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   const combined = { ...last, text: combineBurstText(batch.map((row) => row.text)) || last.text };
   const person = personForChat(jid, combined.fromName, combined.sender);
   if (person) combined.fromName = person.name;
-  let settings = await getSettings();
+  const settings = await getSettings();
   if (!settings.enabled) {
-    settings = { ...settings, enabled: true, aiEnabled: true };
-    await saveSettings(settings);
+    return;
   }
   const rules = await getRules();
   const faqs = await getFaqs();
@@ -382,8 +381,8 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   });
   const convo = await upsertConversation(customer.id, jid);
   if (convo.status !== "bot") {
-    await setConversationStatus(convo.id, "bot");
-    convo.status = "bot";
+    // Authoritative human handoff: human, waiting_human, paused, closed must never auto-reply
+    return;
   }
   const history = await recentMessages(convo.id);
   const knowledge = await knowledgeSearch(combined.text);
@@ -435,11 +434,11 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
     settings,
     rules,
     faqs,
-    conversationStatus: "bot",
+    conversationStatus: convo.status,
     knowledgeHits: knowledge,
     aiReply: null,
   });
-  if (routed.action === "skip" && routed.intent === "group") return;
+  if (routed.action === "skip") return;
   const faqFacts = matchAllFaqs(combined.text, faqs).map((f) => `${f.question}: ${f.answer}`);
   const ruleFacts = matchAllRules(combined.text, rules)
     .filter((r) => !/agent|human/.test(r.triggerValue))

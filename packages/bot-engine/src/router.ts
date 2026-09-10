@@ -114,13 +114,16 @@ export function routeMessage(input: {
   settings: BotSettings;
   rules: AutomationRule[];
   faqs: Faq[];
-  conversationStatus: "bot" | "waiting_human" | "human" | "closed";
+  conversationStatus: "bot" | "waiting_human" | "human" | "paused" | "closed";
   knowledgeHits?: string[];
   aiReply?: string | null;
 }): BotDecision {
-  const { message, settings, rules, faqs, knowledgeHits, aiReply } = input;
+  const { message, settings, rules, faqs, conversationStatus, knowledgeHits, aiReply } = input;
   if (!settings.enabled) {
     return { action: "skip", text: "", source: "skip", intent: "disabled" };
+  }
+  if (conversationStatus !== "bot") {
+    return { action: "skip", text: "", source: "skip", intent: `status_${conversationStatus}` };
   }
   if (message.isGroup && !settings.replyToGroups) {
     return { action: "skip", text: "", source: "skip", intent: "group" };
