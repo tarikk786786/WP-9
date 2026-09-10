@@ -32,11 +32,13 @@ async function boot() {
   }
   booting = true;
   try {
-    child = spawn("npx", ["tsx", "src/index.ts"], {
+    const isWin = process.platform === "win32";
+    const exe = isWin ? "cmd.exe" : "npx";
+    const args = isWin ? ["/c", "npx", "tsx", "src/index.ts"] : ["tsx", "src/index.ts"];
+    child = spawn(exe, args, {
       cwd: workerRoot,
       stdio: "inherit",
       env: process.env,
-      shell: true,
     });
     console.log(`[keep] WhatsApp worker pid ${child.pid}`);
     child.on("exit", (code, signal) => {
@@ -57,9 +59,10 @@ async function healthTick() {
       whatsappConnection?: string;
       whatsapp?: { connected?: boolean; phase?: string };
     };
-    const ready = json.whatsapp?.connected === true || json.whatsappConnection === "ready";
-    const waitingScan = json.whatsappConnection === "qr" || json.whatsapp?.phase === "qr";
-    const connecting = json.whatsappConnection === "connecting" || json.whatsapp?.phase === "connecting";
+    const phase = (json.whatsapp?.phase || json.whatsappConnection || "").toLowerCase();
+    const ready = json.whatsapp?.connected === true || phase === "ready" || phase === "connected";
+    const waitingScan = phase.includes("qr");
+    const connecting = phase.includes("connect");
     if (ready || waitingScan) {
       notReadySince = 0;
       return;
