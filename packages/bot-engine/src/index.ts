@@ -19,3 +19,7 @@ export { readMessage, splitHumanAsks, inferMood } from "./orchestrate/read.ts";
 export { debounceChat, combineBurstText } from "./orchestrate/debounce.ts";
 export { avoidRepeat, isCannedFallback, isHoroscopeAsk, isBareCheckin, writeSpokenReply } from "./orchestrate/spoken.ts";
 export { stripModelNoise } from "./orchestrate/compose.ts";
+export * from "./orchestrate/state-machine.ts";
+export * from "./orchestrate/circuit-breaker.ts";
+export * from "./orchestrate/outbox.ts";
+export * from "./tools/index.ts";

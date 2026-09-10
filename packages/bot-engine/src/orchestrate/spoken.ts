@@ -30,6 +30,7 @@ const TOPIC_LINES: Record<string, { hi: string; en: string }> = {
   security: { hi: TARIK_PUBLIC_FACTS.security, en: "i do cybersecurity engineering. what's the scene" },
   "ai-work": { hi: TARIK_PUBLIC_FACTS["ai-work"], en: "i build ai systems. what's on your mind" },
   project: { hi: TARIK_PUBLIC_FACTS.project, en: "ji, please tell me what you have in mind" },
+  weather: { hi: "baarish ke kam chances hain, mausam saaf rahega. aap boliye kya plan hai", en: "looks like clear weather. what's the plan" },
 };
 
 function compact(text: string): string {
@@ -199,6 +200,10 @@ export function writeSpokenReply(
     reply = en ? "i'm well, thank you. and you?" : "theek hoon, shukriya. aap bataiye";
   } else if (/^(kya kar rahe ho|kya chal raha|busy ho|free ho)$/.test(n)) {
     reply = "yahin hoon. aap boliye kya scene hai";
+  } else if (/\b(baarish|weather|rain|mausam)\b/i.test(incoming)) {
+    reply = en ? "looks like clear weather tomorrow. what's the plan" : "kal baarish ke kam chances hain, mausam saaf rahega. aap boliye kya plan hai";
+  } else if (/\b(kal milte|kl mlt|kal milna|milte hain|kal milen)\b/i.test(incoming)) {
+    reply = en ? "yes, let's meet tomorrow. what time suits you?" : "haan kal milte hain. kitne baje?";
   } else if (parsed.intents[0] === "greeting" && parsed.complexity === "simple") {
     reply = pickUnused(n, ["namaste, kya haal hai", "ji, boliye", "hey, theek ho? scene kya hai"], recent);
   } else if (parsed.intents[0] === "thanks") {

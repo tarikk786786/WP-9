@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/engine.test.ts src/orchestrate.test.ts src/people.test.ts",
+    "test": "tsx --test src/engine.test.ts src/orchestrate.test.ts src/people.test.ts src/tools.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

@@ -44,7 +44,7 @@ export const WorkerHealth = z.object({
   worker: z.literal("ok"),
   uptimeMs: z.number(),
   whatsapp: z.object({
-    phase: z.enum(["idle", "qr", "connecting", "ready", "logged_out"]),
+    phase: z.string(),
     connected: z.boolean(),
     phone: z.string().nullable(),
     qrDataUrl: z.string().nullable(),
@@ -55,6 +55,9 @@ export const WorkerHealth = z.object({
     lastMessageReceivedAt: z.string().nullable(),
     lastMessageSentAt: z.string().nullable(),
   }),
+  stateMachine: z.record(z.string(), z.unknown()).optional(),
+  circuitBreakers: z.record(z.string(), z.unknown()).optional(),
+  outbox: z.record(z.string(), z.unknown()).optional(),
 });
 export type WorkerHealth = z.infer<typeof WorkerHealth>;
 

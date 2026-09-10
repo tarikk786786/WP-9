@@ -21,7 +21,28 @@ import {
   wasProcessed,
 } from "@bot/database";
 import type { NormalizedMessage } from "@bot/shared";
-import { analyzeMessage, combineBurstText, debounceChat, forgetDuplicate, generateBestHumanReply, isCannedFallback, isDuplicate, isInboundStub, matchAllFaqs, matchAllRules, normalizeIncoming, routeMessage, writeCompleteFallback, writeSpokenReply, avoidRepeat } from "@bot/engine";
+import {
+  analyzeMessage,
+  combineBurstText,
+  debounceChat,
+  forgetDuplicate,
+  generateBestHumanReply,
+  isCannedFallback,
+  isDuplicate,
+  isInboundStub,
+  matchAllFaqs,
+  matchAllRules,
+  normalizeIncoming,
+  routeMessage,
+  writeCompleteFallback,
+  writeSpokenReply,
+  avoidRepeat,
+  connectionStateMachine,
+  aiCircuitBreaker,
+  whatsappCircuitBreaker,
+  messageOutbox,
+  shouldReplyTool,
+} from "@bot/engine";
 import { personForChat } from "./people-map.ts";
 import { isSendableJid, resolveChat } from "./chat-address.ts";
 import { authDir, migrateLegacyAuth } from "./paths.ts";
@@ -256,6 +277,11 @@ export async function ensureAlwaysOn() {
     businessHours: { ...settings.businessHours, enabled: false },
   });
   migrateLegacyAuth();
+  messageOutbox.setSender(async (destJid, outText) => {
+    await whatsappCircuitBreaker.execute(async () => {
+      await sendText(destJid, outText);
+    });
+  });
   await markPersistedFromDisk();
   await startWhatsApp();
   if (keepAliveStarted) return;
@@ -373,6 +399,37 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
     isFirstMessage: inboundCount <= batch.length,
     inboundCount,
   });
+  const decision = await shouldReplyTool.execute(
+    {
+      text: combined.text,
+      isGroup: Boolean(combined.isGroup),
+      fromMe: false,
+    },
+    {},
+  );
+  if (decision.data?.decision === "IGNORE") return;
+  if (decision.data?.decision === "REACT" && decision.data.emoji) {
+    try {
+      await manager.sock?.sendMessage(jid, {
+        react: {
+          text: decision.data.emoji,
+          key: {
+            id: combined.whatsappMessageId,
+            remoteJid: jid,
+            fromMe: false,
+          },
+        },
+      });
+      touchFrame();
+      return;
+    } catch {
+      // Fall through to normal text reply
+    }
+  }
+  if (decision.data?.decision === "ESCALATE") {
+    await setConversationStatus(convo.id, "waiting_human");
+  }
+
   const routed = routeMessage({
     message: combined,
     settings,
@@ -422,7 +479,12 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
   if (!text) text = spoken || "haan, sun raha hoon";
   pendingReplies.set(jid, batch);
   try {
-    await sendText(jid, text);
+    messageOutbox.enqueue(jid, text, {
+      whatsappMessageId: combined.whatsappMessageId,
+      conversationId: convo.id,
+      aiGenerated: Boolean(ai),
+      intent: routed.intent ?? routed.source,
+    });
     pendingReplies.delete(jid);
     await addMessage({
       conversation_id: convo.id,
@@ -547,6 +609,7 @@ async function openSocket(pairingPhone?: string) {
     if (generation !== manager.generation || manager.sock !== sock) return;
     const { connection, lastDisconnect, qr } = update;
     if (qr && manager.snapshot.phase !== "ready") {
+      connectionStateMachine.transition("QR_REQUIRED", "QR code presented for scanning");
       const saved = manager.snapshot.persisted || Boolean(state.creds.registered);
       if (!saved) {
         manager.snapshot = {
@@ -562,6 +625,8 @@ async function openSocket(pairingPhone?: string) {
       const phone = sock.user?.id?.split(":")[0] ?? sock.user?.id ?? null;
       manager.reconnectDelay = 1500;
       await persistAuthDir();
+      connectionStateMachine.transition("CONNECTED", `Linked ${phone ?? ""}`);
+      whatsappCircuitBreaker.recordSuccess();
       manager.snapshot = {
         ...manager.snapshot,
         phase: "ready",
@@ -590,6 +655,7 @@ async function openSocket(pairingPhone?: string) {
       if (manager.sock === sock) manager.sock = null;
       const dead = shouldWipeAuth(statusCode);
       if (dead) {
+        connectionStateMachine.transition("LOGGED_OUT", "Session ended (401)");
         await rm(AUTH_DIR, { recursive: true, force: true });
         await clearAuthFiles();
         manager.snapshot = {
@@ -601,6 +667,8 @@ async function openSocket(pairingPhone?: string) {
         scheduleReconnect();
         return;
       }
+      connectionStateMachine.transition("RECONNECTING", "Connection closed, reconnecting");
+      whatsappCircuitBreaker.recordFailure();
       manager.snapshot.connected = false;
       manager.snapshot.phase = manager.snapshot.persisted ? "connecting" : "connecting";
       manager.snapshot.qrDataUrl = null;

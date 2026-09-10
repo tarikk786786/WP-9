@@ -17,6 +17,12 @@ const TYPO_FIX: Array<[RegExp, string]> = [
   [/\b(pric|prce|prize)\b/gi, "price"],
   [/\b(budjet|budjett)\b/gi, "budget"],
   [/\b(tommorow|tomorow)\b/gi, "tomorrow"],
+  [/\bkl\b/gi, "kal"],
+  [/\bmlt\b/gi, "milte"],
+  [/\byr\b/gi, "yaar"],
+  [/\bkyaaa+\b/gi, "kya"],
+  [/\bbhaiii+\b/gi, "bhai"],
+  [/\bbarish\b/gi, "baarish"],
 ];
 
 const ASK_LABELS: Array<{ pattern: RegExp; ask: string }> = [
@@ -29,7 +35,7 @@ const ASK_LABELS: Array<{ pattern: RegExp; ask: string }> = [
   { pattern: /\b(timeline|kitne din|how long|deadline|kab tak)\b/i, ask: "kitna time lagta hai" },
   { pattern: /\b(email|gmail|contact|number|instagram|github)\b/i, ask: "contact kahan hai" },
   { pattern: /\b(resume|cv|degree|ceh|chfi|oscp|credential|certificate)\b/i, ask: "cv/credentials kahan hain" },
-  { pattern: /\b(call|zoom|meet|meeting|milna|baat kar)\b/i, ask: "call/meet kab ho sakta hai" },
+  { pattern: /\b(call|zoom|meet|meeting|milna|milte|baat kar)\b/i, ask: "call/meet kab ho sakta hai" },
   { pattern: /\b(hours?|timing|kitne baje|timezone|ist|24 hours?)\b/i, ask: "kab tak yahin rehta hoon" },
   { pattern: /\b(based|address|kidhar ho|kahan se kaam|where are you|bhubaneswar)\b/i, ask: "kahan se kaam karta hoon" },
   { pattern: /\b(who are you|kaun ho|your name|aap kaun|tum kaun)\b/i, ask: "main kaun hoon" },
@@ -37,6 +43,7 @@ const ASK_LABELS: Array<{ pattern: RegExp; ask: string }> = [
   { pattern: /\b(forensic|evidence|malware|incident)\b/i, ask: "forensics pe kaam hota hai kya" },
   { pattern: /\b(cyber|security|audit|pentest)\b/i, ask: "security pe kaam hota hai kya" },
   { pattern: /\b(project|banana hai|website chahiye|site chahiye|build|mvp)\b/i, ask: "kya banana soch rahe ho" },
+  { pattern: /\b(weather|baarish|rain|mausam)\b/i, ask: "mausam kaisa rahega" },
 ];
 
 export function normalizeHumanText(text: string): string {

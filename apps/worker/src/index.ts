@@ -19,6 +19,7 @@ import {
 import { defaultBotSettings, SendMessageBody } from "@bot/shared";
 import { isAuthorizedWorkerRequest } from "./auth.ts";
 import { ensureAlwaysOn, getSnapshot, logoutWhatsApp, sendWhatsApp, startWhatsApp, uptimeMs, exportAuthArchive, importAuthArchive } from "./whatsapp.ts";
+import { connectionStateMachine, aiCircuitBreaker, whatsappCircuitBreaker, messageOutbox } from "@bot/engine";
 
 function keepProcessAlive(kind: string, error: unknown) {
   const text = error instanceof Error ? error.stack || error.message : String(error);
@@ -92,12 +93,12 @@ const server = createServer(async (req, res) => {
         status: snap.connected ? "healthy" : "degraded",
         uptimeMs: uptimeMs(),
         supabase: usingSupabase(),
-        whatsappConnection: snap.phase,
+        whatsappConnection: connectionStateMachine.currentState || snap.phase,
         lastSuccessfulConnection: snap.lastConnectedAt,
         lastMessageReceived: snap.lastMessageReceivedAt,
         lastMessageSent: snap.lastMessageSentAt,
         whatsapp: {
-          phase: snap.phase,
+          phase: connectionStateMachine.currentState || snap.phase,
           connected: snap.connected,
           phone: snap.phone,
           persisted: snap.persisted,
@@ -106,6 +107,12 @@ const server = createServer(async (req, res) => {
           lastMessageReceivedAt: snap.lastMessageReceivedAt,
           lastMessageSentAt: snap.lastMessageSentAt,
         },
+        stateMachine: connectionStateMachine.getSnapshot(),
+        circuitBreakers: {
+          ai: aiCircuitBreaker.getSnapshot(),
+          whatsapp: whatsappCircuitBreaker.getSnapshot(),
+        },
+        outbox: messageOutbox.getSnapshot(),
       });
       return;
     }
@@ -115,10 +122,31 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === "/status" && req.method === "GET") {
       json(res, 200, {
-        health: { worker: "ok", uptimeMs: uptimeMs(), whatsapp: getSnapshot() },
+        health: {
+          worker: "ok",
+          uptimeMs: uptimeMs(),
+          whatsapp: getSnapshot(),
+          stateMachine: connectionStateMachine.getSnapshot(),
+          circuitBreakers: {
+            ai: aiCircuitBreaker.getSnapshot(),
+            whatsapp: whatsappCircuitBreaker.getSnapshot(),
+          },
+          outbox: messageOutbox.getSnapshot(),
+        },
         analytics: analyticsSnapshot(),
         settings: await getSettings(),
       });
+      return;
+    }
+    if (url.pathname === "/outbox/retry" && req.method === "POST") {
+      const retried = messageOutbox.retryDeadLetters();
+      json(res, 200, { retried, outbox: messageOutbox.getSnapshot() });
+      return;
+    }
+    if (url.pathname === "/circuit/reset" && req.method === "POST") {
+      aiCircuitBreaker.reset();
+      whatsappCircuitBreaker.reset();
+      json(res, 200, { reset: true });
       return;
     }
     if (rateLimited(ip)) {

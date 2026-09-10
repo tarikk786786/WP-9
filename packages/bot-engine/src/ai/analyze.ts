@@ -21,6 +21,7 @@ export type MessageIntent =
   | "portfolio"
   | "urgent"
   | "project"
+  | "weather"
   | "contact"
   | "credentials"
   | "smalltalk"
@@ -56,7 +57,7 @@ const INTENT_PATTERNS: Array<{ intent: MessageIntent; pattern: RegExp }> = [
   { intent: "timeline", pattern: /\b(timeline|kitne din|how long|deadline|delivery|turnaround|kab tak)\b/i },
   { intent: "contact", pattern: /\b(email|gmail|contact|number|phone no|phone number|instagram|github|pgp)\b/i },
   { intent: "credentials", pattern: /\b(resume|cv|degree|degrees|b\.?sc|m\.?sc|mca|m\.?tech|ceh|chfi|oscp|certificat|credential|qualification)\b/i },
-  { intent: "meeting", pattern: /\b(call|zoom|meet|meeting|video|milna|baat kar)\b/i },
+  { intent: "meeting", pattern: /\b(call|zoom|meet|meeting|video|milna|milte|baat kar)\b/i },
   { intent: "hours", pattern: /\b(hours?|timing|open|close|kitne baje|office time|timezone|ist|24 hours?|response time)\b/i },
   { intent: "location", pattern: /\b(based (in|out of)?|address|kidhar ho|kahan se (kaam|ho)|where (are you|do you (live|work|sit))|bhubaneswar)\b/i },
   { intent: "forensics", pattern: /\b(forensic|evidence|malware|incident)\b/i },
@@ -64,6 +65,7 @@ const INTENT_PATTERNS: Array<{ intent: MessageIntent; pattern: RegExp }> = [
   { intent: "ai-work", pattern: /\b(ai|llm|rag|automation|saas|gpt)\b/i },
   { intent: "urgent", pattern: /\b(urgent|jaldi|asap|emergency|abhi)\b/i },
   { intent: "project", pattern: /\b(project|banana hai|website chahiye|site chahiye|build|app|product|mvp)\b/i },
+  { intent: "weather", pattern: /\b(weather|baarish|rain|mausam|temperature|garmi|sardi)\b/i },
 ];
 
 export function isAskingIfMachine(text: string) {
