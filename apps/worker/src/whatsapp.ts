@@ -15,6 +15,7 @@ import {
   recentMessages,
   saveAuthFiles,
   saveSettings,
+  saveWorkerHeartbeat,
   setConversationStatus,
   upsertConversation,
   upsertCustomer,
@@ -164,7 +165,7 @@ export function getSnapshot(): WorkerSnapshot {
       ...snap,
       phase: "connecting",
       connected: false,
-      error: "WhatsApp silent ho gaya. Wapas jod raha hoon.",
+      error: "WhatsApp connection went silent. Reconnecting...",
     };
   }
   if (snap.phase === "qr" && snap.qrDataUrl) return { ...snap, connected: false };
@@ -175,6 +176,34 @@ export function getSnapshot(): WorkerSnapshot {
     phase: snap.persisted ? "connecting" : snap.phase === "logged_out" ? "logged_out" : snap.phase,
   };
 }
+
+export async function syncWorkerHeartbeat() {
+  try {
+    const snap = getSnapshot();
+    await saveWorkerHeartbeat({
+      phase: snap.phase,
+      connected: snap.connected,
+      phone: snap.phone ?? null,
+      pairingCode: snap.pairingCode ?? null,
+      qrDataUrl: snap.qrDataUrl ?? null,
+      error: snap.error ?? null,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch {
+    /* heartbeat failure is non-blocking */
+  }
+}
+
+// Background sync heartbeat every 8 seconds
+if (typeof setInterval !== "undefined") {
+  const hbTimer = setInterval(() => {
+    void syncWorkerHeartbeat();
+  }, 8_000);
+  if (hbTimer && typeof hbTimer.unref === "function") {
+    hbTimer.unref();
+  }
+}
+
 
 export async function exportAuthArchive() {
   await persistAuthDir();
@@ -475,7 +504,7 @@ async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
       : spoken);
   if (!text || isCannedFallback(text)) text = spoken;
   text = avoidRepeat(text, recent);
-  if (!text) text = spoken || "haan, sun raha hoon";
+  if (!text) text = spoken || "I am here, how can I help you?";
   pendingReplies.set(jid, batch);
   try {
     messageOutbox.enqueue(jid, text, {
@@ -617,6 +646,7 @@ async function openSocket(pairingPhone?: string) {
           qrDataUrl: await QRCode.toDataURL(qr, { width: 280, margin: 1 }),
           error: null,
         };
+        void syncWorkerHeartbeat();
       }
     }
     if (connection === "open") {
@@ -637,6 +667,7 @@ async function openSocket(pairingPhone?: string) {
         error: null,
         lastConnectedAt: new Date().toISOString(),
       };
+      void syncWorkerHeartbeat();
       await addLog("info", "whatsapp", `Linked ${phone ?? ""}`.trim());
       try {
         await sock.sendPresenceUpdate("available");
@@ -660,9 +691,10 @@ async function openSocket(pairingPhone?: string) {
         manager.snapshot = {
           ...empty(),
           phase: "connecting",
-          error: "Pehle wala QR/login band ho gaya. Naya QR aa raha hai.",
+          error: "Previous session closed. Generating new connection...",
         };
         manager.reconnectDelay = 800;
+        void syncWorkerHeartbeat();
         scheduleReconnect();
         return;
       }
@@ -672,8 +704,9 @@ async function openSocket(pairingPhone?: string) {
       manager.snapshot.phase = manager.snapshot.persisted ? "connecting" : "connecting";
       manager.snapshot.qrDataUrl = null;
       manager.snapshot.error = manager.snapshot.persisted
-        ? "WhatsApp drop ho gaya. Wapas jod raha hoon."
-        : "QR expire / drop. Naya QR aa raha hai.";
+        ? "WhatsApp connection dropped. Reconnecting..."
+        : "QR expired or connection dropped. Generating new QR code...";
+      void syncWorkerHeartbeat();
       scheduleReconnect();
     }
   });
@@ -770,8 +803,8 @@ async function openSocket(pairingPhone?: string) {
       const person = personForChat(jid, raw.pushName || undefined, phoneHints);
       normalized.text =
         person?.voice === "love"
-          ? "haan meri jaan, sun raha hoon. text mein likh dijiye"
-          : "aa gaya. kripya text mein likh dena kya chahiye";
+          ? "Received. Please let me know what you need."
+          : "Received. Please describe what you need in text.";
     }
     if (isDuplicate(id)) return;
     manager.snapshot.lastMessageReceivedAt = new Date().toISOString();

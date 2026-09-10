@@ -56,10 +56,9 @@ export function LocalBrain({ initial }: { initial: LiveStatus }) {
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle>WhatsApp always on</CardTitle>
+            <CardTitle>WhatsApp Continuous Service</CardTitle>
             <CardDescription>
-              Worker khud WhatsApp jodta rehta hai. Drop ho to wapas
-              connect karta hai, aur har inbound ka jawab jata hai.
+              The background worker maintains continuous WhatsApp connection with automatic reconnection and reliable message processing.
             </CardDescription>
           </div>
           <Badge className="gap-1.5" variant={waLive ? "default" : "secondary"}>
@@ -84,7 +83,7 @@ export function LocalBrain({ initial }: { initial: LiveStatus }) {
               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                 {endpoint.online && endpoint.models.length
                   ? endpoint.models.slice(0, 3).join(", ")
-                  : "Soft Hinglish voice · live now"}
+                  : "Natural conversational AI · live now"}
               </p>
             </button>
           ))}

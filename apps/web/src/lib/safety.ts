@@ -19,7 +19,7 @@ export function inspectIncoming(text: string): SafetyVerdict {
   if (JAILBREAK.test(body)) {
     return {
       action: "safe-reply",
-      text: "normal baat karte hain. kya kaam hai",
+      text: "Please describe your inquiry directly.",
       reason: "Blocked a prompt-injection attempt.",
     };
   }
@@ -32,14 +32,14 @@ export function inspectIncoming(text: string): SafetyVerdict {
   if (MONEY_HINT.test(body)) {
     return {
       action: "safe-reply",
-      text: "yeh yahan nahi hota. asli baat ho to seedha likh",
+      text: "Financial transactions cannot be processed here. Please describe your project inquiry directly.",
       reason: "Blocked a money-transfer request.",
     };
   }
   if (SECRET_HINT.test(body)) {
     return {
       action: "safe-reply",
-      text: "password yahan mat bhej. call pe baat karte hain",
+      text: "Please do not share sensitive credentials or passwords here.",
       reason: "Blocked a secrets request.",
     };
   }

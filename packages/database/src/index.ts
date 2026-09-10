@@ -479,3 +479,55 @@ export function analyticsSnapshot() {
     errors: memory.logs.filter((l) => l.level === "error").length,
   };
 }
+
+export type WorkerHeartbeat = {
+  phase: string;
+  connected: boolean;
+  phone: string | null;
+  pairingCode: string | null;
+  qrDataUrl: string | null;
+  error: string | null;
+  updatedAt: string;
+};
+
+export async function saveWorkerHeartbeat(heartbeat: WorkerHeartbeat) {
+  const jsonStr = JSON.stringify(heartbeat);
+  memory.authFiles["__worker_heartbeat.json"] = jsonStr;
+  const db = supabase();
+  if (!db) return;
+  try {
+    await db.from("baileys_auth").upsert(
+      { filename: "__worker_heartbeat.json", data: jsonStr },
+      { onConflict: "filename" },
+    );
+  } catch (err) {
+    console.error("[database] saveWorkerHeartbeat error:", err);
+  }
+}
+
+export async function loadWorkerHeartbeat(): Promise<WorkerHeartbeat | null> {
+  const db = supabase();
+  if (db) {
+    try {
+      const { data, error } = await db
+        .from("baileys_auth")
+        .select("data")
+        .eq("filename", "__worker_heartbeat.json")
+        .maybeSingle();
+      if (!error && data?.data) {
+        return JSON.parse(data.data) as WorkerHeartbeat;
+      }
+    } catch {
+      /* fallback */
+    }
+  }
+  if (memory.authFiles["__worker_heartbeat.json"]) {
+    try {
+      return JSON.parse(memory.authFiles["__worker_heartbeat.json"]) as WorkerHeartbeat;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+

@@ -1,3 +1,4 @@
+import { loadWorkerHeartbeat } from "@bot/database";
 import { workerFetch, workerHealth, workerLooksLocal } from "@/lib/worker-client";
 import type { ScanSnapshot } from "@/lib/types";
 
@@ -9,8 +10,8 @@ function emptySnapshot(): ScanSnapshot {
     qrDataUrl: null,
     phone: null,
     error: onVercel && localUrl
-      ? "Vercel localhost worker tak nahi pahunchta. WORKER_API_URL pe public worker URL do."
-      : "Worker offline. Run npm run worker.",
+      ? "Vercel cannot reach a localhost worker directly. Set WORKER_API_URL to your public tunnel or worker host URL."
+      : "Worker is offline. Run 'npm run worker' to start.",
     persisted: false,
     savedAt: null,
     serverless: onVercel,
@@ -53,6 +54,26 @@ export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
       pairingCode,
     };
   } catch {
+    try {
+      const hb = await loadWorkerHeartbeat();
+      if (hb) {
+        const ageMs = Date.now() - new Date(hb.updatedAt).getTime();
+        if (ageMs < 60_000) {
+          return {
+            phase: hb.connected ? "ready" : ((hb.phase as ScanSnapshot["phase"]) || "idle"),
+            qrDataUrl: hb.qrDataUrl,
+            phone: hb.phone,
+            error: hb.error,
+            persisted: Boolean(hb.connected || hb.phase === "ready"),
+            savedAt: hb.updatedAt,
+            serverless: Boolean(process.env.VERCEL),
+            pairingCode: hb.pairingCode,
+          };
+        }
+      }
+    } catch {
+      /* fallback to empty */
+    }
     return emptySnapshot();
   }
 }

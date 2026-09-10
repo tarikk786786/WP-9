@@ -16,6 +16,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspace=web && npm run build --workspace=worker",
+    "tunnel": "node scripts/tunnel.js",
     "tools": "bash scripts/install-tools.sh"
   }
 }

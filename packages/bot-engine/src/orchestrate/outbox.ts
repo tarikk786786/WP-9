@@ -27,6 +27,9 @@ export class OutboxQueue {
     this.timer = setInterval(() => {
       void this.processQueue();
     }, 2500);
+    if (this.timer && typeof this.timer.unref === "function") {
+      this.timer.unref();
+    }
   }
 
   public setSender(sender: OutboxSender) {

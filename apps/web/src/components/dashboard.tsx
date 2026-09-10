@@ -168,18 +168,17 @@ export function Dashboard({ initial }: { initial: DeskData }) {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium tracking-[0.18em] text-primary uppercase">
-              Main Tarik hoon · always live
+              Tarik Islam · Always Online
             </p>
             <h1 className="font-heading mt-1 text-2xl font-semibold tracking-tight">
-              Mera WhatsApp, meri awaaz
+              WhatsApp AI Agent Platform
             </h1>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Replies first person — main khud likh raha hoon, kisi ke behalf pe nahi.
-              Facts{" "}
+              Authentic first-person assistant grounded in verified facts from{" "}
               <a className="underline" href="https://tarikislam.in" target="_blank" rel="noreferrer">
                 tarikislam.in
-              </a>{" "}
-              se. Voice, language, hours, keywords — sab customize.
+              </a>
+              . Fully customizable voice, language, rules, business hours, and knowledge.
             </p>
           </div>
           <Badge variant={status.configured ? "default" : "secondary"} className="w-fit">
@@ -379,31 +378,31 @@ export function Dashboard({ initial }: { initial: DeskData }) {
                   />
                   <ToggleRow
                     title="Local models"
-                    hint="Ollama / Flan, phir meri Hinglish voice."
+                    hint="Local fallback models before voice generation."
                     checked={rules.useLocalLlm}
                     onChange={(checked) => setRules({ ...rules, useLocalLlm: checked })}
                   />
                   <ToggleRow
                     title="Soft emoji"
-                    hint="Ek chhota smile, zyada nahi."
+                    hint="Subtle emoji usage, kept professional."
                     checked={rules.emoji}
                     onChange={(checked) => setRules({ ...rules, emoji: checked })}
                   />
                   <ToggleRow
                     title="Typing indicator"
-                    hint="Pehle composing, phir reply."
+                    hint="Show composing indicator before sending reply."
                     checked={rules.showTyping}
                     onChange={(checked) => setRules({ ...rules, showTyping: checked })}
                   />
                   <ToggleRow
                     title="Reply to photos / voice / files"
-                    hint="Main dekh raha hoon, quietly."
+                    hint="Acknowledge incoming photos, voice notes, and media."
                     checked={rules.replyToMedia}
                     onChange={(checked) => setRules({ ...rules, replyToMedia: checked })}
                   />
                   <ToggleRow
                     title="Reply in groups"
-                    hint="Off by default — groups messy hote hain."
+                    hint="Disabled by default to avoid group noise."
                     checked={rules.replyToGroups}
                     onChange={(checked) => setRules({ ...rules, replyToGroups: checked })}
                   />

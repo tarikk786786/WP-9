@@ -1,3 +1,4 @@
+import { loadWorkerHeartbeat } from "@bot/database";
 import { workerBase, workerLooksLocal } from "@/lib/worker-client";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,32 @@ async function proxyStream(request: Request) {
       body: request.method === "POST" ? body || "{}" : undefined,
     });
     if (!response.ok || !response.body) {
+      try {
+        const hb = await loadWorkerHeartbeat();
+        if (hb && Date.now() - new Date(hb.updatedAt).getTime() < 60_000) {
+          return new Response(
+            `data: ${JSON.stringify({
+              snapshot: {
+                phase: hb.connected ? "ready" : hb.phase || "idle",
+                qrDataUrl: hb.qrDataUrl,
+                phone: hb.phone,
+                pairingCode: hb.pairingCode,
+                persisted: Boolean(hb.connected || hb.phase === "ready"),
+                error: hb.error,
+              },
+            })}\n\n`,
+            {
+              status: 200,
+              headers: {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+              },
+            },
+          );
+        }
+      } catch {
+        /* fallback */
+      }
       const detail = await response.text().catch(() => "");
       return new Response(
         `data: ${JSON.stringify({
@@ -41,7 +68,7 @@ async function proxyStream(request: Request) {
             pairingCode: null,
             persisted: false,
             error:
-              "WhatsApp worker band hai. Vercel pe QR nahi chalta — worker URL set karo (WORKER_API_URL).",
+              "WhatsApp worker is unavailable. Please verify the worker service is running and WORKER_API_URL is configured.",
             detail: detail.slice(0, 200),
           },
         })}\n\n`,
@@ -62,6 +89,32 @@ async function proxyStream(request: Request) {
       },
     });
   } catch {
+    try {
+      const hb = await loadWorkerHeartbeat();
+      if (hb && Date.now() - new Date(hb.updatedAt).getTime() < 60_000) {
+        return new Response(
+          `data: ${JSON.stringify({
+            snapshot: {
+              phase: hb.connected ? "ready" : hb.phase || "idle",
+              qrDataUrl: hb.qrDataUrl,
+              phone: hb.phone,
+              pairingCode: hb.pairingCode,
+              persisted: Boolean(hb.connected || hb.phase === "ready"),
+              error: hb.error,
+            },
+          })}\n\n`,
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+            },
+          },
+        );
+      }
+    } catch {
+      /* fallback */
+    }
     const local = workerLooksLocal();
     const onVercel = Boolean(process.env.VERCEL);
     return new Response(
@@ -73,10 +126,10 @@ async function proxyStream(request: Request) {
           pairingCode: null,
           persisted: false,
           error: onVercel && local
-            ? "Vercel is pointing WORKER_API_URL at localhost. Set a public https worker URL."
+            ? "Vercel cannot reach a localhost worker directly. Set WORKER_API_URL to your public tunnel or worker host URL."
             : onVercel
-              ? "Worker URL reach nahi ho raha. Worker process aur tunnel/host online rakho."
-              : "Worker offline hai. npm run worker chalao.",
+              ? "Worker URL unreachable. Keep the worker process and tunnel/host online."
+              : "Worker is offline. Run 'npm run worker' to start.",
         },
       })}\n\n`,
       {

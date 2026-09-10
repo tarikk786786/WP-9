@@ -110,36 +110,36 @@ export const defaultBotSettings = (): BotSettings => ({
   aiEnabled: true,
   faqEnabled: true,
   welcomeEnabled: true,
-  defaultLanguage: "hinglish",
-  welcomeMessage: "haan, kya haal hai",
-  fallbackMessage: "dekh liya. bolo",
-  humanHandoffMessage: "theek, thoda wait, dekh ke likhta hoon",
+  defaultLanguage: "english",
+  welcomeMessage: "Hello! How can I help you today?",
+  fallbackMessage: "Received your message. How can I help you?",
+  humanHandoffMessage: "Sure, transferring you to a human agent. Please hold on.",
   timezone: "Asia/Kolkata",
   businessHours: {
     enabled: false,
     days: [1, 2, 3, 4, 5],
     open: "09:00",
     close: "18:00",
-    afterHoursMessage: "thoda late ho gaya mere side. subah dekh ke likhta hoon",
+    afterHoursMessage: "Thanks for reaching out! We are currently outside of business hours and will get back to you shortly.",
   },
   replyToGroups: false,
   replyToMedia: true,
 });
 
 export const defaultAutomationRules = (): AutomationRule[] => [
-  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "haan, kya haal hai", priority: 10, enabled: true },
-  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "haan, bolo", priority: 10, enabled: true },
-  { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "rate andaz se nahi bolta", priority: 20, enabled: true },
-  { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "ist. aksar din mein yahin, avg 24 ghante ke andar", priority: 20, enabled: true },
-  { id: "human", name: "Human", triggerType: "keyword", triggerValue: "talk to a human", response: "theek, thoda wait, dekh ke likhta hoon", priority: 5, enabled: true },
+  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "Hello! How can I help you today?", priority: 10, enabled: true },
+  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "Hello! How can I help you today?", priority: 10, enabled: true },
+  { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "Pricing depends on project scope. Share your requirements and I'll send a quote.", priority: 20, enabled: true },
+  { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "Operating in IST hours (typically 9 AM - 6 PM), responding within 24 hours.", priority: 20, enabled: true },
+  { id: "human", name: "Human", triggerType: "keyword", triggerValue: "talk to a human", response: "Sure, transferring you to a human agent. Please hold on.", priority: 5, enabled: true },
 ];
 
 export const defaultFaqs = (): Faq[] => [
   {
     id: "who",
     question: "Who are you?",
-    answer: "tarik hoon. bolo",
-    keywords: ["who are you", "kaun ho", "your name"],
+    answer: "I'm Tarik Islam. How can I help you today?",
+    keywords: ["who are you", "your name", "who is this"],
     category: "identity",
     priority: 1,
     enabled: true,
@@ -147,7 +147,7 @@ export const defaultFaqs = (): Faq[] => [
   {
     id: "site",
     question: "Website?",
-    answer: "tarikislam.in pe dekh lena. studio dezo.in pe hai",
+    answer: "You can find my portfolio at tarikislam.in and studio at dezo.in.",
     keywords: ["website", "portfolio", "site"],
     category: "identity",
     priority: 2,
@@ -156,8 +156,8 @@ export const defaultFaqs = (): Faq[] => [
   {
     id: "where",
     question: "Where are you based?",
-    answer: "bhubaneswar, india se kaam karta hoon",
-    keywords: ["where are you", "kidhar ho", "kahan se kaam"],
+    answer: "I work from Bhubaneswar, India.",
+    keywords: ["where are you", "location", "based in"],
     category: "identity",
     priority: 3,
     enabled: true,
@@ -165,7 +165,7 @@ export const defaultFaqs = (): Faq[] => [
   {
     id: "contact",
     question: "How do I contact you?",
-    answer: "email princetarikislam@gmail.com. number +91 89844 73230",
+    answer: "Email: princetarikislam@gmail.com. Phone: +91 89844 73230",
     keywords: ["email", "contact number"],
     category: "identity",
     priority: 4,

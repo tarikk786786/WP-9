@@ -183,7 +183,7 @@ export function ScanLogin({
         signal: controller.signal,
       });
       if (!response.ok || !response.body) {
-        throw new Error("WhatsApp worker reach nahi ho raha. Refresh karke dubara Show QR.");
+        throw new Error("WhatsApp worker is unreachable. Please refresh and try Show QR again.");
       }
 
       const reader = response.body.getReader();
@@ -292,14 +292,14 @@ export function ScanLogin({
       });
       const snap = (await restore.json()) as ScanSnapshot & { error?: string };
       if (!restore.ok) {
-        setExportNote(snap.error ?? "Import fail. File check karo.");
+        setExportNote(snap.error ?? "Import failed. Please check the session file.");
         return;
       }
       if (writeLocalArchive(archive)) setSavedHere(true);
       applyScan(snap);
-      setExportNote("Login import ho gayi. Worker reconnect kar raha hai.");
+      setExportNote("Session imported successfully. Worker is reconnecting.");
     } catch {
-      setExportNote("JSON file padhi nahi. Export wali file use karo.");
+      setExportNote("Could not read JSON file. Please use a valid export file.");
     }
   }
 

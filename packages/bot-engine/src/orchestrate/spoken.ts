@@ -88,9 +88,8 @@ export function avoidRepeat(
 }
 
 function useEnglish(analysis: MessageAnalysis, incoming: string) {
-  if (analysis.language !== "english") return false;
-  if (incoming.trim().split(/\s+/).length > 4) return true;
-  return /\b(what|where|when|how|who|why|can you|could you|please)\b/i.test(incoming);
+  if (analysis.language === "english") return true;
+  return /\b(hi|hello|hey|what|where|when|how|who|why|can you|could you|please|thanks|thank you)\b/i.test(incoming);
 }
 
 function lineFor(topic: string, en: boolean): string | undefined {

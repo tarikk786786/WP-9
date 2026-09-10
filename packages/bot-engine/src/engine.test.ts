@@ -122,9 +122,9 @@ describe("router", () => {
       assert.match(decision.text, /text/i);
     });
 
-    it("keeps replying even if a chat was marked human", () => {
+    it("skips replying when a chat was marked human", () => {
       const decision = routeMessage({ ...base, conversationStatus: "human", message: { ...base.message, text: "kya" } });
-      assert.equal(decision.action, "reply");
+      assert.equal(decision.action, "skip");
     });
 
   it("uses after-hours copy", () => {
