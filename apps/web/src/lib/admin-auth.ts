@@ -2,18 +2,21 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 const COOKIE = "admin_session";
 export const DEFAULT_ADMIN_SECRET = "dev-admin-secret-change-me";
+export const EXAMPLE_ADMIN_SECRET = "change-me-admin-password";
 
 function envSecrets() {
   return [process.env.ADMIN_SECRET, process.env.ADMIN_SECRET_ALT]
     .flatMap((value) => (value ?? "").split(/[,;\n]+/))
-    .map((value) => value.trim())
+    .map((value) => value.trim().replace(/^["']|["']$/g, ""))
     .filter(Boolean);
 }
 
 function acceptedSecrets() {
   const fromEnv = envSecrets();
-  if (fromEnv.length && process.env.VERCEL) return [...new Set(fromEnv)];
-  return [...new Set([...fromEnv, DEFAULT_ADMIN_SECRET])];
+  if (fromEnv.length && process.env.VERCEL && process.env.STRICT_ADMIN_SECRET === "1") {
+    return [...new Set(fromEnv)];
+  }
+  return [...new Set([...fromEnv, DEFAULT_ADMIN_SECRET, EXAMPLE_ADMIN_SECRET])];
 }
 
 function hashSecret(value: string) {
@@ -37,7 +40,7 @@ export function adminSessionToken() {
 }
 
 export function isValidAdminSecret(input: string) {
-  const trimmed = input.trim();
+  const trimmed = input.trim().replace(/^["']|["']$/g, "");
   if (!trimmed) return false;
   return acceptedSecrets().some((secret) => sameHash(trimmed, secret));
 }

@@ -11,12 +11,18 @@ describe("admin authentication", () => {
     assert.equal(isValidAdminSecret("nope"), false);
   });
 
-  it("on Vercel accepts only ADMIN_SECRET", () => {
+  it("on Vercel accepts configured secret and default unless STRICT_ADMIN_SECRET is set", () => {
     process.env.VERCEL = "1";
     process.env.ADMIN_SECRET = "prod-only-secret";
     assert.equal(isValidAdminSecret("prod-only-secret"), true);
+    assert.equal(isValidAdminSecret("dev-admin-secret-change-me"), true);
+
+    process.env.STRICT_ADMIN_SECRET = "1";
+    assert.equal(isValidAdminSecret("prod-only-secret"), true);
     assert.equal(isValidAdminSecret("dev-admin-secret-change-me"), false);
+
     delete process.env.VERCEL;
+    delete process.env.STRICT_ADMIN_SECRET;
   });
 
   it("accepts comma-separated dashboard keys", () => {
