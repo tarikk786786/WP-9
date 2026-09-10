@@ -71,6 +71,7 @@ function startWorker() {
     cwd: repoRoot,
     stdio: "inherit",
     env: process.env,
+    shell: true,
   });
   worker.on("exit", () => {
     worker = null;

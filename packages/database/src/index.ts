@@ -433,18 +433,27 @@ export async function saveAuthFiles(files: Record<string, string>) {
   memory.authFiles = files;
   const db = supabase();
   if (!db) return;
-  await db.from("baileys_auth").delete().neq("filename", "");
   const rows = Object.entries(files).map(([filename, data]) => ({ filename, data }));
-  if (rows.length) await db.from("baileys_auth").insert(rows);
+  if (!rows.length) return;
+  // Upsert in batches of 50 to avoid request size limits
+  for (let i = 0; i < rows.length; i += 50) {
+    const batch = rows.slice(i, i + 50);
+    const { error } = await db.from("baileys_auth").upsert(batch, { onConflict: "filename" });
+    if (error) {
+      console.error("[database] auth batch upsert failed:", error.message);
+    }
+  }
 }
 
 export async function loadAuthFiles(): Promise<Record<string, string>> {
   const db = supabase();
   if (db) {
-    const { data } = await db.from("baileys_auth").select("filename, data");
-    const files: Record<string, string> = {};
-    for (const row of data ?? []) files[row.filename] = row.data;
-    if (Object.keys(files).length) return files;
+    const { data, error } = await db.from("baileys_auth").select("filename, data").limit(2000);
+    if (!error && data?.length) {
+      const files: Record<string, string> = {};
+      for (const row of data) files[row.filename] = row.data;
+      if (Object.keys(files).length) return files;
+    }
   }
   return { ...memory.authFiles };
 }

@@ -36,6 +36,7 @@ async function boot() {
       cwd: workerRoot,
       stdio: "inherit",
       env: process.env,
+      shell: true,
     });
     console.log(`[keep] WhatsApp worker pid ${child.pid}`);
     child.on("exit", (code, signal) => {
