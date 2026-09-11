@@ -85,7 +85,7 @@ function id(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function supabase(): SupabaseClient | null {
+export function supabase(): SupabaseClient | null {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -94,6 +94,10 @@ function supabase(): SupabaseClient | null {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
   return createClient(url, key, { auth: { persistSession: false } });
+}
+
+export function getSupabaseClient(): SupabaseClient | null {
+  return supabase();
 }
 
 export function usingSupabase() {

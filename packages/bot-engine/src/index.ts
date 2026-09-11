@@ -22,4 +22,9 @@ export { stripModelNoise } from "./orchestrate/compose.ts";
 export * from "./orchestrate/state-machine.ts";
 export * from "./orchestrate/circuit-breaker.ts";
 export * from "./orchestrate/outbox.ts";
-
+export * from "./orchestrate/quality-judge.ts";
+export * from "./memory/index.ts";
+export * from "./ai/model-router.ts";
+export * from "./multimodal/audio.ts";
+export * from "./multimodal/vision.ts";
+export * from "./tools/index.ts";
