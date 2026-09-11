@@ -51,6 +51,35 @@ export type LogEvent = {
   created_at: string;
 };
 
+export interface ResponseCommitRecord {
+  responseId: string;
+  turnId: string;
+  chatId: string;
+  status: "CREATED" | "RESERVED" | "COMMITTED" | "SENDING" | "SENT" | "RETRY_PENDING" | "DEAD_LETTER";
+  finalText: string;
+  intent?: string;
+  modelId?: string;
+  plan?: Record<string, unknown>;
+  createdAt?: number;
+  committedAt?: number;
+  sentAt?: number;
+  attemptCount?: number;
+  lastError?: string;
+}
+
+export interface OutboxDbRecord {
+  responseId: string;
+  turnId?: string;
+  chatId: string;
+  text: string;
+  status: "pending" | "sending" | "sent" | "failed" | "dead_letter";
+  attempts: number;
+  maxAttempts: number;
+  createdAt: number;
+  sentAt?: number;
+  lastError?: string;
+}
+
 type Memory = {
   customers: Customer[];
   conversations: Conversation[];
@@ -62,6 +91,11 @@ type Memory = {
   logs: LogEvent[];
   authFiles: Record<string, string>;
   knowledge: Array<{ id: string; title: string; content: string; enabled: boolean }>;
+  dedup: Map<string, { messageId: string; eventId: string; chatId: string; senderId: string; contentHash: string; normalizedHash: string; createdAt: number }>;
+  turns: Map<string, { turnId: string; chatId: string; messageIds: string[]; combinedText: string; status: string; createdAt: number }>;
+  responseCommits: Map<string, ResponseCommitRecord>;
+  conversationLocks: Map<string, { chatId: string; turnId: string; ownerId: string; acquiredAt: number; expiresAt: number }>;
+  messageOutbox: Map<string, OutboxDbRecord>;
 };
 
 const memory: Memory = {
@@ -75,6 +109,11 @@ const memory: Memory = {
   logs: [],
   authFiles: {},
   knowledge: [],
+  dedup: new Map(),
+  turns: new Map(),
+  responseCommits: new Map(),
+  conversationLocks: new Map(),
+  messageOutbox: new Map(),
 };
 
 function now() {
@@ -639,4 +678,472 @@ export async function releaseWorkerLease(instanceId: string): Promise<void> {
   }
 }
 
+// ============================================================
+// Authoritative Conversation Engine Persistence Functions
+// ============================================================
 
+export interface MessageDedupRecord {
+  messageId: string;
+  eventId: string;
+  chatId: string;
+  senderId: string;
+  contentHash: string;
+  normalizedHash: string;
+  createdAt?: number;
+}
+
+export async function recordMessageDedup(entry: MessageDedupRecord): Promise<boolean> {
+  const db = supabase();
+  const nowMs = Date.now();
+  // Check in-memory first
+  if (memory.dedup.has(entry.messageId) || memory.dedup.has(entry.eventId)) {
+    return false;
+  }
+  memory.dedup.set(entry.messageId, { ...entry, createdAt: nowMs });
+  memory.dedup.set(entry.eventId, { ...entry, createdAt: nowMs });
+
+  if (db) {
+    try {
+      const { error } = await db.from("message_dedup").insert({
+        message_id: entry.messageId,
+        event_id: entry.eventId,
+        chat_id: entry.chatId,
+        sender_id: entry.senderId,
+        content_hash: entry.contentHash,
+        normalized_hash: entry.normalizedHash,
+      });
+      if (error && (error.code === "23505" || /duplicate key/i.test(error.message))) {
+        return false;
+      }
+    } catch {
+      /* fallback */
+    }
+  }
+  return true;
+}
+
+export async function isMessageDeduped(params: {
+  messageId?: string;
+  eventId?: string;
+  contentHash?: string;
+  chatId?: string;
+  senderId?: string;
+  windowMs?: number;
+}): Promise<boolean> {
+  if (params.messageId && memory.dedup.has(params.messageId)) return true;
+  if (params.eventId && memory.dedup.has(params.eventId)) return true;
+
+  const db = supabase();
+  if (db) {
+    try {
+      if (params.messageId) {
+        const { data } = await db.from("message_dedup").select("id").eq("message_id", params.messageId).maybeSingle();
+        if (data) return true;
+      }
+      if (params.eventId) {
+        const { data } = await db.from("message_dedup").select("id").eq("event_id", params.eventId).maybeSingle();
+        if (data) return true;
+      }
+      if (params.contentHash && params.chatId && params.senderId) {
+        const windowStart = new Date(Date.now() - (params.windowMs ?? 15_000)).toISOString();
+        const { data } = await db
+          .from("message_dedup")
+          .select("id")
+          .eq("content_hash", params.contentHash)
+          .eq("chat_id", params.chatId)
+          .eq("sender_id", params.senderId)
+          .gte("created_at", windowStart)
+          .maybeSingle();
+        if (data) return true;
+      }
+    } catch {
+      /* ignore db error, rely on memory */
+    }
+  }
+  return false;
+}
+
+export interface ConversationTurnRecord {
+  turnId: string;
+  chatId: string;
+  messageIds: string[];
+  combinedText: string;
+  status?: string;
+  createdAt?: number;
+}
+
+export async function upsertConversationTurn(entry: ConversationTurnRecord): Promise<void> {
+  const nowMs = Date.now();
+  memory.turns.set(entry.turnId, {
+    turnId: entry.turnId,
+    chatId: entry.chatId,
+    messageIds: entry.messageIds,
+    combinedText: entry.combinedText,
+    status: entry.status ?? "created",
+    createdAt: nowMs,
+  });
+
+  const db = supabase();
+  if (db) {
+    try {
+      await db.from("conversation_turns").upsert(
+        {
+          turn_id: entry.turnId,
+          chat_id: entry.chatId,
+          message_ids: entry.messageIds,
+          combined_text: entry.combinedText,
+          status: entry.status ?? "created",
+        },
+        { onConflict: "turn_id" }
+      );
+    } catch {
+      /* fallback */
+    }
+  }
+}
+
+export async function getConversationTurn(turnId: string): Promise<ConversationTurnRecord | null> {
+  const mem = memory.turns.get(turnId);
+  if (mem) return mem;
+
+  const db = supabase();
+  if (db) {
+    try {
+      const { data } = await db.from("conversation_turns").select("*").eq("turn_id", turnId).maybeSingle();
+      if (data) {
+        return {
+          turnId: data.turn_id,
+          chatId: data.chat_id,
+          messageIds: data.message_ids ?? [],
+          combinedText: data.combined_text,
+          status: data.status,
+          createdAt: new Date(data.created_at).getTime(),
+        };
+      }
+    } catch {
+      /* fallback */
+    }
+  }
+  return null;
+}
+
+export interface ResponseCommitRecord {
+  responseId: string;
+  turnId: string;
+  chatId: string;
+  status: "CREATED" | "RESERVED" | "COMMITTED" | "SENDING" | "SENT" | "RETRY_PENDING" | "DEAD_LETTER";
+  finalText: string;
+  intent?: string;
+  modelId?: string;
+  plan?: Record<string, unknown>;
+  createdAt?: number;
+  committedAt?: number;
+  sentAt?: number;
+  attemptCount?: number;
+  lastError?: string;
+}
+
+export async function recordResponseCommit(
+  entry: ResponseCommitRecord
+): Promise<{ committed: boolean; existing?: ResponseCommitRecord }> {
+  const nowMs = Date.now();
+  // Check if turn already committed
+  const existingTurn = Array.from(memory.responseCommits.values()).find((r) => r.turnId === entry.turnId);
+  if (existingTurn) {
+    return { committed: false, existing: existingTurn };
+  }
+  const existingId = memory.responseCommits.get(entry.responseId);
+  if (existingId) {
+    return { committed: false, existing: existingId };
+  }
+
+  const db = supabase();
+  if (db) {
+    try {
+      const { data, error } = await db.from("response_commits").insert({
+        response_id: entry.responseId,
+        turn_id: entry.turnId,
+        chat_id: entry.chatId,
+        status: entry.status,
+        final_text: entry.finalText,
+        intent: entry.intent,
+        model_id: entry.modelId,
+        plan: entry.plan ?? {},
+        attempt_count: entry.attemptCount ?? 0,
+      }).select().maybeSingle();
+
+      if (error && (error.code === "23505" || /duplicate key/i.test(error.message))) {
+        // Fetch existing
+        const { data: existing } = await db.from("response_commits").select("*").eq("turn_id", entry.turnId).maybeSingle();
+        if (existing) {
+          const rec: ResponseCommitRecord = {
+            responseId: existing.response_id,
+            turnId: existing.turn_id,
+            chatId: existing.chat_id,
+            status: existing.status,
+            finalText: existing.final_text,
+            intent: existing.intent,
+            modelId: existing.model_id,
+            plan: existing.plan,
+            createdAt: new Date(existing.created_at).getTime(),
+            committedAt: new Date(existing.committed_at).getTime(),
+            sentAt: existing.sent_at ? new Date(existing.sent_at).getTime() : undefined,
+            attemptCount: existing.attempt_count,
+            lastError: existing.last_error,
+          };
+          memory.responseCommits.set(rec.responseId, rec);
+          return { committed: false, existing: rec };
+        }
+      }
+    } catch {
+      /* fallback to memory */
+    }
+  }
+
+  const rec: ResponseCommitRecord = {
+    ...entry,
+    createdAt: nowMs,
+    committedAt: nowMs,
+    attemptCount: entry.attemptCount ?? 0,
+  };
+  memory.responseCommits.set(entry.responseId, rec);
+  return { committed: true, existing: rec };
+}
+
+export async function updateResponseCommitStatus(
+  responseId: string,
+  status: ResponseCommitRecord["status"],
+  error?: string
+): Promise<void> {
+  const existing = memory.responseCommits.get(responseId);
+  if (existing) {
+    existing.status = status;
+    if (status === "SENT") existing.sentAt = Date.now();
+    if (error) existing.lastError = error;
+  }
+
+  const db = supabase();
+  if (db) {
+    try {
+      const updates: Record<string, unknown> = { status };
+      if (status === "SENT") updates.sent_at = now();
+      if (error) updates.last_error = error;
+      await db.from("response_commits").update(updates).eq("response_id", responseId);
+    } catch {
+      /* fallback */
+    }
+  }
+}
+
+export async function getResponseCommitByTurn(turnId: string): Promise<ResponseCommitRecord | null> {
+  const mem = Array.from(memory.responseCommits.values()).find((r) => r.turnId === turnId);
+  if (mem) return mem;
+
+  const db = supabase();
+  if (db) {
+    try {
+      const { data } = await db.from("response_commits").select("*").eq("turn_id", turnId).maybeSingle();
+      if (data) {
+        return {
+          responseId: data.response_id,
+          turnId: data.turn_id,
+          chatId: data.chat_id,
+          status: data.status,
+          finalText: data.final_text,
+          intent: data.intent,
+          modelId: data.model_id,
+          plan: data.plan,
+          createdAt: new Date(data.created_at).getTime(),
+          committedAt: new Date(data.committed_at).getTime(),
+          sentAt: data.sent_at ? new Date(data.sent_at).getTime() : undefined,
+          attemptCount: data.attempt_count,
+          lastError: data.last_error,
+        };
+      }
+    } catch {
+      /* fallback */
+    }
+  }
+  return null;
+}
+
+// --- Single-Flight Conversation Locking ---
+export async function acquireChatLockDb(
+  chatId: string,
+  turnId: string,
+  ownerId: string,
+  ttlMs = 25_000
+): Promise<boolean> {
+  const nowMs = Date.now();
+  const expiresAtMs = nowMs + ttlMs;
+
+  const mem = memory.conversationLocks.get(chatId);
+  if (mem && mem.expiresAt > nowMs && mem.ownerId !== ownerId) {
+    return false;
+  }
+  memory.conversationLocks.set(chatId, {
+    chatId,
+    turnId,
+    ownerId,
+    acquiredAt: nowMs,
+    expiresAt: expiresAtMs,
+  });
+
+  const db = supabase();
+  if (db) {
+    try {
+      const expiresAtIso = new Date(expiresAtMs).toISOString();
+      // Try to acquire lock row
+      const { data, error } = await db
+        .from("conversation_locks")
+        .upsert(
+          {
+            chat_id: chatId,
+            turn_id: turnId,
+            owner_id: ownerId,
+            acquired_at: now(),
+            expires_at: expiresAtIso,
+          },
+          { onConflict: "chat_id" }
+        )
+        .select();
+      if (error) return true; // fallback to memory
+    } catch {
+      /* fallback */
+    }
+  }
+  return true;
+}
+
+export async function releaseChatLockDb(chatId: string, turnId: string, ownerId: string): Promise<void> {
+  const mem = memory.conversationLocks.get(chatId);
+  if (mem && (mem.ownerId === ownerId || mem.turnId === turnId)) {
+    memory.conversationLocks.delete(chatId);
+  }
+
+  const db = supabase();
+  if (db) {
+    try {
+      await db.from("conversation_locks").delete().eq("chat_id", chatId).eq("owner_id", ownerId);
+    } catch {
+      /* fallback */
+    }
+  }
+}
+
+// --- Authoritative Outbox Queue Persistence ---
+export interface OutboxDbRecord {
+  responseId: string;
+  turnId?: string;
+  chatId: string;
+  text: string;
+  status: "pending" | "sending" | "sent" | "failed" | "dead_letter";
+  attempts: number;
+  maxAttempts: number;
+  createdAt: number;
+  sentAt?: number;
+  lastError?: string;
+}
+
+export async function enqueueMessageOutboxDb(entry: {
+  responseId: string;
+  turnId?: string;
+  chatId: string;
+  text: string;
+  maxAttempts?: number;
+}): Promise<OutboxDbRecord> {
+  const nowMs = Date.now();
+  const existing = memory.messageOutbox.get(entry.responseId);
+  if (existing) return existing;
+
+  const rec: OutboxDbRecord = {
+    responseId: entry.responseId,
+    turnId: entry.turnId,
+    chatId: entry.chatId,
+    text: entry.text,
+    status: "pending",
+    attempts: 0,
+    maxAttempts: entry.maxAttempts ?? 2,
+    createdAt: nowMs,
+  };
+  memory.messageOutbox.set(entry.responseId, rec);
+
+  const db = supabase();
+  if (db) {
+    try {
+      await db.from("message_outbox").upsert(
+        {
+          response_id: entry.responseId,
+          turn_id: entry.turnId,
+          chat_id: entry.chatId,
+          text: entry.text,
+          status: "pending",
+          attempts: 0,
+          max_attempts: entry.maxAttempts ?? 2,
+        },
+        { onConflict: "response_id" }
+      );
+    } catch {
+      /* fallback */
+    }
+  }
+  return rec;
+}
+
+export async function updateOutboxStatusDb(
+  responseId: string,
+  status: OutboxDbRecord["status"],
+  error?: string
+): Promise<void> {
+  const existing = memory.messageOutbox.get(responseId);
+  if (existing) {
+    existing.status = status;
+    if (status === "sending") existing.attempts += 1;
+    if (status === "sent") existing.sentAt = Date.now();
+    if (error) existing.lastError = error;
+  }
+
+  const db = supabase();
+  if (db) {
+    try {
+      const updates: Record<string, unknown> = { status };
+      if (status === "sent") updates.sent_at = now();
+      if (error) updates.last_error = error;
+      await db.from("message_outbox").update(updates).eq("response_id", responseId);
+    } catch {
+      /* fallback */
+    }
+  }
+}
+
+export async function getPendingOutboxItemsDb(): Promise<OutboxDbRecord[]> {
+  const db = supabase();
+  if (db) {
+    try {
+      const { data } = await db
+        .from("message_outbox")
+        .select("*")
+        .in("status", ["pending", "failed", "sending"])
+        .order("created_at", { ascending: true });
+      if (data && data.length > 0) {
+        return data.map((d) => ({
+          responseId: d.response_id,
+          turnId: d.turn_id,
+          chatId: d.chat_id,
+          text: d.text,
+          status: d.status,
+          attempts: d.attempts ?? 0,
+          maxAttempts: d.max_attempts ?? 2,
+          createdAt: new Date(d.created_at).getTime(),
+          sentAt: d.sent_at ? new Date(d.sent_at).getTime() : undefined,
+          lastError: d.last_error,
+        }));
+      }
+    } catch {
+      /* fallback */
+    }
+  }
+  return Array.from(memory.messageOutbox.values()).filter(
+    (item) => item.status === "pending" || item.status === "failed" || item.status === "sending"
+  );
+}

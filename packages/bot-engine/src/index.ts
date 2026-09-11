@@ -28,4 +28,4 @@ export * from "./ai/model-router.ts";
 export * from "./multimodal/audio.ts";
 export * from "./multimodal/vision.ts";
 export * from "./tools/index.ts";
-export * from "./conversation/index.ts";
+export * from "./conversation-engine/index.ts";

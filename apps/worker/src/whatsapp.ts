@@ -103,6 +103,53 @@ conversationEngine.setSender(async (chatId, text) => {
   await sendText(chatId, text);
 });
 
+conversationEngine.setAiGenerator(async (context, tier) => {
+  const { turn, history, knowledge, faqs, rules, understanding } = context;
+  const settings = await getSettings();
+  const person = personForChat(turn.chatId, turn.fromName, turn.sender);
+
+  const faqFacts = matchAllFaqs(turn.combinedText, faqs).map((f) => `${f.question}: ${f.answer}`);
+  const ruleFacts = matchAllRules(turn.combinedText, rules)
+    .filter((r) => !/agent|human/.test(r.triggerValue))
+    .map((r) => r.response);
+
+  const timeoutMs = tier === "fast" ? 6500 : 5000;
+  const ai = await withTimeout(
+    generateBestHumanReply(
+      {
+        id: turn.firstMessageId,
+        whatsappMessageId: turn.firstMessageId,
+        chatId: turn.chatId,
+        sender: turn.sender,
+        fromName: person?.name ?? turn.fromName ?? turn.sender,
+        text: turn.combinedText,
+        timestamp: new Date(turn.createdAt).toISOString(),
+        isGroup: turn.isGroup,
+        type: "text",
+        metadata: {},
+      },
+      {
+        settings,
+        customerName: person?.name ?? turn.fromName ?? turn.sender,
+        recent: history,
+        faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
+        knowledge: [...knowledge, ...ruleFacts],
+        intent: understanding.intents.join(","),
+        analysis: analyzeMessage(turn.combinedText, {
+          isFirstMessage: history.length === 0,
+          inboundCount: history.filter((m) => m.role === "user").length,
+        }),
+        isFirstMessage: history.length === 0,
+        messageType: "text",
+        person: person ?? undefined,
+      }
+    ),
+    timeoutMs
+  );
+
+  return ai?.text ? { text: ai.text, modelId: tier === "fast" ? "gpt-4o-mini" : "gpt-4o" } : null;
+});
+
 conversationEngine.updateDependencies({
   getSettings: async () => {
     return await getSettings();
@@ -147,52 +194,6 @@ conversationEngine.updateDependencies({
   getRules: async () => {
     return await getRules();
   },
-  generateAiReply: async (turn, understanding, { history, knowledge }) => {
-    const settings = await getSettings();
-    const faqs = await getFaqs();
-    const rules = await getRules();
-    const person = personForChat(turn.chatId, turn.fromName, turn.sender);
-
-    const faqFacts = matchAllFaqs(turn.combinedText, faqs).map((f) => `${f.question}: ${f.answer}`);
-    const ruleFacts = matchAllRules(turn.combinedText, rules)
-      .filter((r) => !/agent|human/.test(r.triggerValue))
-      .map((r) => r.response);
-
-    const ai = await withTimeout(
-      generateBestHumanReply(
-        {
-          id: turn.firstMessageId,
-          whatsappMessageId: turn.firstMessageId,
-          chatId: turn.chatId,
-          sender: turn.sender,
-          fromName: person?.name ?? turn.fromName ?? turn.sender,
-          text: turn.combinedText,
-          timestamp: new Date(turn.createdAt).toISOString(),
-          isGroup: turn.isGroup,
-          type: "text",
-          metadata: {},
-        },
-        {
-          settings,
-          customerName: person?.name ?? turn.fromName ?? turn.sender,
-          recent: history,
-          faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
-          knowledge: [...knowledge, ...ruleFacts],
-          intent: understanding.intents.join(","),
-          analysis: analyzeMessage(turn.combinedText, {
-            isFirstMessage: history.length === 0,
-            inboundCount: history.filter((m) => m.role === "user").length,
-          }),
-          isFirstMessage: history.length === 0,
-          messageType: "text",
-          person: person ?? undefined,
-        }
-      ),
-      7500
-    );
-
-    return ai?.text || null;
-  },
   onMessageCommitted: async (chatId, message, turn) => {
     const customer = await upsertCustomer({
       number: chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
@@ -206,7 +207,7 @@ conversationEngine.updateDependencies({
       message_type: "text",
       text: message.text,
       media_reference: null,
-      ai_generated: message.aiGenerated,
+      ai_generated: Boolean(message.modelId),
       intent: message.intent,
     });
     await markProcessed(message.responseId);
@@ -456,6 +457,7 @@ export async function ensureAlwaysOn() {
       await sendText(destJid, outText);
     });
   });
+  await conversationEngine.outbox.initFromDatabase();
   await markPersistedFromDisk();
   await startWhatsApp();
   if (keepAliveStarted) return;
@@ -513,8 +515,13 @@ export async function sendWhatsApp(chatId: string, text: string) {
   if (!isSocketLive() || !manager.sock) {
     throw new Error("WhatsApp is not linked.");
   }
-  await manager.sock.sendMessage(chatId, { text });
-  manager.snapshot.lastMessageSentAt = new Date().toISOString();
+  const responseId = `out_admin_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  await conversationEngine.outbox.enqueue({
+    responseId,
+    chatId,
+    text,
+    metadata: { source: "admin" },
+  });
   const customer = await upsertCustomer({
     number: chatId.replace(/@s\.whatsapp\.net$/, ""),
     name: chatId,
@@ -522,7 +529,7 @@ export async function sendWhatsApp(chatId: string, text: string) {
   const convo = await upsertConversation(customer.id, chatId);
   await addMessage({
     conversation_id: convo.id,
-    whatsapp_message_id: `out_admin_${Date.now()}`,
+    whatsapp_message_id: responseId,
     direction: "out",
     message_type: "text",
     text,

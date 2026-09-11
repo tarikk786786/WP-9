@@ -19,7 +19,7 @@ import {
 import { defaultBotSettings, SendMessageBody } from "@bot/shared";
 import { isAuthorizedWorkerRequest } from "./auth.ts";
 import { ensureAlwaysOn, getSnapshot, logoutWhatsApp, sendWhatsApp, startWhatsApp, uptimeMs, exportAuthArchive, importAuthArchive } from "./whatsapp.ts";
-import { connectionStateMachine, aiCircuitBreaker, whatsappCircuitBreaker, messageOutbox } from "@bot/engine";
+import { connectionStateMachine, aiCircuitBreaker, whatsappCircuitBreaker, messageOutbox, conversationEngine } from "@bot/engine";
 
 function keepProcessAlive(kind: string, error: unknown) {
   const text = error instanceof Error ? error.stack || error.message : String(error);
@@ -241,6 +241,10 @@ const server = createServer(async (req, res) => {
             whatsapp: whatsappCircuitBreaker.getSnapshot(),
           },
           outbox: messageOutbox.getSnapshot(),
+          conversationEngine: {
+            metrics: conversationEngine.getMetrics(),
+            outbox: conversationEngine.outbox.getSnapshot(),
+          },
         },
         analytics: analyticsSnapshot(),
         settings: await getSettings(),
