@@ -19,7 +19,7 @@ export function AdminLoginForm() {
         <CardHeader>
           <CardTitle>Admin access</CardTitle>
           <CardDescription>
-            Password is your <code>ADMIN_SECRET</code>.
+            Password is <code>Tarik@786786</code> or your configured <code>ADMIN_SECRET</code>.
           </CardDescription>
         </CardHeader>
         <CardContent>
