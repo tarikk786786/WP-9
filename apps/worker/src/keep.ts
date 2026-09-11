@@ -78,16 +78,16 @@ async function healthTick() {
     };
     const phase = (json.whatsapp?.phase || json.whatsappConnection || "").toLowerCase();
     const ready = json.whatsapp?.connected === true || phase === "ready" || phase === "connected";
-    const waitingScan = phase.includes("qr");
+    const waitingScan = phase.includes("qr") || (json.whatsapp?.phase || "").toLowerCase().includes("qr");
     const connecting = phase.includes("connect");
     if (ready || waitingScan) {
       notReadySince = 0;
       return;
     }
     if (!notReadySince) notReadySince = Date.now();
-    const waitMs = connecting ? 180_000 : 120_000;
+    const waitMs = connecting ? 300_000 : 240_000;
     if (Date.now() - notReadySince > waitMs && child?.pid) {
-      console.error("[keep] WhatsApp stayed down — restarting worker");
+      console.error("[keep] WhatsApp stayed down (>5m) — restarting worker");
       notReadySince = 0;
       child.kill("SIGTERM");
     }

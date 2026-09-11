@@ -42,6 +42,7 @@ function cloudflaredBin() {
   const fromEnv = process.env.CLOUDFLARED_BIN?.trim();
   const candidates = [
     fromEnv,
+    path.join(repoRoot, "tools", "bin", "cloudflared.exe"),
     path.join(repoRoot, "tools", "bin", "cloudflared"),
     path.join(workerDir, "cloudflared.bin"),
     "cloudflared",

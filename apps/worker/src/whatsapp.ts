@@ -711,6 +711,7 @@ async function openSocket(pairingPhone?: string) {
       }
       if (isQrTimeout) {
         console.log("[whatsapp] QR scan window timed out. Refreshing QR code...");
+        connectionStateMachine.transition("QR_REQUIRED", "QR code refreshed");
         manager.reconnectDelay = 1500;
         manager.snapshot.connected = false;
         manager.snapshot.phase = "qr";

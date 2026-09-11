@@ -1,14 +1,15 @@
-﻿module.exports = {
+const path = require('node:path');
+
+module.exports = {
   apps: [
     {
       name: 'whatsapp-worker',
-      script: 'npm',
-      args: 'run live',
+      script: path.resolve(__dirname, 'node_modules/tsx/dist/cli.mjs'),
+      args: 'apps/worker/src/guard.ts',
       cwd: __dirname,
-      interpreter: 'none',
       env: {
         NODE_ENV: 'production',
-        WORKER_PORT: 8788,
+        WORKER_PORT: '8788',
       },
       restart_delay: 2500,
       max_memory_restart: '600M',
