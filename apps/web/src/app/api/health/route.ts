@@ -42,8 +42,19 @@ export async function GET() {
     /* fallback */
   }
 
+  const onVercel = Boolean(process.env.VERCEL);
+  const isProd = process.env.NODE_ENV === "production" || onVercel;
+
   return NextResponse.json(
-    { web: "ok", worker: { worker: "down", error: "Baileys worker is not reachable. Run npm run worker." } },
+    {
+      web: "ok",
+      worker: {
+        worker: "down",
+        error: isProd
+          ? "Baileys worker is not reachable on the configured host. Check Render service status."
+          : "Baileys worker is not reachable. Run npm run worker.",
+      },
+    },
     { status: 200 },
   );
 }
