@@ -6,8 +6,8 @@ import type {
 } from "@bot/shared";
 import { loadWorkerHeartbeat } from "@bot/database";
 
-const DEFAULT_WORKER = process.env.WORKER_API_URL || "http://127.0.0.1:8788";
-const SECRET = process.env.WORKER_API_SECRET || "dev-worker-secret-change-me";
+const DEFAULT_WORKER = process.env.WORKER_API_URL || "https://wp-9.onrender.com";
+const SECRET = process.env.WORKER_API_SECRET || "wp9_sec_9114411026_daziai_crm";
 
 let cachedWorkerUrl = DEFAULT_WORKER;
 let lastWorkerUrlCheck = 0;
