@@ -13,6 +13,12 @@ let cachedWorkerUrl = DEFAULT_WORKER;
 let lastWorkerUrlCheck = 0;
 
 export async function resolveWorkerBase(): Promise<string> {
+  const envUrl = process.env.WORKER_API_URL;
+  if (envUrl && envUrl.trim().startsWith("http")) {
+    cachedWorkerUrl = envUrl.trim();
+    return cachedWorkerUrl.replace(/\/$/, "");
+  }
+
   const now = Date.now();
   if (now - lastWorkerUrlCheck < 6000 && cachedWorkerUrl && cachedWorkerUrl !== "http://127.0.0.1:8788") {
     return cachedWorkerUrl.replace(/\/$/, "");
@@ -60,9 +66,11 @@ export function classifyWorkerError(err: unknown, status?: number): WorkerErrorC
 
 export async function workerFetch(path: string, init: RequestInit = {}) {
   const base = await resolveWorkerBase();
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${SECRET}`);
   headers.set("x-worker-secret", SECRET);
+  headers.set("x-request-id", requestId);
   if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   return fetch(`${base}${path}`, {
     ...init,

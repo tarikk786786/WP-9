@@ -2,7 +2,10 @@ import { timingSafeEqual } from "node:crypto";
 
 export function workerSecret() {
   const secret = process.env.WORKER_API_SECRET;
-  if (process.env.NODE_ENV === "production" && (!secret || secret === "dev-worker-secret-change-me")) {
+  if (
+    process.env.NODE_ENV === "production" &&
+    (!secret || secret === "dev-worker-secret-change-me" || secret === "change-me-long-random-secret")
+  ) {
     throw new Error("WORKER_API_SECRET is required in production and must not use dev default");
   }
   return secret || "dev-worker-secret-change-me";
