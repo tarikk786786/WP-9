@@ -7,8 +7,8 @@ import {
   weatherTool,
   calculatorTool,
   shouldReplyTool,
-  writeSpokenReply,
-} from "./index.ts";
+} from "./tools/index.ts";
+import { writeSpokenReply } from "./index.ts";
 
 describe("Tool Registry and Multilingual Engine", () => {
   it("registers all tool categories and exports OpenAI format", () => {

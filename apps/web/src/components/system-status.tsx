@@ -143,7 +143,7 @@ export function SystemStatus() {
   const queueFailed = h?.queue?.failed ?? 0;
 
   return (
-    <Card className="border-border/60 shadow-sm">
+    <Card className="w-full border-border/60 shadow-sm">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>

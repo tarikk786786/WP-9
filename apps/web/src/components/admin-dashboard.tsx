@@ -116,7 +116,7 @@ export function AdminDashboard({ view }: { view: "dashboard" | "conversations" |
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="space-y-6">
       {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
 
       {view === "dashboard" ? (

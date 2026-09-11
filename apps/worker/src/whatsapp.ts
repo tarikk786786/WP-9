@@ -44,8 +44,8 @@ import {
   aiCircuitBreaker,
   whatsappCircuitBreaker,
   messageOutbox,
-  shouldReplyTool,
 } from "@bot/engine";
+import { shouldReplyTool } from "@bot/engine/tools";
 import { personForChat } from "./people-map.ts";
 import { isSendableJid, resolveChat } from "./chat-address.ts";
 import { authDir, migrateLegacyAuth } from "./paths.ts";
