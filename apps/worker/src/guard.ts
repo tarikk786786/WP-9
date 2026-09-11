@@ -64,15 +64,30 @@ async function workerHealthy() {
   }
 }
 
+function killChild(child: ChildProcess | null) {
+  if (!child || !child.pid) return;
+  const pid = child.pid;
+  try {
+    if (process.platform === "win32") {
+      spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+    } else {
+      child.kill("SIGTERM");
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 function startWorker() {
   if (stopping || pidAlive(worker?.pid)) return;
   worker = null;
   console.log("[live] starting WhatsApp worker");
-  worker = spawn("npm", ["run", "worker"], {
-    cwd: repoRoot,
-    stdio: "inherit",
+  const bin = process.platform === "win32" ? "npx.cmd" : "npx";
+  worker = spawn(bin, ["tsx", "src/keep.ts"], {
+    cwd: workerDir,
+    stdio: ["ignore", "inherit", "inherit"],
     env: process.env,
-    shell: true,
+    shell: false,
   });
   worker.on("exit", () => {
     worker = null;
@@ -137,11 +152,7 @@ async function publicTunnelHealthy() {
 function killTunnel() {
   const current = tunnel;
   tunnel = null;
-  try {
-    current?.kill("SIGTERM");
-  } catch {
-    /* ignore */
-  }
+  killChild(current);
 }
 
 function startTunnel() {
