@@ -692,6 +692,71 @@ export interface MessageDedupRecord {
   createdAt?: number;
 }
 
+export interface InboundClaimResult {
+  claimed: boolean;
+  reason?: "ALREADY_CLAIMED" | "DUPLICATE_HASH" | "DB_ERROR";
+}
+
+export async function claimInboundMessage(params: {
+  messageId: string;
+  eventId: string;
+  chatId: string;
+  senderId: string;
+  contentHash?: string;
+  source?: string;
+}): Promise<InboundClaimResult> {
+  // In-memory check first
+  if (memory.dedup.has(params.messageId) || memory.dedup.has(params.eventId)) {
+    return { claimed: false, reason: "ALREADY_CLAIMED" };
+  }
+
+  const nowMs = Date.now();
+  const db = supabase();
+
+  if (db) {
+    try {
+      const { error } = await db.from("inbound_event_claims").insert({
+        message_id: params.messageId,
+        event_id: params.eventId,
+        chat_id: params.chatId,
+        sender_id: params.senderId,
+        content_hash: params.contentHash ?? null,
+        source: params.source ?? "notify",
+      });
+
+      if (error) {
+        if (error.code === "23505" || /duplicate key|unique constraint/i.test(error.message)) {
+          return { claimed: false, reason: "ALREADY_CLAIMED" };
+        }
+      }
+    } catch {
+      // fallback to memory
+    }
+  }
+
+  // Claim in memory
+  memory.dedup.set(params.messageId, {
+    messageId: params.messageId,
+    eventId: params.eventId,
+    chatId: params.chatId,
+    senderId: params.senderId,
+    contentHash: params.contentHash ?? "",
+    normalizedHash: "",
+    createdAt: nowMs,
+  });
+  memory.dedup.set(params.eventId, {
+    messageId: params.messageId,
+    eventId: params.eventId,
+    chatId: params.chatId,
+    senderId: params.senderId,
+    contentHash: params.contentHash ?? "",
+    normalizedHash: "",
+    createdAt: nowMs,
+  });
+
+  return { claimed: true };
+}
+
 export async function recordMessageDedup(entry: MessageDedupRecord): Promise<boolean> {
   const db = supabase();
   const nowMs = Date.now();

@@ -1,5 +1,6 @@
 import { upsertConversationTurn } from "@bot/database";
 import type { InboundEventPayload } from "./event-gate.ts";
+import type { ActiveConversationState, EmotionState, UserGoal } from "./state.ts";
 
 export interface QuotedContext {
   id?: string;
@@ -14,14 +15,29 @@ export interface ConversationTurn {
   turnId: string;
   tenantId: string;
   chatId: string;
-  fragments: InboundMessageFragment[];
-  combinedText: string;
-  messageIds: string[];
-  firstMessageId: string;
-  lastMessageId: string;
+  userId?: string;
   sender: string;
   fromName?: string;
   isGroup: boolean;
+  messageIds: string[];
+  rawMessages: InboundMessageFragment[];
+  fragments: InboundMessageFragment[];
+  firstMessageId: string;
+  lastMessageId: string;
+  combinedText: string;
+  normalizedText?: string;
+  semanticText?: string;
+  language?: string;
+  intent?: string;
+  subIntent?: string;
+  entities?: Record<string, string>;
+  references?: Record<string, string>;
+  emotion?: EmotionState;
+  tone?: string;
+  urgency?: "low" | "medium" | "high";
+  goal?: UserGoal;
+  conversationState?: ActiveConversationState;
+  confidence?: number;
   quoted?: QuotedContext;
   createdAt: number;
 }
@@ -167,6 +183,8 @@ export class ConversationTurnBuilder {
       turnId,
       tenantId: buffer.tenantId,
       chatId: buffer.chatId,
+      userId: last.sender,
+      rawMessages: fragments,
       fragments,
       combinedText,
       messageIds: fragments.map((f) => f.messageId),

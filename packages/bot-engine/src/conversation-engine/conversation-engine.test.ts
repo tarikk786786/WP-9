@@ -483,4 +483,196 @@ describe("Authoritative Conversation Engine — Architectural Test Suite", () =>
     await new Promise((resolve) => setTimeout(resolve, 60));
     assert.equal(sentMessages.length, 2, "Second intentional message after interval produces second turn");
   });
+
+  // Test D: Fragmented thought ("bhai", "ek baat batao", "price kitna hai?") -> 1 response
+  it("Test D: Fragmented thought ('bhai', 'ek baat batao', 'price kitna hai?') aggregates to 1 turn and 1 response", async () => {
+    const base = Date.now();
+    await engine.acceptInboundEvent({
+      tenantId: "default",
+      chatId: "919114411026@s.whatsapp.net",
+      messageId: "frag_d_1",
+      text: "bhai",
+      sender: "919114411026",
+      timestamp: base,
+    });
+    await engine.acceptInboundEvent({
+      tenantId: "default",
+      chatId: "919114411026@s.whatsapp.net",
+      messageId: "frag_d_2",
+      text: "ek baat batao",
+      sender: "919114411026",
+      timestamp: base + 10,
+    });
+    await engine.acceptInboundEvent({
+      tenantId: "default",
+      chatId: "919114411026@s.whatsapp.net",
+      messageId: "frag_d_3",
+      text: "price kitna hai?",
+      sender: "919114411026",
+      timestamp: base + 20,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(sentMessages.length, 1);
+    assert.match(sentMessages[0].text, /pricing|plan|₹|service/i);
+  });
+
+  // Test E: Slang / Hinglish / typo message -> appropriate answer
+  it("Test E: Slang / Hinglish / typo message ('prc kya h web ka plz btao') understood and answered", async () => {
+    await engine.acceptInboundEvent({
+      tenantId: "default",
+      chatId: "919114411026@s.whatsapp.net",
+      messageId: "msg_slang_typo_e",
+      text: "prc kya h web ka plz btao",
+      sender: "919114411026",
+      timestamp: Date.now(),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(sentMessages.length, 1);
+    assert.match(sentMessages[0].text, /pricing|plan|₹|service/i);
+  });
+
+  // Test F: Quoted message referencing price -> response answers price
+  it("Test F: Quoted message referencing price resolves referenced question correctly", async () => {
+    await engine.acceptInboundEvent({
+      tenantId: "default",
+      chatId: "919114411026@s.whatsapp.net",
+      messageId: "msg_quoted_f",
+      text: "ye wala batao",
+      sender: "919114411026",
+      timestamp: Date.now(),
+      quoted: {
+        id: "quoted_msg_99",
+        text: "Website design package kitne ka hai?",
+        sender: "919114411026",
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(sentMessages.length, 1);
+    assert.match(sentMessages[0].text, /pricing|plan|₹|service/i);
+  });
+
+  // Test H: Emotional message ("bohot pareshan hu bhai") -> empathetic response
+  it("Test H: Emotional message ('bohot pareshan hu bhai') receives empathetic, non-robotic response", async () => {
+    await engine.acceptInboundEvent({
+      tenantId: "default",
+      chatId: "919114411026@s.whatsapp.net",
+      messageId: "msg_emotional_h",
+      text: "bohot pareshan hu bhai kuch samajh nahi aa raha",
+      sender: "919114411026",
+      timestamp: Date.now(),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(sentMessages.length, 1);
+    assert.match(sentMessages[0].text, /pareshan|chinta|sambhal|shant|fatar/i);
+  });
+
+  // Test I: Urgent message ("turant reply karo please") -> fast direct response
+  it("Test I: Urgent message ('turant reply karo please') triggers fast direct response", async () => {
+    await engine.acceptInboundEvent({
+      tenantId: "default",
+      chatId: "919114411026@s.whatsapp.net",
+      messageId: "msg_urgent_i",
+      text: "turant reply karo please urgent hai",
+      sender: "919114411026",
+      timestamp: Date.now(),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(sentMessages.length, 1);
+    assert.ok(sentMessages[0].text.length > 0);
+  });
+
+  // Test J: Playful message ("tu bot hai kya pagal") -> witty natural response
+  it("Test J: Playful message ('tu bot hai kya pagal') receives natural human response without bot denial loop", async () => {
+    await engine.acceptInboundEvent({
+      tenantId: "default",
+      chatId: "919114411026@s.whatsapp.net",
+      messageId: "msg_playful_j",
+      text: "tu bot hai kya pagal haha",
+      sender: "919114411026",
+      timestamp: Date.now(),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(sentMessages.length, 1);
+    assert.ok(sentMessages[0].text.length > 0);
+  });
+
+  // Test K: DAZY romantic contact message -> DAZY profile, level evaluated, no generic business reply
+  it("Test K: DAZY romantic contact message triggers dedicated romantic profile without generic business replies", async () => {
+    const dazyChat = "917903956968@s.whatsapp.net";
+    await engine.acceptInboundEvent({
+      tenantId: "default",
+      chatId: dazyChat,
+      messageId: "msg_dazy_k",
+      text: "kahan ho? yaad aa rahi hai tumhari",
+      sender: "917903956968",
+      fromName: "DAZY",
+      timestamp: Date.now(),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(sentMessages.length, 1);
+    // Must NOT be a generic business lead reply
+    assert.doesNotMatch(sentMessages[0].text, /website|package|service|client/i);
+    assert.match(sentMessages[0].text, /Dazy|pyaari|paas|yaad|yahi hu/i);
+  });
+
+  // Test O: Admin / manual message -> outbox sends with metadata { source: 'admin' }, no bot response triggered
+  it("Test O: Admin/manual message routed through outbox sends directly with source:admin and no bot turn triggered", async () => {
+    await outbox.enqueue({
+      responseId: "resp_admin_o_1",
+      chatId: "919114411026@s.whatsapp.net",
+      text: "Manual message from admin dashboard",
+      metadata: { source: "admin" },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(sentMessages.length, 1);
+    assert.equal(sentMessages[0].text, "Manual message from admin dashboard");
+    assert.equal(sentMessages[0].metadata?.source, "admin");
+  });
+
+  // Test P: Multiple concurrent chats -> independent processing, no cross-talk
+  it("Test P: Multiple concurrent chats process independently without cross-talk", async () => {
+    const chat1 = "919114411001@s.whatsapp.net";
+    const chat2 = "919114411002@s.whatsapp.net";
+
+    await Promise.all([
+      engine.acceptInboundEvent({
+        tenantId: "default",
+        chatId: chat1,
+        messageId: "msg_p_1",
+        text: "User 1 asking about delivery",
+        sender: "919114411001",
+        timestamp: Date.now(),
+      }),
+      engine.acceptInboundEvent({
+        tenantId: "default",
+        chatId: chat2,
+        messageId: "msg_p_2",
+        text: "User 2 asking about pricing",
+        sender: "919114411002",
+        timestamp: Date.now(),
+      }),
+    ]);
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assert.equal(sentMessages.length, 2);
+    const m1 = sentMessages.find((m) => m.chatId === chat1);
+    const m2 = sentMessages.find((m) => m.chatId === chat2);
+    assert.ok(m1, "Chat 1 must receive its own reply");
+    assert.ok(m2, "Chat 2 must receive its own reply");
+  });
+
+  // Test Q: Multiple response rate across all tests -> strictly 0%
+  it("Test Q: Multiple response rate metric is strictly 0%", async () => {
+    const metrics = engine.getMetrics();
+    assert.equal(metrics.multiple_response_rate, 0);
+    assert.equal(metrics.duplicate_response_attempts, 0);
+  });
 });

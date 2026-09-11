@@ -23,13 +23,13 @@ import {
   upsertCustomer,
   wasProcessed,
   markProcessed,
+  claimInboundMessage,
 } from "@bot/database";
 import type { NormalizedMessage } from "@bot/shared";
 import {
   analyzeMessage,
   combineBurstText,
   debounceChat,
-  forgetDuplicate,
   generateBestHumanReply,
   isCannedFallback,
   isDuplicate,
@@ -797,6 +797,19 @@ async function openSocket(pairingPhone?: string) {
     if (await wasProcessed(id) || await wasProcessed(`out_${id}`)) return;
     if (isDuplicate(id)) return;
 
+    // 5. Atomic inbound message claim (Phase 22 / Phase 23)
+    const claim = await claimInboundMessage({
+      messageId: id,
+      eventId: `evt_${id}`,
+      chatId: jid,
+      senderId: raw.key.participant || jid,
+      source: "notify",
+    });
+    if (!claim.claimed) {
+      console.log(`[whatsapp] Message ${id} already claimed by another turn or instance, dropping.`);
+      return;
+    }
+
     const body = (raw.message ?? inboundStore.get(id)) as Record<string, unknown> | undefined;
     if (isInboundStub(body ?? null)) {
       scheduleDecryptWait(jid, id, raw);
@@ -871,14 +884,13 @@ async function openSocket(pairingPhone?: string) {
   }
 
   sock.ev.on("messages.upsert", ({ messages, type }) => {
-    const source = type === "append" ? "append" : "notify";
+    // Phase 23: ONLY type === 'notify' triggers automated conversation turns
+    if (type !== "notify") return;
     void (async () => {
       for (const raw of messages) {
         try {
-          await ingestRaw(raw as WaRaw, source);
+          await ingestRaw(raw as WaRaw, "notify");
         } catch (error) {
-          const id = raw.key.id;
-          if (id) forgetDuplicate(id);
           await addLog("error", "whatsapp", error instanceof Error ? error.message : "message failed");
         }
       }
@@ -888,35 +900,28 @@ async function openSocket(pairingPhone?: string) {
   });
 
   sock.ev.on("messages.update", (updates) => {
+    // Phase 23: messages.update updates decrypted payload cache only, NEVER triggers a new reply
     void (async () => {
       for (const row of updates) {
         const message = (row.update as { message?: Record<string, unknown> } | undefined)?.message;
-        if (!message) continue;
-        try {
-          await ingestRaw({ key: row.key, message, messageTimestamp: Date.now() / 1000 }, "update");
-        } catch (error) {
-          const id = row.key.id;
-          if (id) forgetDuplicate(id);
-          await addLog("error", "whatsapp", error instanceof Error ? error.message : "message update failed");
+        const id = row.key?.id;
+        if (id && message) {
+          inboundStore.set(id, message);
         }
       }
     })().catch((error) => {
-      console.error("[whatsapp] messages.update failed", error);
+      console.error("[whatsapp] messages.update handler error", error);
     });
   });
 
   sock.ev.on("messaging-history.set", (payload) => {
+    // Phase 23: messaging-history.set caches history only, NEVER triggers automated replies
     const messages = (payload as { messages?: WaRaw[] }).messages ?? [];
-    void (async () => {
-      for (const raw of messages) {
-        try {
-          await ingestRaw(raw, "history");
-        } catch {
-          /* catch-up is best-effort */
-        }
+    for (const raw of messages) {
+      const id = raw.key?.id;
+      if (id && raw.message) {
+        inboundStore.set(id, raw.message);
       }
-    })().catch((error) => {
-      console.error("[whatsapp] history catch-up failed", error);
-    });
+    }
   });
 }

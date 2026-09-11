@@ -26,6 +26,9 @@ export * from "./response-planner.ts";
 export * from "./quality-gate.ts";
 export * from "./response-commit.ts";
 export * from "./outbox.ts";
+export * from "./state.ts";
+export * from "./dazy-profile.ts";
+export * from "./memory.ts";
 
 export interface ConversationEngineMetrics {
   messages_received: number;
@@ -321,3 +324,6 @@ export class AuthoritativeConversationEngine {
 }
 
 export const conversationEngine = new AuthoritativeConversationEngine();
+export const ConversationBrain = AuthoritativeConversationEngine;
+export type ConversationBrain = AuthoritativeConversationEngine;
+export const conversationBrain = conversationEngine;

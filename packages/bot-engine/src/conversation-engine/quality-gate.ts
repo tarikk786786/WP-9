@@ -1,4 +1,6 @@
 import type { ConversationHistoryEntry } from "./context.ts";
+import type { EmotionState } from "./state.ts";
+import { validateDazyEthics } from "./dazy-profile.ts";
 
 export interface QualityGateAudit {
   passed: boolean;
@@ -16,14 +18,28 @@ export class ResponseQualityGate {
     /how may i assist you today/i,
     /feel free to reach out if you have any questions/i,
     /is there anything else i can help you with\??/i,
+    /thank you for (your )?compliment/i,
     /<think>[\s\S]*?<\/think>/gi,
   ];
 
-  public sanitize(text: string): string {
+  // Inappropriate fake emotional claims to be sanitized
+  private fakeIntimacyClaims: Array<{ pattern: RegExp; replacement: string }> = [
+    { pattern: /omg\s+i\s+am\s+so\s+sad\s+for\s+you/i, replacement: "That sounds really tough." },
+    { pattern: /i\s+know\s+exactly\s+how\s+you\s+feel/i, replacement: "I can see why you'd feel that way." },
+    { pattern: /i\s+love\s+talking\s+to\s+you\s+so\s+much/i, replacement: "Glad we connected." },
+  ];
+
+  public sanitize(text: string, isDazy = false): string {
     let clean = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
     for (const phrase of this.roboticPhrases) {
       clean = clean.replace(phrase, "").trim();
+    }
+
+    if (!isDazy) {
+      for (const { pattern, replacement } of this.fakeIntimacyClaims) {
+        clean = clean.replace(pattern, replacement).trim();
+      }
     }
 
     // Clean redundant multiple spaces or dangling dashes
@@ -52,20 +68,34 @@ export class ResponseQualityGate {
     return false;
   }
 
-  public audit(text: string, history: ConversationHistoryEntry[]): QualityGateAudit {
+  public audit(
+    text: string,
+    history: ConversationHistoryEntry[],
+    options?: { isDazy?: boolean; emotionState?: EmotionState }
+  ): QualityGateAudit {
     const reasons: string[] = [];
-    let sanitized = this.sanitize(text);
+    let sanitized = this.sanitize(text, options?.isDazy);
 
     if (!sanitized) {
-      sanitized = "Ji samajh gaya. Bataiye main aapki kya madad kar sakta hoon?";
+      sanitized = options?.isDazy
+        ? "haan meri jaan ❤️ batao"
+        : "Ji samajh gaya. Bataiye main aapki kya madad kar sakta hoon?";
       reasons.push("Empty after stripping robotic noise");
+    }
+
+    // Ethical boundary check for DAZY profile
+    if (options?.isDazy) {
+      const ethics = validateDazyEthics(sanitized);
+      if (!ethics.valid) {
+        reasons.push(`DAZY ethics violation detected: ${ethics.violation}`);
+        sanitized = "Main hamesha tumhari baat samajhne aur saath dene ke liye hoon ❤️";
+      }
     }
 
     // Check repetition
     if (this.checkRepetition(sanitized, history)) {
       reasons.push("Accidental repetitive response detected");
-      // Add natural variation
-      sanitized = `Ji bilkul! ${sanitized}`;
+      sanitized = options?.isDazy ? `${sanitized}` : `Ji bilkul! ${sanitized}`;
     }
 
     // Enforce WhatsApp Brevity: max 1200 characters
