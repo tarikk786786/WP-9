@@ -1,5 +1,5 @@
 import { loadWorkerHeartbeat } from "@bot/database";
-import { workerBase, workerLooksLocal } from "@/lib/worker-client";
+import { getWorkerLive, workerBase, workerLooksLocal } from "@/lib/worker-client";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -115,21 +115,35 @@ async function proxyStream(request: Request) {
     } catch {
       /* fallback */
     }
+    let isAlive = false;
+    try {
+      const live = await getWorkerLive(2500);
+      isAlive = live.ok;
+    } catch {
+      /* ignore */
+    }
+
     const local = workerLooksLocal();
     const onVercel = Boolean(process.env.VERCEL);
+    const isProd = process.env.NODE_ENV === "production" || onVercel;
+
+    const errorMsg = isAlive
+      ? "Worker process is online. Initializing WhatsApp session..."
+      : onVercel && local
+        ? "Vercel cannot reach a localhost worker directly. Set WORKER_API_URL to your public tunnel or worker host URL."
+        : isProd
+          ? "Worker URL unreachable. Keep the worker process and tunnel/host online."
+          : "Worker is offline. Run 'npm run worker' to start.";
+
     return new Response(
       `data: ${JSON.stringify({
         snapshot: {
-          phase: "idle",
+          phase: isAlive ? "connecting" : "idle",
           qrDataUrl: null,
           phone: null,
           pairingCode: null,
           persisted: false,
-          error: onVercel && local
-            ? "Vercel cannot reach a localhost worker directly. Set WORKER_API_URL to your public tunnel or worker host URL."
-            : onVercel
-              ? "Worker URL unreachable. Keep the worker process and tunnel/host online."
-              : "Worker is offline. Run 'npm run worker' to start.",
+          error: errorMsg,
         },
       })}\n\n`,
       {

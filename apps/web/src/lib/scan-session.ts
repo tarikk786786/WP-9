@@ -1,9 +1,16 @@
 import { loadWorkerHeartbeat } from "@bot/database";
-import { workerFetch, workerHealth, workerLooksLocal } from "@/lib/worker-client";
+import {
+  getWorkerDetails,
+  getWorkerLive,
+  workerFetch,
+  workerHealth,
+  workerLooksLocal,
+} from "@/lib/worker-client";
 import type { ScanSnapshot } from "@/lib/types";
 
 function emptySnapshot(): ScanSnapshot {
   const onVercel = Boolean(process.env.VERCEL);
+  const isProd = process.env.NODE_ENV === "production" || onVercel;
   const localUrl = workerLooksLocal();
   return {
     phase: "idle",
@@ -11,7 +18,9 @@ function emptySnapshot(): ScanSnapshot {
     phone: null,
     error: onVercel && localUrl
       ? "Vercel cannot reach a localhost worker directly. Set WORKER_API_URL to your public tunnel or worker host URL."
-      : "Worker is offline. Run 'npm run worker' to start.",
+      : isProd
+        ? "Worker URL unreachable. Keep the worker process and tunnel/host online."
+        : "Worker is offline. Run 'npm run worker' to start.",
     persisted: false,
     savedAt: null,
     serverless: onVercel,
@@ -20,6 +29,44 @@ function emptySnapshot(): ScanSnapshot {
 }
 
 export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
+  const onVercel = Boolean(process.env.VERCEL);
+  let workerIsAlive = false;
+  try {
+    const liveCheck = await getWorkerLive(3000);
+    workerIsAlive = liveCheck.ok;
+  } catch {
+    /* ignore probe failure */
+  }
+
+  try {
+    const details = await getWorkerDetails(4000);
+    if (details.ok && details.data) {
+      const wa = details.data.whatsapp;
+      const statusStr = (wa.status || "").toLowerCase();
+      const connected = statusStr === "connected" || statusStr === "ready";
+      return {
+        phase: connected
+          ? "ready"
+          : statusStr.includes("qr")
+            ? "qr"
+            : statusStr.includes("connecting") || statusStr.includes("reconnecting")
+              ? "connecting"
+              : statusStr.includes("logged_out")
+                ? "logged_out"
+                : "idle",
+        qrDataUrl: wa.qrDataUrl,
+        phone: wa.phone,
+        error: null,
+        persisted: Boolean(wa.phone || connected),
+        savedAt: wa.lastConnectedAt,
+        serverless: onVercel,
+        pairingCode: wa.pairingCode,
+      };
+    }
+  } catch {
+    /* fallback to /health or heartbeat */
+  }
+
   try {
     const health = await workerHealth();
     const wa = health.whatsapp ?? {};
@@ -50,7 +97,7 @@ export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
       error,
       persisted: Boolean(wa.persisted || connected),
       savedAt: wa.lastConnectedAt ?? health.lastSuccessfulConnection ?? null,
-      serverless: Boolean(process.env.VERCEL),
+      serverless: onVercel,
       pairingCode,
     };
   } catch {
@@ -66,7 +113,7 @@ export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
             error: hb.error,
             persisted: Boolean(hb.connected || hb.phase === "ready"),
             savedAt: hb.updatedAt,
-            serverless: Boolean(process.env.VERCEL),
+            serverless: onVercel,
             pairingCode: hb.pairingCode,
           };
         }
@@ -74,7 +121,12 @@ export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
     } catch {
       /* fallback to empty */
     }
-    return emptySnapshot();
+    const empty = emptySnapshot();
+    if (workerIsAlive) {
+      empty.error = "Worker process is running. Connecting to WhatsApp...";
+      empty.phase = "connecting";
+    }
+    return empty;
   }
 }
 

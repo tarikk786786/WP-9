@@ -531,3 +531,97 @@ export async function loadWorkerHeartbeat(): Promise<WorkerHeartbeat | null> {
   return null;
 }
 
+export type WorkerLease = {
+  id: string;
+  instanceId: string;
+  acquiredAt: string;
+  renewedAt: string;
+  expiresAt: string;
+};
+
+export async function acquireWorkerLease(instanceId: string, ttlMs: number = 30_000): Promise<boolean> {
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  const nowIso = new Date().toISOString();
+  const db = supabase();
+  if (db) {
+    try {
+      const { data, error } = await db
+        .from("worker_leases")
+        .select("*")
+        .eq("id", "primary_worker")
+        .maybeSingle();
+
+      if (!error && data) {
+        const isExpired = new Date(data.expires_at).getTime() < Date.now();
+        if (data.instance_id !== instanceId && !isExpired) {
+          return false;
+        }
+      }
+
+      const { error: upsertErr } = await db.from("worker_leases").upsert({
+        id: "primary_worker",
+        instance_id: instanceId,
+        renewed_at: nowIso,
+        expires_at: expiresAt,
+      });
+      if (!upsertErr) return true;
+    } catch {
+      /* fallback to baileys_auth lock */
+    }
+  }
+
+  const lockKey = "__worker_primary_lease.json";
+  try {
+    const raw = memory.authFiles[lockKey];
+    if (raw) {
+      const lease = JSON.parse(raw) as WorkerLease;
+      if (lease.instanceId !== instanceId && new Date(lease.expiresAt).getTime() > Date.now()) {
+        return false;
+      }
+    }
+    const newLease: WorkerLease = {
+      id: "primary_worker",
+      instanceId,
+      acquiredAt: nowIso,
+      renewedAt: nowIso,
+      expiresAt,
+    };
+    const jsonStr = JSON.stringify(newLease);
+    memory.authFiles[lockKey] = jsonStr;
+    if (db) {
+      await db.from("baileys_auth").upsert(
+        { filename: lockKey, data: jsonStr },
+        { onConflict: "filename" },
+      );
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export async function releaseWorkerLease(instanceId: string): Promise<void> {
+  const db = supabase();
+  if (db) {
+    try {
+      await db.from("worker_leases").delete().eq("id", "primary_worker").eq("instance_id", instanceId);
+    } catch {
+      /* fallback */
+    }
+  }
+  const lockKey = "__worker_primary_lease.json";
+  try {
+    const raw = memory.authFiles[lockKey];
+    if (raw) {
+      const lease = JSON.parse(raw) as WorkerLease;
+      if (lease.instanceId === instanceId) {
+        delete memory.authFiles[lockKey];
+        if (db) await db.from("baileys_auth").delete().eq("filename", lockKey);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+

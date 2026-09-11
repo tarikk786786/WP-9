@@ -21,7 +21,7 @@ primary_region = "iad"
     timeout = "5s"
     grace_period = "25s"
     method = "GET"
-    path = "/health"
+    path = "/health/live"
 
 [mounts]
   source = "baileys_data"

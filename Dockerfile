@@ -25,5 +25,5 @@ RUN mkdir -p /app/data/baileys-auth
 VOLUME ["/app/data"]
 EXPOSE 8788
 HEALTHCHECK --interval=20s --timeout=5s --start-period=25s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:8788/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "const p=process.env.PORT||process.env.WORKER_PORT||8788; fetch('http://127.0.0.1:'+p+'/health/live').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["npm", "run", "worker"]

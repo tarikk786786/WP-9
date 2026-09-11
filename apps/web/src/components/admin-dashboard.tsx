@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ScanLogin } from "@/components/scan-login";
+import { SystemStatus } from "@/components/system-status";
 import type { AutomationRule, BotSettings, Faq } from "@bot/shared";
 import { defaultBotSettings } from "@bot/shared";
 
@@ -120,6 +121,7 @@ export function AdminDashboard({ view }: { view: "dashboard" | "conversations" |
 
       {view === "dashboard" ? (
         <>
+          <SystemStatus />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat title="Worker" value={status.error ? "offline" : status.health?.worker ?? "…"} />
             <Stat title="WhatsApp" value={wa?.connected ? `linked ${wa.phone ?? ""}` : wa?.phase ?? "unknown"} />

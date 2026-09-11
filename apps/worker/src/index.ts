@@ -367,7 +367,34 @@ server.on("error", (error: NodeJS.ErrnoException) => {
   throw error;
 });
 
-server.listen(port, "0.0.0.0", () => {
-  console.log(`[worker] Baileys worker on http://127.0.0.1:${port}`);
+server.listen(port, host, () => {
+  console.log(`
+=====================================================
+WP-9 Worker Online
+Port:      ${port}
+Host:      ${host}
+Mode:      ${process.env.NODE_ENV || "development"}
+Liveness:  http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}/health/live
+Readiness: http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}/health/ready
+Details:   http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}/health/details
+Supabase:  ${usingSupabase() ? "Configured" : "Local disk fallback"}
+=====================================================
+`);
   void ensureAlwaysOn();
 });
+
+function gracefulShutdown(signal: string) {
+  console.log(`[worker] Received ${signal}. Closing server gracefully...`);
+  server.close(() => {
+    console.log("[worker] HTTP server closed.");
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error("[worker] Forcefully terminating after shutdown timeout.");
+    process.exit(1);
+  }, 10_000).unref();
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+

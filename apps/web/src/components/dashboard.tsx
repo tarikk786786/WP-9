@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { LocalBrain } from "@/components/local-brain";
 import { ScanLogin } from "@/components/scan-login";
+import { SystemStatus } from "@/components/system-status";
 import { copyText } from "@/lib/browser-copy";
 import type { DeskData } from "@/lib/load-desk";
 import type { BotRules, InboxMessage, KeywordRule } from "@/lib/types";
@@ -188,6 +189,9 @@ export function Dashboard({ initial }: { initial: DeskData }) {
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="lg:col-span-2">
+          <SystemStatus />
+        </div>
         <LocalBrain
           initial={{
             ...initial.live,

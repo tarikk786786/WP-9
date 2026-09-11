@@ -16,6 +16,8 @@ import {
   saveAuthFiles,
   saveSettings,
   saveWorkerHeartbeat,
+  acquireWorkerLease,
+  releaseWorkerLease,
   setConversationStatus,
   upsertConversation,
   upsertCustomer,
@@ -177,18 +179,23 @@ export function getSnapshot(): WorkerSnapshot {
   };
 }
 
+export const WORKER_INSTANCE_ID = `worker_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+
 export async function syncWorkerHeartbeat() {
   try {
     const snap = getSnapshot();
-    await saveWorkerHeartbeat({
-      phase: snap.phase,
-      connected: snap.connected,
-      phone: snap.phone ?? null,
-      pairingCode: snap.pairingCode ?? null,
-      qrDataUrl: snap.qrDataUrl ?? null,
-      error: snap.error ?? null,
-      updatedAt: new Date().toISOString(),
-    });
+    await Promise.all([
+      saveWorkerHeartbeat({
+        phase: snap.phase,
+        connected: snap.connected,
+        phone: snap.phone ?? null,
+        pairingCode: snap.pairingCode ?? null,
+        qrDataUrl: snap.qrDataUrl ?? null,
+        error: snap.error ?? null,
+        updatedAt: new Date().toISOString(),
+      }),
+      acquireWorkerLease(WORKER_INSTANCE_ID, 30_000),
+    ]);
   } catch {
     /* heartbeat failure is non-blocking */
   }
@@ -281,13 +288,16 @@ function persistAuthDirSoon() {
   }, 1500);
 }
 
-function scheduleReconnect() {
+function scheduleReconnect(immediate = false) {
   if (manager.reconnectTimer || manager.starting) return;
   if (manager.snapshot.phase === "logged_out") return;
-  const delay = manager.reconnectDelay;
+  const base = immediate ? 1500 : manager.reconnectDelay;
+  const jitter = base * (0.8 + Math.random() * 0.4);
+  const delay = Math.round(jitter);
+  console.log(`[whatsapp] Scheduling reconnect in ${delay}ms...`);
   manager.reconnectTimer = setTimeout(() => {
     manager.reconnectTimer = null;
-    manager.reconnectDelay = Math.min(delay * 2, 15_000);
+    manager.reconnectDelay = Math.min(Math.round(base * 1.6), 120_000);
     void startWhatsApp();
   }, delay);
 }
@@ -680,8 +690,9 @@ async function openSocket(pairingPhone?: string) {
       }
     }
     if (connection === "close") {
-      const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output
-        ?.statusCode;
+      const err = lastDisconnect?.error as { message?: string; output?: { statusCode?: number } } | undefined;
+      const statusCode = err?.output?.statusCode;
+      const isQrTimeout = Boolean(err?.message && /QR refs attempts ended|QR code expired/i.test(err.message));
       if (manager.sock === sock) manager.sock = null;
       const dead = shouldWipeAuth(statusCode);
       if (dead) {
@@ -695,7 +706,17 @@ async function openSocket(pairingPhone?: string) {
         };
         manager.reconnectDelay = 800;
         void syncWorkerHeartbeat();
-        scheduleReconnect();
+        scheduleReconnect(true);
+        return;
+      }
+      if (isQrTimeout) {
+        console.log("[whatsapp] QR scan window timed out. Refreshing QR code...");
+        manager.reconnectDelay = 1500;
+        manager.snapshot.connected = false;
+        manager.snapshot.phase = "qr";
+        manager.snapshot.error = "QR code refreshed. Please scan with WhatsApp.";
+        void syncWorkerHeartbeat();
+        scheduleReconnect(true);
         return;
       }
       connectionStateMachine.transition("RECONNECTING", "Connection closed, reconnecting");
