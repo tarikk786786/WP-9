@@ -1,16 +1,22 @@
-services:
+﻿services:
   - type: web
-    name: whatsapp-baileys-worker
+    name: wp9-worker
     runtime: docker
+    plan: free
+    region: oregon
     dockerfilePath: Dockerfile
-    plan: starter
-    healthCheckPath: /health/live
     envVars:
+      - key: PORT
+        value: 8788
       - key: WORKER_PORT
-        value: "8788"
-      - key: BAILEYS_AUTH_DIR
-        value: /app/data/baileys-auth
-    disk:
-      name: baileys-auth
-      mountPath: /app/data
-      sizeGB: 1
+        value: 8788
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: ADMIN_SECRET
+        sync: false
+      - key: WORKER_API_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
