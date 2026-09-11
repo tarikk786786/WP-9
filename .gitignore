@@ -13,7 +13,7 @@ coverage
 *.tsbuildinfo
 auth_info*
 baileys-auth
-session
+data/session
 *.pem
 cloudflared.bin
 apps/worker/cloudflared.bin
