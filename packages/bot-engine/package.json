@@ -9,7 +9,7 @@
     "./tools": "./src/tools/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/engine.test.ts src/orchestrate.test.ts src/people.test.ts src/tools.test.ts src/handoff.test.ts src/evals.test.ts",
+    "test": "tsx --test src/engine.test.ts src/orchestrate.test.ts src/people.test.ts src/tools.test.ts src/handoff.test.ts src/evals.test.ts src/conversation/conversation.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

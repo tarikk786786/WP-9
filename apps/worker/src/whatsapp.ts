@@ -44,6 +44,7 @@ import {
   aiCircuitBreaker,
   whatsappCircuitBreaker,
   messageOutbox,
+  conversationEngine,
 } from "@bot/engine";
 import { shouldReplyTool } from "@bot/engine/tools";
 import { personForChat } from "./people-map.ts";
@@ -108,6 +109,120 @@ async function sendText(jid: string, text: string) {
   }
   throw lastError instanceof Error ? lastError : new Error("send failed");
 }
+
+// Authoritative Single-Turn Conversation Engine Setup
+conversationEngine.setSender(async (chatId, text) => {
+  await sendText(chatId, text);
+});
+
+conversationEngine.updateDependencies({
+  getSettings: async () => {
+    return await getSettings();
+  },
+  getConversationStatus: async (chatId: string) => {
+    const customer = await upsertCustomer({
+      number: chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
+      name: chatId,
+    });
+    const convo = await upsertConversation(customer.id, chatId);
+    return convo.status;
+  },
+  setConversationStatus: async (chatId: string, status: string) => {
+    const customer = await upsertCustomer({
+      number: chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
+      name: chatId,
+    });
+    const convo = await upsertConversation(customer.id, chatId);
+    await setConversationStatus(convo.id, status as never);
+  },
+  getHistory: async (chatId: string) => {
+    const customer = await upsertCustomer({
+      number: chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
+      name: chatId,
+    });
+    const convo = await upsertConversation(customer.id, chatId);
+    const history = await recentMessages(convo.id);
+    return history
+      .slice()
+      .reverse()
+      .map((m) => ({
+        role: m.direction === "in" ? ("user" as const) : ("assistant" as const),
+        text: m.text,
+      }));
+  },
+  searchKnowledge: async (query: string) => {
+    return await knowledgeSearch(query);
+  },
+  getFaqs: async () => {
+    return await getFaqs();
+  },
+  getRules: async () => {
+    return await getRules();
+  },
+  generateAiReply: async (turn, understanding, { history, knowledge }) => {
+    const settings = await getSettings();
+    const faqs = await getFaqs();
+    const rules = await getRules();
+    const person = personForChat(turn.chatId, turn.fromName, turn.sender);
+
+    const faqFacts = matchAllFaqs(turn.combinedText, faqs).map((f) => `${f.question}: ${f.answer}`);
+    const ruleFacts = matchAllRules(turn.combinedText, rules)
+      .filter((r) => !/agent|human/.test(r.triggerValue))
+      .map((r) => r.response);
+
+    const ai = await withTimeout(
+      generateBestHumanReply(
+        {
+          id: turn.firstMessageId,
+          whatsappMessageId: turn.firstMessageId,
+          chatId: turn.chatId,
+          sender: turn.sender,
+          fromName: person?.name ?? turn.fromName ?? turn.sender,
+          text: turn.combinedText,
+          timestamp: new Date(turn.createdAt).toISOString(),
+          isGroup: turn.isGroup,
+          type: "text",
+          metadata: {},
+        },
+        {
+          settings,
+          customerName: person?.name ?? turn.fromName ?? turn.sender,
+          recent: history,
+          faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
+          knowledge: [...knowledge, ...ruleFacts],
+          intent: understanding.intents.join(","),
+          analysis: analyzeMessage(turn.combinedText, {
+            isFirstMessage: history.length === 0,
+            inboundCount: history.filter((m) => m.role === "user").length,
+          }),
+          isFirstMessage: history.length === 0,
+          messageType: "text",
+          person: person ?? undefined,
+        }
+      ),
+      7500
+    );
+
+    return ai?.text || null;
+  },
+  onMessageCommitted: async (chatId, message) => {
+    const customer = await upsertCustomer({
+      number: chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
+      name: chatId,
+    });
+    const convo = await upsertConversation(customer.id, chatId);
+    await addMessage({
+      conversation_id: convo.id,
+      whatsapp_message_id: message.responseId,
+      direction: "out",
+      message_type: "text",
+      text: message.text,
+      media_reference: null,
+      ai_generated: message.aiGenerated,
+      intent: message.intent,
+    });
+  },
+});
 
 type Manager = {
   snapshot: WorkerSnapshot;
@@ -808,8 +923,16 @@ async function openSocket(pairingPhone?: string) {
         if (!normalized) return;
         if (isDuplicate(id)) return;
         manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
-        debounceChat(jid, normalized, (batch) => {
-          void replyToBurst(jid, batch);
+        conversationEngine.acceptInboundEvent({
+          tenantId: "default",
+          chatId: jid,
+          messageId: id,
+          text: normalized.text,
+          sender: normalized.sender,
+          fromName: normalized.fromName,
+          timestamp: Date.now(),
+          isGroup: Boolean(normalized.isGroup),
+          mediaType: normalized.type,
         });
       })().catch((error) => {
         console.error("[whatsapp] decrypt wait failed", error);
@@ -869,8 +992,33 @@ async function openSocket(pairingPhone?: string) {
       ai_generated: false,
       intent: null,
     });
-    debounceChat(jid, normalized, (batch) => {
-      void replyToBurst(jid, batch);
+    const contextInfo = (body?.extendedTextMessage as { contextInfo?: Record<string, unknown> } | undefined)?.contextInfo;
+    const quotedRaw = contextInfo?.quotedMessage as Record<string, unknown> | undefined;
+    const quotedText = quotedRaw
+      ? typeof quotedRaw.conversation === "string"
+        ? quotedRaw.conversation
+        : (quotedRaw.extendedTextMessage as { text?: string } | undefined)?.text ?? ""
+      : "";
+    const quotedSender = typeof contextInfo?.participant === "string" ? contextInfo.participant : undefined;
+    const quotedId = typeof contextInfo?.stanzaId === "string" ? contextInfo.stanzaId : undefined;
+
+    conversationEngine.acceptInboundEvent({
+      tenantId: "default",
+      chatId: jid,
+      messageId: id,
+      text: normalized.text,
+      sender: normalized.sender,
+      fromName: normalized.fromName,
+      timestamp: waTimestampMs(raw),
+      quoted: quotedText
+        ? {
+            id: quotedId,
+            text: quotedText,
+            sender: quotedSender,
+          }
+        : undefined,
+      isGroup: Boolean(normalized.isGroup),
+      mediaType: normalized.type,
     });
   }
 
