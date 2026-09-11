@@ -1,5 +1,11 @@
 {
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm install",
-  "buildCommand": "cd ../.. && npm run build --workspace=web"
+  "buildCommand": "cd ../.. && npm run build --workspace=web",
+  "crons": [
+    {
+      "path": "/api/health",
+      "schedule": "*/10 * * * *"
+    }
+  ]
 }

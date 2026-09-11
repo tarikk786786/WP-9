@@ -1,22 +1,24 @@
-﻿services:
+services:
   - type: web
     name: wp9-worker
     runtime: docker
-    plan: starter
+    plan: free
     region: singapore
     dockerfilePath: Dockerfile
     healthCheckPath: /health/live
-    disk:
-      name: wp9-data
-      mountPath: /app/data
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: HOST
         value: 0.0.0.0
+      - key: PORT
+        value: 8788
+      - key: WORKER_PORT
+        value: 8788
       - key: DEPLOYMENT_MODE
         value: render
+      - key: PUBLIC_WORKER_URL
+        value: https://wp-9.onrender.com
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY

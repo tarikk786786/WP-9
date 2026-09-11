@@ -367,6 +367,32 @@ server.on("error", (error: NodeJS.ErrnoException) => {
   throw error;
 });
 
+function startCloudKeepalive() {
+  const target =
+    process.env.RENDER_EXTERNAL_URL ||
+    process.env.PUBLIC_WORKER_URL ||
+    (process.env.DEPLOYMENT_MODE === "render" ? "https://wp-9.onrender.com" : null);
+
+  if (!target || !target.startsWith("http")) return;
+
+  const pingUrl = `${target.replace(/\/$/, "")}/health/live`;
+  console.log(`[worker] Cloud keepalive self-pinger active for: ${pingUrl}`);
+
+  setInterval(async () => {
+    try {
+      const res = await fetch(pingUrl, {
+        headers: { "User-Agent": "WP-9-Worker-KeepAlive/1.0" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (res.ok) {
+        console.log(`[worker] Cloud keepalive ping OK (${res.status})`);
+      }
+    } catch (err) {
+      console.warn(`[worker] Cloud keepalive ping warning:`, err instanceof Error ? err.message : String(err));
+    }
+  }, 8 * 60 * 1000).unref();
+}
+
 server.listen(port, host, () => {
   console.log(`
 =====================================================
@@ -381,6 +407,7 @@ Supabase:  ${usingSupabase() ? "Configured" : "Local disk fallback"}
 =====================================================
 `);
   void ensureAlwaysOn();
+  startCloudKeepalive();
 });
 
 function gracefulShutdown(signal: string) {
