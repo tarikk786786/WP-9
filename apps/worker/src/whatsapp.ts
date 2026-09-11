@@ -50,6 +50,7 @@ import { personForChat } from "./people-map.ts";
 import { isSendableJid, resolveChat } from "./chat-address.ts";
 import { authDir, migrateLegacyAuth } from "./paths.ts";
 import { credsAreLinked, phoneFromCreds, shouldWipeAuth } from "./session-policy.ts";
+import { connectionGuardian } from "./connection-guardian.ts";
 
 type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
 
@@ -142,6 +143,7 @@ const manager: Manager = {
 let lastFrameAt = Date.now();
 function touchFrame() {
   lastFrameAt = Date.now();
+  connectionGuardian.recordActivity();
 }
 
 function isSocketLive() {
@@ -328,6 +330,12 @@ let keepAliveStarted = false;
 let pulsing = false;
 let lastReconnectAt = 0;
 
+connectionGuardian.setSnapshotGetter(getSnapshot);
+connectionGuardian.registerReconnectHandler(async () => {
+  console.log("[guardian] Reconnect requested by ConnectionGuardian");
+  await startWhatsApp(undefined, { force: true });
+});
+
 export async function ensureAlwaysOn() {
   const settings = await getSettings();
   await saveSettings({
@@ -338,6 +346,7 @@ export async function ensureAlwaysOn() {
     businessHours: { ...settings.businessHours, enabled: false },
   });
   migrateLegacyAuth();
+  connectionGuardian.start();
   messageOutbox.setSender(async (destJid, outText) => {
     await whatsappCircuitBreaker.execute(async () => {
       await sendText(destJid, outText);
@@ -852,6 +861,7 @@ async function openSocket(pairingPhone?: string) {
     }
     if (isDuplicate(id)) return;
     manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
+    connectionGuardian.recordMessage();
     const customer = await upsertCustomer({
       number: jid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
       name: normalized.fromName,
