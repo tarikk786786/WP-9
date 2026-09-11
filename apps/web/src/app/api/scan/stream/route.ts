@@ -1,5 +1,5 @@
 import { loadWorkerHeartbeat } from "@bot/database";
-import { getWorkerLive, workerBase, workerLooksLocal } from "@/lib/worker-client";
+import { getWorkerLive, resolveWorkerBase, workerLooksLocal } from "@/lib/worker-client";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -13,10 +13,11 @@ export async function POST(request: Request) {
 }
 
 async function proxyStream(request: Request) {
-  const secret = process.env.WORKER_API_SECRET || "dev-worker-secret-change-me";
+  const base = await resolveWorkerBase();
+  const secret = process.env.WORKER_API_SECRET || "wp9_sec_9114411026_daziai_crm";
   const url = new URL(request.url);
   const pair = url.searchParams.get("pair");
-  const target = `${workerBase()}/session/stream${pair ? `?pair=${encodeURIComponent(pair)}` : ""}`;
+  const target = `${base}/session/stream${pair ? `?pair=${encodeURIComponent(pair)}` : ""}`;
   let body: string | undefined;
   if (request.method === "POST") {
     body = await request.text();
