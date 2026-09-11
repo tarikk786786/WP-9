@@ -207,6 +207,23 @@ export class WhatsAppOutbox {
     };
   }
 
+  public retryDeadLetters(): number {
+    let count = 0;
+    for (const item of this.queue.values()) {
+      if (item.status === "dead_letter" || item.status === "failed") {
+        item.status = "pending";
+        item.attempts = 0;
+        item.error = undefined;
+        item.updatedAt = Date.now();
+        count++;
+      }
+    }
+    if (count > 0) {
+      void this.processQueue(true);
+    }
+    return count;
+  }
+
   public clear() {
     this.queue.clear();
   }

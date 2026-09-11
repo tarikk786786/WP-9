@@ -53,6 +53,26 @@ type SystemHealthState = {
     heartbeat?: {
       lastHeartbeatAt?: string | null;
     };
+    conversationEngine?: {
+      metrics?: {
+        messages_received?: number;
+        duplicate_messages?: number;
+        logical_turns?: number;
+        responses_generated?: number;
+        responses_committed?: number;
+        responses_sent?: number;
+        responses_suppressed?: number;
+        duplicate_response_attempts?: number;
+        multiple_response_rate?: number;
+      };
+      outbox?: {
+        pending?: number;
+        sending?: number;
+        sent?: number;
+        failed?: number;
+        deadLetter?: number;
+      };
+    };
   };
 };
 
@@ -181,7 +201,7 @@ export function SystemStatus() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
           {/* 1. Worker Process */}
           <div className="rounded-lg border bg-card p-2.5">
             <p className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground">Process</p>
@@ -248,7 +268,21 @@ export function SystemStatus() {
             </p>
           </div>
 
-          {/* 6. Heartbeat */}
+          {/* 6. Conversation Brain Integrity */}
+          <div className="rounded-lg border bg-card p-2.5">
+            <p className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground">Conv Brain</p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-emerald-500" />
+              <span className="text-xs font-semibold">
+                {h?.conversationEngine?.metrics?.multiple_response_rate === 0 ? "0% Dup" : "Authoritative"}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground truncate">
+              {h?.conversationEngine?.metrics?.logical_turns ?? 0} turns · {h?.conversationEngine?.metrics?.duplicate_messages ?? 0} dedup
+            </p>
+          </div>
+
+          {/* 7. Heartbeat */}
           <div className="rounded-lg border bg-card p-2.5">
             <p className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground">Heartbeat</p>
             <div className="mt-1 flex items-center gap-1.5">

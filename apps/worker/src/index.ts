@@ -252,8 +252,12 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (url.pathname === "/outbox/retry" && req.method === "POST") {
-      const retried = messageOutbox.retryDeadLetters();
-      json(res, 200, { retried, outbox: messageOutbox.getSnapshot() });
+      const retried1 = messageOutbox.retryDeadLetters();
+      const retried2 = conversationEngine.outbox.retryDeadLetters();
+      json(res, 200, {
+        retried: retried1 + retried2,
+        outbox: conversationEngine.outbox.getSnapshot(),
+      });
       return;
     }
     if (url.pathname === "/circuit/reset" && req.method === "POST") {
