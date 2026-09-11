@@ -1,0 +1,28 @@
+[Unit]
+Description=Cloudflare Named Tunnel for WP-9 Worker
+After=network-online.target
+Wants=network-online.target
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+
+[Service]
+Type=notify
+User=cloudflared
+Group=cloudflared
+EnvironmentFile=-/etc/cloudflared/tunnel.env
+
+# Cloudflare Tunnel execution using secure token from environment file
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate tunnel run --token $TUNNEL_TOKEN
+
+# Automatic crash recovery
+Restart=always
+RestartSec=5s
+KillMode=mixed
+TimeoutStopSec=15s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cloudflared-wp9
+
+[Install]
+WantedBy=multi-user.target

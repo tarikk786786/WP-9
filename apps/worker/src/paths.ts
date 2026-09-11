@@ -6,7 +6,10 @@ const workerRoot = path.resolve(fileURLToPath(new URL(".", import.meta.url)), ".
 
 export function authDir() {
   const fromEnv = process.env.BAILEYS_AUTH_DIR?.trim();
-  return path.resolve(fromEnv || path.join(workerRoot, "data", "baileys-auth"));
+  if (fromEnv) return path.resolve(fromEnv);
+  if (existsSync("/app/data")) return path.resolve("/app/data/baileys-auth");
+  if (existsSync("/opt/wp9/data")) return path.resolve("/opt/wp9/data/baileys-auth");
+  return path.resolve(path.join(workerRoot, "data", "baileys-auth"));
 }
 
 export function dataDir() {

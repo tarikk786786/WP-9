@@ -1,0 +1,40 @@
+[Unit]
+Description=WP-9 Production WhatsApp Baileys Worker (Persistent Always-Live)
+After=network-online.target
+Wants=network-online.target
+Documentation=https://github.com/tarikk786786/WP-9
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/wp9
+EnvironmentFile=-/etc/wp9/worker.env
+EnvironmentFile=-/opt/wp9/.env
+
+# Default Fallback Environment Variables
+Environment=NODE_ENV=production
+Environment=HOST=0.0.0.0
+Environment=WORKER_PORT=8788
+Environment=PORT=8788
+Environment=BAILEYS_AUTH_DIR=/app/data/baileys-auth
+
+# Process Execution
+ExecStartPre=/bin/mkdir -p /app/data/baileys-auth
+ExecStart=/usr/bin/npm run worker
+
+# Self-Healing & Auto-Restart Policies
+Restart=always
+RestartSec=3s
+RestartPreventExitStatus=0
+KillMode=mixed
+TimeoutStopSec=15s
+
+# Resource Constraints & System Safety
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wp9-worker
+
+[Install]
+WantedBy=multi-user.target

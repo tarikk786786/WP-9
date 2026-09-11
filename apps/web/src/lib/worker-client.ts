@@ -64,20 +64,17 @@ export function classifyWorkerError(err: unknown, status?: number): WorkerErrorC
   return "WORKER_UNREACHABLE";
 }
 
+import { WorkerClient, type WorkerClientConfig } from "@bot/shared";
+
 export async function workerFetch(path: string, init: RequestInit = {}) {
   const base = await resolveWorkerBase();
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-  const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${SECRET}`);
-  headers.set("x-worker-secret", SECRET);
-  headers.set("x-request-id", requestId);
-  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  return fetch(`${base}${path}`, {
-    ...init,
-    headers,
-    cache: "no-store",
-    signal: init.signal ?? AbortSignal.timeout(10_000),
+  const client = new WorkerClient({
+    baseUrl: base,
+    secret: SECRET,
+    defaultTimeoutMs: 10_000,
+    maxRetries: 2,
   });
+  return client.fetchWithRetry(path, init);
 }
 
 export async function getWorkerLive(timeoutMs = 4000): Promise<{

@@ -337,14 +337,6 @@ connectionGuardian.registerReconnectHandler(async () => {
 });
 
 export async function ensureAlwaysOn() {
-  const settings = await getSettings();
-  await saveSettings({
-    ...settings,
-    enabled: true,
-    aiEnabled: true,
-    replyToMedia: true,
-    businessHours: { ...settings.businessHours, enabled: false },
-  });
   migrateLegacyAuth();
   connectionGuardian.start();
   messageOutbox.setSender(async (destJid, outText) => {
