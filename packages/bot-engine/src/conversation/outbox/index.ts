@@ -81,7 +81,7 @@ export class IdempotentOutbox {
       text: params.text,
       status: "PENDING",
       attempts: 0,
-      maxAttempts: params.maxAttempts ?? 3,
+      maxAttempts: params.maxAttempts ?? 2,
       createdAt: now,
       updatedAt: now,
       metadata: params.metadata,
@@ -100,6 +100,14 @@ export class IdempotentOutbox {
       const now = Date.now();
       for (const [key, item] of this.queue.entries()) {
         if (item.status === "PENDING" || (item.status === "FAILED" && item.attempts < item.maxAttempts)) {
+          // Exponential backoff for failed retries: at least 5s * 2^(attempts - 1)
+          if (item.status === "FAILED") {
+            const backoffMs = Math.min(30_000, 5000 * Math.pow(2, item.attempts - 1));
+            if (now - item.updatedAt < backoffMs) {
+              continue;
+            }
+          }
+
           item.status = "SENDING";
           item.attempts += 1;
           item.updatedAt = Date.now();
@@ -111,9 +119,12 @@ export class IdempotentOutbox {
             item.updatedAt = Date.now();
 
             // Evict sent item after 5 minutes
-            setTimeout(() => {
+            const evictTimer = setTimeout(() => {
               this.queue.delete(key);
             }, 300_000);
+            if (evictTimer && typeof evictTimer.unref === "function") {
+              evictTimer.unref();
+            }
           } catch (err) {
             item.error = err instanceof Error ? err.message : String(err);
             item.updatedAt = Date.now();

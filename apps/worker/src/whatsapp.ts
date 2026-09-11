@@ -22,6 +22,7 @@ import {
   upsertConversation,
   upsertCustomer,
   wasProcessed,
+  markProcessed,
 } from "@bot/database";
 import type { NormalizedMessage } from "@bot/shared";
 import {
@@ -71,7 +72,6 @@ export type WorkerSnapshot = {
 const AUTH_DIR = authDir();
 const startedAt = Date.now();
 
-const pendingReplies = new Map<string, NormalizedMessage[]>();
 const inboundStore = new Map<string, Record<string, unknown>>();
 
 async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
@@ -93,21 +93,9 @@ async function sendText(jid: string, text: string) {
   const sock = manager.sock;
   if (!sock) throw new Error("WhatsApp socket down");
   if (!isSendableJid(jid)) throw new Error("WhatsApp chat id missing");
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      await sock.sendMessage(jid, { text });
-      manager.snapshot.lastMessageSentAt = new Date().toISOString();
-      touchFrame();
-      return;
-    } catch (error) {
-      lastError = error;
-      const message = error instanceof Error ? error.message : String(error);
-      if (/jidDecode|invalid jid|No session/i.test(message) && attempt === 2) break;
-      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error("send failed");
+  await sock.sendMessage(jid, { text });
+  manager.snapshot.lastMessageSentAt = new Date().toISOString();
+  touchFrame();
 }
 
 // Authoritative Single-Turn Conversation Engine Setup
@@ -205,7 +193,7 @@ conversationEngine.updateDependencies({
 
     return ai?.text || null;
   },
-  onMessageCommitted: async (chatId, message) => {
+  onMessageCommitted: async (chatId, message, turn) => {
     const customer = await upsertCustomer({
       number: chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
       name: chatId,
@@ -221,6 +209,15 @@ conversationEngine.updateDependencies({
       ai_generated: message.aiGenerated,
       intent: message.intent,
     });
+    await markProcessed(message.responseId);
+    await markProcessed(message.turnId);
+    await markProcessed(`out_${message.turnId}`);
+    if (turn?.messageIds) {
+      for (const mid of turn.messageIds) {
+        await markProcessed(mid);
+        await markProcessed(`out_${mid}`);
+      }
+    }
   },
 });
 
@@ -535,151 +532,6 @@ export async function sendWhatsApp(chatId: string, text: string) {
   });
 }
 
-async function replyToBurst(jid: string, batch: NormalizedMessage[]) {
-  if (!batch.length) return;
-  if (!manager.sock) {
-    pendingReplies.set(jid, batch);
-    scheduleReconnect();
-    return;
-  }
-  const last = batch[batch.length - 1];
-  const combined = { ...last, text: combineBurstText(batch.map((row) => row.text)) || last.text };
-  const person = personForChat(jid, combined.fromName, combined.sender);
-  if (person) combined.fromName = person.name;
-  const settings = await getSettings();
-  if (!settings.enabled) {
-    return;
-  }
-  const rules = await getRules();
-  const faqs = await getFaqs();
-  const customer = await upsertCustomer({
-    number: jid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
-    name: person?.name ?? combined.fromName,
-  });
-  const convo = await upsertConversation(customer.id, jid);
-  if (convo.status !== "bot") {
-    // Authoritative human handoff: human, waiting_human, paused, closed must never auto-reply
-    return;
-  }
-  const history = await recentMessages(convo.id);
-  const knowledge = await knowledgeSearch(combined.text);
-  const inboundCount = history.filter((m) => m.direction === "in").length;
-  const recent = history
-    .slice()
-    .reverse()
-    .map((m) => ({
-      role: m.direction === "in" ? ("user" as const) : ("assistant" as const),
-      text: m.text,
-    }));
-  const analysis = analyzeMessage(combined.text, {
-    isFirstMessage: inboundCount <= batch.length,
-    inboundCount,
-  });
-  const decision = await shouldReplyTool.execute(
-    {
-      text: combined.text,
-      isGroup: Boolean(combined.isGroup),
-      fromMe: false,
-    },
-    {},
-  );
-  if (decision.data?.decision === "IGNORE") return;
-  if (decision.data?.decision === "REACT" && decision.data.emoji) {
-    try {
-      await manager.sock?.sendMessage(jid, {
-        react: {
-          text: decision.data.emoji,
-          key: {
-            id: combined.whatsappMessageId,
-            remoteJid: jid,
-            fromMe: false,
-          },
-        },
-      });
-      touchFrame();
-      return;
-    } catch {
-      // Fall through to normal text reply
-    }
-  }
-  if (decision.data?.decision === "ESCALATE") {
-    await setConversationStatus(convo.id, "waiting_human");
-  }
-
-  const routed = routeMessage({
-    message: combined,
-    settings,
-    rules,
-    faqs,
-    conversationStatus: convo.status,
-    knowledgeHits: knowledge,
-    aiReply: null,
-  });
-  if (routed.action === "skip") return;
-  const faqFacts = matchAllFaqs(combined.text, faqs).map((f) => `${f.question}: ${f.answer}`);
-  const ruleFacts = matchAllRules(combined.text, rules)
-    .filter((r) => !/agent|human/.test(r.triggerValue))
-    .map((r) => r.response);
-  const spoken = writeSpokenReply(combined.text, analysis, recent, person ?? undefined);
-  const suggested = analysis.wantsAllAnswers
-    ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge], combined.text)
-    : isCannedFallback(routed.text)
-      ? spoken
-      : routed.text;
-  const ai =
-    settings.aiEnabled !== false
-      ? await withTimeout(
-          generateBestHumanReply(combined, {
-            settings,
-            customerName: person?.name ?? combined.fromName,
-            recent,
-            faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
-            knowledge: [...knowledge, ...ruleFacts],
-            intent: analysis.intents.join(","),
-            suggested,
-            analysis,
-            isFirstMessage: inboundCount <= batch.length,
-            messageType: combined.type,
-            person: person ?? undefined,
-          }),
-          7500,
-        )
-      : null;
-  let text =
-    ai?.text ||
-    (analysis.wantsAllAnswers
-      ? writeCompleteFallback(analysis, [...faqFacts, ...ruleFacts, ...knowledge], combined.text)
-      : spoken);
-  if (!text || isCannedFallback(text)) text = spoken;
-  text = avoidRepeat(text, recent);
-  if (!text) text = spoken || "I am here, how can I help you?";
-  pendingReplies.set(jid, batch);
-  try {
-    messageOutbox.enqueue(jid, text, {
-      whatsappMessageId: combined.whatsappMessageId,
-      conversationId: convo.id,
-      aiGenerated: Boolean(ai),
-      intent: routed.intent ?? routed.source,
-    });
-    pendingReplies.delete(jid);
-    await addMessage({
-      conversation_id: convo.id,
-      whatsapp_message_id: `out_${combined.whatsappMessageId}`,
-      direction: "out",
-      message_type: "text",
-      text,
-      media_reference: null,
-      ai_generated: Boolean(ai),
-      intent: routed.intent ?? routed.source,
-    });
-  } catch (error) {
-    manager.snapshot.connected = false;
-    for (const row of batch) forgetDuplicate(row.whatsappMessageId);
-    await addLog("error", "whatsapp", error instanceof Error ? error.message : "send failed");
-    scheduleReconnect();
-  }
-}
-
 export async function startWhatsApp(pairingPhone?: string, opts?: { force?: boolean }) {
   if (manager.starting) return getSnapshot();
   if (!opts?.force && isSocketReallyLive()) return getSnapshot();
@@ -823,9 +675,7 @@ async function openSocket(pairingPhone?: string) {
       } catch {
         /* presence is best-effort */
       }
-      for (const [jid, batch] of pendingReplies) {
-        void replyToBurst(jid, batch);
-      }
+      void conversationEngine.outbox.processQueue();
     }
     if (connection === "close") {
       const err = lastDisconnect?.error as { message?: string; output?: { statusCode?: number } } | undefined;
@@ -894,10 +744,6 @@ async function openSocket(pairingPhone?: string) {
     return n > 1e12 ? n : n * 1000;
   }
 
-  function isRecentInbound(raw: WaRaw) {
-    return Date.now() - waTimestampMs(raw) < 2 * 60 * 60 * 1000;
-  }
-
   const decryptWait = new Set<string>();
 
   function scheduleDecryptWait(jid: string, id: string, raw: WaRaw) {
@@ -905,35 +751,12 @@ async function openSocket(pairingPhone?: string) {
     decryptWait.add(id);
     setTimeout(() => {
       void (async () => {
-        if (await wasProcessed(`out_${id}`)) return;
+        if (await wasProcessed(id) || await wasProcessed(`out_${id}`)) return;
         if (isDuplicate(id)) return;
         const stored = inboundStore.get(id) as Record<string, unknown> | undefined;
         if (stored && !isInboundStub(stored)) {
-          await ingestRaw({ ...raw, message: stored }, "update");
-          return;
+          await ingestRaw({ ...raw, message: stored }, "notify");
         }
-        const normalized = normalizeIncoming({
-          id,
-          jid,
-          fromMe: false,
-          pushName: raw.pushName || undefined,
-          message: { conversation: "message aa gaya. kripya ek line text likh dena" },
-          timestamp: Math.floor(Date.now() / 1000),
-        });
-        if (!normalized) return;
-        if (isDuplicate(id)) return;
-        manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
-        conversationEngine.acceptInboundEvent({
-          tenantId: "default",
-          chatId: jid,
-          messageId: id,
-          text: normalized.text,
-          sender: normalized.sender,
-          fromName: normalized.fromName,
-          timestamp: Date.now(),
-          isGroup: Boolean(normalized.isGroup),
-          mediaType: normalized.type,
-        });
       })().catch((error) => {
         console.error("[whatsapp] decrypt wait failed", error);
       });
@@ -949,9 +772,24 @@ async function openSocket(pairingPhone?: string) {
     personForChat(jid, raw.pushName || undefined, phoneHints);
     if (raw.message) inboundStore.set(id, raw.message);
     if (inboundStore.size > 500) inboundStore.delete(inboundStore.keys().next().value ?? "");
+
+    // 1. Ignore own messages
     if (raw.key.fromMe) return;
-    if (source !== "notify" && !isRecentInbound(raw)) return;
-    if (await wasProcessed(`out_${id}`)) return;
+
+    // 2. Strict live-event gate: NEVER auto-reply on historical sync, appends, or updates
+    if (source !== "notify") return;
+
+    // 3. Strict recency gate: discard stale messages older than 60s
+    const ageMs = Date.now() - waTimestampMs(raw);
+    if (ageMs > 60_000 || ageMs < -10_000) {
+      console.log(`[whatsapp] Discarding stale message (${Math.round(ageMs / 1000)}s old):`, id);
+      return;
+    }
+
+    // 4. Strict deduplication check across memory and database
+    if (await wasProcessed(id) || await wasProcessed(`out_${id}`)) return;
+    if (isDuplicate(id)) return;
+
     const body = (raw.message ?? inboundStore.get(id)) as Record<string, unknown> | undefined;
     if (isInboundStub(body ?? null)) {
       scheduleDecryptWait(jid, id, raw);
@@ -974,7 +812,10 @@ async function openSocket(pairingPhone?: string) {
           ? "Received. Please let me know what you need."
           : "Received. Please describe what you need in text.";
     }
-    if (isDuplicate(id)) return;
+
+    // Persist processed marker immediately in database and memory
+    await markProcessed(id);
+
     manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
     connectionGuardian.recordMessage();
     const customer = await upsertCustomer({

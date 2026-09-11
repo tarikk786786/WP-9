@@ -43,7 +43,7 @@ export interface ConversationEngineDependencies {
     understanding: UnderstandingResult,
     context: { history: ConversationHistoryEntry[]; knowledge: string[] }
   ) => Promise<string | null>;
-  onMessageCommitted?: (chatId: string, message: CommittedResponse) => Promise<void>;
+  onMessageCommitted?: (chatId: string, message: CommittedResponse, turn?: ConversationTurn) => Promise<void>;
 }
 
 export class AuthoritativeConversationEngine {
@@ -262,7 +262,7 @@ export class AuthoritativeConversationEngine {
 
       if (this.deps.onMessageCommitted) {
         try {
-          await this.deps.onMessageCommitted(turn.chatId, response);
+          await this.deps.onMessageCommitted(turn.chatId, response, turn);
         } catch (err) {
           console.error(`[conversation-engine] Error in onMessageCommitted for ${turn.chatId}:`, err);
         }
