@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import { dataDir, migrateLegacyAuth } from "./paths.ts";
 import { acquireWorkerLock, releaseWorkerLock } from "./singleton.ts";
 
-const port = Number(process.env.WORKER_PORT || 8788);
+const port = Number(process.env.PORT || process.env.WORKER_PORT || 8788);
+const liveUrl = `http://127.0.0.1:${port}/health/live`;
 const healthUrl = `http://127.0.0.1:${port}/health`;
 const workerRoot = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 
@@ -14,10 +15,19 @@ let stopping = false;
 let booting = false;
 let notReadySince = 0;
 let lockHeld = false;
+let crashCount = 0;
+
+const BACKOFF_SCHEDULE = [2000, 4000, 8000, 16000, 30000, 60000];
+
+function getBackoffMs() {
+  const base = BACKOFF_SCHEDULE[Math.min(crashCount, BACKOFF_SCHEDULE.length - 1)];
+  const jitter = base * (0.8 + Math.random() * 0.4);
+  return Math.round(jitter);
+}
 
 async function portHealthy() {
   try {
-    const res = await fetch(healthUrl, { signal: AbortSignal.timeout(2500) });
+    const res = await fetch(liveUrl, { signal: AbortSignal.timeout(2500) });
     return res.ok;
   } catch {
     return false;
@@ -44,8 +54,10 @@ async function boot() {
     child.on("exit", (code, signal) => {
       child = null;
       if (stopping) return;
-      console.error(`[keep] worker stopped (${code ?? signal ?? "exit"}). restarting`);
-      void delay(2500).then(boot);
+      crashCount += 1;
+      const waitMs = getBackoffMs();
+      console.error(`[keep] worker stopped (${code ?? signal ?? "exit"}). restarting in ${waitMs}ms (crash #${crashCount})`);
+      void delay(waitMs).then(boot);
     });
   } finally {
     booting = false;
@@ -54,6 +66,11 @@ async function boot() {
 
 async function healthTick() {
   try {
+    const liveRes = await fetch(liveUrl, { signal: AbortSignal.timeout(3000) });
+    if (liveRes.ok) {
+      crashCount = 0;
+    }
+
     const res = await fetch(healthUrl, { signal: AbortSignal.timeout(4000) });
     const json = (await res.json()) as {
       whatsappConnection?: string;
@@ -68,7 +85,7 @@ async function healthTick() {
       return;
     }
     if (!notReadySince) notReadySince = Date.now();
-    const waitMs = connecting ? 120_000 : 90_000;
+    const waitMs = connecting ? 180_000 : 120_000;
     if (Date.now() - notReadySince > waitMs && child?.pid) {
       console.error("[keep] WhatsApp stayed down — restarting worker");
       notReadySince = 0;
