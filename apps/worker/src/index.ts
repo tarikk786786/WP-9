@@ -97,8 +97,8 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // 1. Unconditional liveness probe - Node process is alive. 0 external dependencies.
-    if (url.pathname === "/health/live") {
+    // 1. Unconditional liveness probe & root ping - Node process is alive.
+    if (url.pathname === "/" || url.pathname === "/health/live" || url.pathname === "/ping") {
       json(res, 200, {
         ok: true,
         service: "wp9-worker",
