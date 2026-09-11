@@ -27,7 +27,14 @@ export async function GET() {
           analytics,
           settings,
         },
-        { status: 200 },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+          },
+        },
       );
     }
   } catch {
@@ -57,7 +64,14 @@ export async function GET() {
             heartbeat: { lastHeartbeatAt: hb.updatedAt },
           },
         },
-        { status: 200 },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+          },
+        },
       );
     }
   } catch {
@@ -79,7 +93,14 @@ export async function GET() {
       error: errorMessage,
       code: "WORKER_UNREACHABLE",
     },
-    { status: 503 },
+    {
+      status: 503,
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+      },
+    },
   );
 }
 

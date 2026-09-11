@@ -4,7 +4,13 @@ import { hydrateScanSnapshot } from "@/lib/scan-session";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json(await hydrateScanSnapshot());
+  return NextResponse.json(await hydrateScanSnapshot(), {
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
+    },
+  });
 }
 
 export async function POST() {
