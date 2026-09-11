@@ -78,12 +78,25 @@ function killChild(child: ChildProcess | null) {
   }
 }
 
+function tsxBin(): { bin: string; args: string[] } {
+  const candidates = [
+    path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs"),
+    path.join(workerDir, "node_modules", "tsx", "dist", "cli.mjs"),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) {
+      return { bin: process.execPath, args: [c, path.join(workerDir, "src", "keep.ts")] };
+    }
+  }
+  return { bin: process.execPath, args: ["-e", "require('child_process').spawnSync('npx', ['tsx', 'src/keep.ts'], { stdio: 'inherit', shell: true })"] };
+}
+
 function startWorker() {
   if (stopping || pidAlive(worker?.pid)) return;
   worker = null;
   console.log("[live] starting WhatsApp worker");
-  const bin = process.platform === "win32" ? "npx.cmd" : "npx";
-  worker = spawn(bin, ["tsx", "src/keep.ts"], {
+  const { bin, args } = tsxBin();
+  worker = spawn(bin, args, {
     cwd: workerDir,
     stdio: ["ignore", "inherit", "inherit"],
     env: process.env,
@@ -185,10 +198,18 @@ function startTunnel() {
   });
 }
 
+const isCloud =
+  process.env.DEPLOYMENT_MODE === "render" ||
+  Boolean(process.env.RENDER) ||
+  Boolean(process.env.RAILWAY_ENVIRONMENT) ||
+  Boolean(process.env.FLY_APP_NAME);
+
 async function tick() {
   if (stopping) return;
   if (!pidAlive(worker?.pid)) worker = null;
   if (!(await workerHealthy())) startWorker();
+  if (isCloud) return; // Cloud platforms have native HTTPS domains; Cloudflare tunnel is disabled
+
   if (!pidAlive(tunnel?.pid)) {
     tunnel = null;
     startTunnel();

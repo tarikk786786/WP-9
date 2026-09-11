@@ -367,20 +367,6 @@ server.on("error", (error: NodeJS.ErrnoException) => {
   throw error;
 });
 
-function startCloudKeepalive() {
-  const targetUrl = process.env.PUBLIC_WORKER_URL || "https://wp-9.onrender.com";
-  if (!targetUrl || !targetUrl.startsWith("http")) return;
-  const pingUrl = `${targetUrl.replace(/\/$/, "")}/health/live`;
-  console.log(`[worker] 24/7 cloud keepalive active -> pinging ${pingUrl} every 3 minutes`);
-  setInterval(async () => {
-    try {
-      await fetch(pingUrl, { signal: AbortSignal.timeout(6000) });
-    } catch {
-      /* ignore keepalive ping error */
-    }
-  }, 180_000).unref();
-}
-
 server.listen(port, host, () => {
   console.log(`
 =====================================================
@@ -395,7 +381,6 @@ Supabase:  ${usingSupabase() ? "Configured" : "Local disk fallback"}
 =====================================================
 `);
   void ensureAlwaysOn();
-  startCloudKeepalive();
 });
 
 function gracefulShutdown(signal: string) {

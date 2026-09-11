@@ -34,6 +34,24 @@ async function portHealthy() {
   }
 }
 
+function tsxCliPath(): string | null {
+  const repoRoot = path.resolve(workerRoot, "..", "..");
+  const candidates = [
+    path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs"),
+    path.join(workerRoot, "node_modules", "tsx", "dist", "cli.mjs"),
+  ];
+  for (const c of candidates) {
+    try {
+      if (existsSync(c)) return c;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+import { existsSync } from "node:fs";
+
 async function boot() {
   if (stopping || booting || child) return;
   if (await portHealthy()) {
@@ -42,13 +60,14 @@ async function boot() {
   }
   booting = true;
   try {
-    const isWin = process.platform === "win32";
-    const exe = isWin ? "cmd.exe" : "npx";
-    const args = isWin ? ["/c", "npx", "tsx", "src/index.ts"] : ["tsx", "src/index.ts"];
+    const cli = tsxCliPath();
+    const exe = cli ? process.execPath : process.platform === "win32" ? "npx.cmd" : "npx";
+    const args = cli ? [cli, path.join(workerRoot, "src", "index.ts")] : ["tsx", "src/index.ts"];
     child = spawn(exe, args, {
       cwd: workerRoot,
-      stdio: "inherit",
+      stdio: ["ignore", "inherit", "inherit"],
       env: process.env,
+      shell: false,
     });
     console.log(`[keep] WhatsApp worker pid ${child.pid}`);
     child.on("exit", (code, signal) => {
@@ -66,28 +85,38 @@ async function boot() {
 
 async function healthTick() {
   try {
+    // 1. Check HTTP Liveness (independent of WhatsApp)
     const liveRes = await fetch(liveUrl, { signal: AbortSignal.timeout(3000) });
     if (liveRes.ok) {
       crashCount = 0;
+    } else if (!child && !stopping) {
+      void boot();
+      return;
     }
 
+    // 2. Check WhatsApp state
     const res = await fetch(healthUrl, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return;
     const json = (await res.json()) as {
       whatsappConnection?: string;
       whatsapp?: { connected?: boolean; phase?: string };
     };
     const phase = (json.whatsapp?.phase || json.whatsappConnection || "").toLowerCase();
-    const ready = json.whatsapp?.connected === true || phase === "ready" || phase === "connected";
-    const waitingScan = phase.includes("qr") || (json.whatsapp?.phase || "").toLowerCase().includes("qr");
-    const connecting = phase.includes("connect");
-    if (ready || waitingScan) {
+    const isConnected = json.whatsapp?.connected === true || phase === "connected" || phase === "ready";
+    const isAwaitingScan = phase.includes("qr") || phase.includes("scan");
+    const isConnecting = phase.includes("connect");
+
+    // As long as worker is connected or actively awaiting QR scan, it is in a healthy state
+    if (isConnected || isAwaitingScan) {
       notReadySince = 0;
       return;
     }
+
     if (!notReadySince) notReadySince = Date.now();
-    const waitMs = connecting ? 300_000 : 240_000;
-    if (Date.now() - notReadySince > waitMs && child?.pid) {
-      console.error("[keep] WhatsApp stayed down (>5m) — restarting worker");
+    // Only restart if stuck in undefined/broken connecting state for > 6 minutes
+    const maxStuckMs = isConnecting ? 360_000 : 300_000;
+    if (Date.now() - notReadySince > maxStuckMs && child?.pid) {
+      console.error("[keep] WhatsApp socket unresponsive (>6m) — gracefully restarting child worker");
       notReadySince = 0;
       child.kill("SIGTERM");
     }

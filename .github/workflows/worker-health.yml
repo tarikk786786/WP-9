@@ -1,0 +1,23 @@
+﻿name: Worker Uptime Observer
+
+on:
+  schedule:
+    # Run every hour as an independent health observer
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Worker Live Health
+        run: |
+          WORKER_URL="${{ secrets.WORKER_API_URL || 'https://wp-9.onrender.com' }}"
+          echo "Observing $WORKER_URL/health/live..."
+          RES=$(curl -s -w "%{http_code}" -o response.json "$WORKER_URL/health/live")
+          cat response.json
+          if [ "$RES" != "200" ]; then
+            echo "::error::Worker health check failed with status $RES"
+            exit 1
+          fi
+          echo "Worker is 100% healthy and live."
