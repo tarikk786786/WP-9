@@ -27,7 +27,19 @@ type SettingsPayload = {
 };
 
 type StatusPayload = {
-  health?: { worker?: string; uptimeMs?: number; whatsapp?: { phase?: string; connected?: boolean; phone?: string | null; error?: string | null } };
+  status?: string;
+  health?: {
+    worker?: string;
+    service?: string;
+    uptimeMs?: number;
+    whatsapp?: {
+      status?: string;
+      phase?: string;
+      connected?: boolean;
+      phone?: string | null;
+      error?: string | null;
+    };
+  };
   analytics?: Record<string, number>;
   error?: string;
 };
