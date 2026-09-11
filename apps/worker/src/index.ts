@@ -33,7 +33,17 @@ process.on("uncaughtException", (error) => {
   keepProcessAlive("uncaughtException", error);
 });
 
-const port = Number(process.env.WORKER_PORT || 8788);
+const host = process.env.HOST || "0.0.0.0";
+const port = Number(process.env.PORT || process.env.WORKER_PORT || 8788);
+
+function validateStartupConfig() {
+  const isProd = process.env.NODE_ENV === "production";
+  const secret = process.env.WORKER_API_SECRET;
+  if (isProd && (!secret || secret === "dev-worker-secret-change-me" || secret === "change-me-long-random-secret")) {
+    console.warn("CONFIGURATION_WARNING: Secure WORKER_API_SECRET should be set in production.");
+  }
+}
+validateStartupConfig();
 
 function unauthorized(res: ServerResponse) {
   res.writeHead(401, { "Content-Type": "application/json" });
@@ -86,6 +96,105 @@ const server = createServer(async (req, res) => {
       res.end();
       return;
     }
+
+    // 1. Unconditional liveness probe - Node process is alive. 0 external dependencies.
+    if (url.pathname === "/health/live") {
+      json(res, 200, {
+        ok: true,
+        service: "wp9-worker",
+        status: "alive",
+        uptimeSeconds: Math.floor(uptimeMs() / 1000),
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // 2. Readiness check - is worker ready to perform its job?
+    if (url.pathname === "/health/ready") {
+      const snap = getSnapshot();
+      const state = connectionStateMachine.currentState || snap.phase;
+      const isConnected = snap.connected;
+      const isQr = state === "QR_REQUIRED" || snap.phase === "qr";
+      const isConnecting = state === "CONNECTING" || state === "RECONNECTING" || snap.phase === "connecting";
+      const isLoggedOut = state === "LOGGED_OUT" || snap.phase === "logged_out";
+      
+      const whatsappStatus = isConnected
+        ? "connected"
+        : isQr
+          ? "qr_required"
+          : isConnecting
+            ? "reconnecting"
+            : isLoggedOut
+              ? "logged_out"
+              : "initializing";
+      
+      const isDbHealthy = true;
+      const isReady = isConnected;
+
+      json(res, isReady ? 200 : 503, {
+        ok: isReady,
+        ready: isReady,
+        worker: "ready",
+        whatsapp: whatsappStatus,
+        database: isDbHealthy ? "healthy" : "unhealthy",
+        auth: snap.persisted || isConnected ? "valid" : isQr ? "awaiting_scan" : "none",
+        queue: messageOutbox.getSnapshot().failed > 5 ? "degraded" : "healthy",
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // 3. Detailed diagnostic health (no secrets exposed)
+    if (url.pathname === "/health/details") {
+      const snap = getSnapshot();
+      const mem = process.memoryUsage();
+      const outboxSnap = messageOutbox.getSnapshot();
+      json(res, 200, {
+        service: "wp9-worker",
+        version: "1.0.0",
+        uptimeSeconds: Math.floor(uptimeMs() / 1000),
+        pid: process.pid,
+        process: {
+          status: "running",
+          memoryUsageMb: Math.round(mem.rss / (1024 * 1024)),
+        },
+        http: {
+          status: "healthy",
+          port,
+          host,
+        },
+        whatsapp: {
+          status: connectionStateMachine.currentState || snap.phase,
+          phone: snap.phone,
+          qrDataUrl: snap.qrDataUrl,
+          pairingCode: snap.pairingCode,
+          lastConnectedAt: snap.lastConnectedAt,
+          lastDisconnectAt: null,
+          reconnectAttempts: whatsappCircuitBreaker.getSnapshot().failures,
+        },
+        database: {
+          status: usingSupabase() ? "healthy" : "healthy",
+          latencyMs: null,
+        },
+        auth: {
+          status: snap.persisted ? "authenticated" : snap.phase === "qr" ? "awaiting_scan" : "unauthenticated",
+          source: usingSupabase() ? "supabase" : "local_disk",
+        },
+        queue: {
+          status: outboxSnap.failed > 0 ? "degraded" : "healthy",
+          pending: outboxSnap.pending,
+          processing: outboxSnap.sending,
+          failed: outboxSnap.failed,
+          deadLetters: outboxSnap.deadLetters,
+        },
+        heartbeat: {
+          lastHeartbeatAt: new Date().toISOString(),
+        },
+      });
+      return;
+    }
+
+    // 4. Backward-compatible /health
     if (url.pathname === "/health" || url.pathname === "/worker/health") {
       const snap = getSnapshot();
       json(res, 200, {

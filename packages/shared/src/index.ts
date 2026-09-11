@@ -181,3 +181,100 @@ export type BotDecision = {
   source: RouteSource;
   intent?: string;
 };
+
+export const WorkerErrorCode = z.enum([
+  "WORKER_UNREACHABLE",
+  "WORKER_TIMEOUT",
+  "WORKER_AUTH_FAILED",
+  "WORKER_HTTP_ERROR",
+  "WORKER_STARTING",
+  "WORKER_NOT_READY",
+  "WHATSAPP_DISCONNECTED",
+  "WHATSAPP_RECONNECTING",
+  "WHATSAPP_QR_REQUIRED",
+  "WHATSAPP_LOGGED_OUT",
+  "DATABASE_UNAVAILABLE",
+  "QUEUE_UNAVAILABLE",
+  "SESSION_UNAVAILABLE",
+  "CONFIGURATION_ERROR",
+]);
+export type WorkerErrorCode = z.infer<typeof WorkerErrorCode>;
+
+export const WorkerLiveness = z.object({
+  ok: z.literal(true),
+  service: z.string(),
+  status: z.literal("alive"),
+  uptimeSeconds: z.number(),
+  timestamp: z.string(),
+});
+export type WorkerLiveness = z.infer<typeof WorkerLiveness>;
+
+export const WorkerReadiness = z.object({
+  ok: z.boolean(),
+  ready: z.boolean(),
+  worker: z.enum(["ready", "starting", "degraded", "not_ready"]),
+  whatsapp: z.enum([
+    "connected",
+    "connecting",
+    "reconnecting",
+    "qr_required",
+    "initializing",
+    "logged_out",
+    "error",
+  ]),
+  database: z.enum(["healthy", "unhealthy", "disconnected"]),
+  auth: z.enum(["valid", "awaiting_scan", "expired", "corrupted", "none"]),
+  queue: z.enum(["healthy", "degraded", "unavailable"]),
+  timestamp: z.string(),
+});
+export type WorkerReadiness = z.infer<typeof WorkerReadiness>;
+
+export const WorkerDetailedHealth = z.object({
+  service: z.string(),
+  version: z.string(),
+  uptimeSeconds: z.number(),
+  pid: z.number(),
+  process: z.object({
+    status: z.enum(["starting", "running", "stopping", "stopped", "crashed"]),
+    memoryUsageMb: z.number(),
+  }),
+  http: z.object({
+    status: z.enum(["healthy", "degraded", "unreachable"]),
+    port: z.number(),
+    host: z.string(),
+  }),
+  whatsapp: z.object({
+    status: z.string(),
+    phone: z.string().nullable(),
+    qrDataUrl: z.string().nullable(),
+    pairingCode: z.string().nullable(),
+    lastConnectedAt: z.string().nullable(),
+    lastDisconnectAt: z.string().nullable(),
+    reconnectAttempts: z.number(),
+  }),
+  database: z.object({
+    status: z.enum(["healthy", "unhealthy", "disconnected"]),
+    latencyMs: z.number().nullable(),
+  }),
+  auth: z.object({
+    status: z.string(),
+    source: z.string(),
+  }),
+  queue: z.object({
+    status: z.string(),
+    pending: z.number(),
+    processing: z.number(),
+    failed: z.number(),
+    deadLetters: z.number(),
+  }),
+  heartbeat: z.object({
+    lastHeartbeatAt: z.string().nullable(),
+  }),
+  lease: z.object({
+    acquired: z.boolean(),
+    instanceId: z.string().nullable(),
+    expiresAt: z.string().nullable(),
+  }).optional(),
+});
+export type WorkerDetailedHealth = z.infer<typeof WorkerDetailedHealth>;
+
