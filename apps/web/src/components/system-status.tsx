@@ -135,9 +135,14 @@ export function SystemStatus() {
   }
 
   const h = data?.health;
-  const isAlive = Boolean(h?.process?.status === "running" || h?.uptimeSeconds);
+  const isAlive = Boolean(
+    data?.status === "ready" ||
+    data?.status === "online" ||
+    h?.process?.status === "running" ||
+    h?.uptimeSeconds
+  );
   const isConnected = Boolean(h?.whatsapp?.connected || h?.whatsapp?.status === "CONNECTED");
-  const waPhase = h?.whatsapp?.status || h?.whatsapp?.phase || "UNKNOWN";
+  const waPhase = h?.whatsapp?.status || h?.whatsapp?.phase || (isConnected ? "CONNECTED" : "UNKNOWN");
   const dbStatus = h?.database?.status || "healthy";
   const queuePending = h?.queue?.pending ?? 0;
   const queueFailed = h?.queue?.failed ?? 0;

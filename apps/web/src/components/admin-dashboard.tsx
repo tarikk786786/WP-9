@@ -123,8 +123,18 @@ export function AdminDashboard({ view }: { view: "dashboard" | "conversations" |
         <>
           <SystemStatus />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat title="Worker" value={status.error ? "offline" : status.health?.worker ?? "…"} />
-            <Stat title="WhatsApp" value={wa?.connected ? `linked ${wa.phone ?? ""}` : wa?.phase ?? "unknown"} />
+            <Stat
+              title="Worker"
+              value={status.error ? "offline" : (status.status === "ready" || status.status === "online" || status.health?.service) ? "online" : "offline"}
+            />
+            <Stat
+              title="WhatsApp"
+              value={
+                wa?.status === "CONNECTED" || wa?.connected
+                  ? `linked ${wa?.phone ?? ""}`.trim()
+                  : wa?.phase || wa?.status || "awaiting scan"
+              }
+            />
             <Stat title="Customers" value={String(stats.customers ?? inbox.customers?.length ?? 0)} />
             <Stat title="AI replies" value={String(stats.aiReplies ?? 0)} />
             <Stat title="Conversations" value={String(stats.conversations ?? inbox.conversations?.length ?? 0)} />
