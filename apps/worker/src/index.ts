@@ -34,7 +34,7 @@ process.on("uncaughtException", (error) => {
 });
 
 const host = process.env.HOST || "0.0.0.0";
-const port = Number(process.env.PORT || process.env.WORKER_PORT || 8788);
+const port = Number(process.env.WORKER_PORT || process.env.PORT || 8788);
 
 function validateStartupConfig() {
   const isProd = process.env.NODE_ENV === "production";

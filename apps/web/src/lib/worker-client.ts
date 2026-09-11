@@ -4,12 +4,35 @@ import type {
   WorkerLiveness,
   WorkerReadiness,
 } from "@bot/shared";
+import { loadWorkerHeartbeat } from "@bot/database";
 
-const WORKER = process.env.WORKER_API_URL || "http://127.0.0.1:8788";
+const DEFAULT_WORKER = process.env.WORKER_API_URL || "http://127.0.0.1:8788";
 const SECRET = process.env.WORKER_API_SECRET || "dev-worker-secret-change-me";
 
+let cachedWorkerUrl = DEFAULT_WORKER;
+let lastWorkerUrlCheck = 0;
+
+export async function resolveWorkerBase(): Promise<string> {
+  const now = Date.now();
+  if (now - lastWorkerUrlCheck < 6000 && cachedWorkerUrl && cachedWorkerUrl !== "http://127.0.0.1:8788") {
+    return cachedWorkerUrl.replace(/\/$/, "");
+  }
+  lastWorkerUrlCheck = now;
+  try {
+    const hb = await loadWorkerHeartbeat();
+    if (hb?.tunnelUrl && typeof hb.tunnelUrl === "string" && hb.tunnelUrl.startsWith("http")) {
+      cachedWorkerUrl = hb.tunnelUrl.trim();
+      return cachedWorkerUrl.replace(/\/$/, "");
+    }
+  } catch {
+    /* fallback to env */
+  }
+  cachedWorkerUrl = process.env.WORKER_API_URL || DEFAULT_WORKER;
+  return cachedWorkerUrl.replace(/\/$/, "");
+}
+
 export function workerBase() {
-  return WORKER.replace(/\/$/, "");
+  return cachedWorkerUrl.replace(/\/$/, "");
 }
 
 export function workerLooksLocal() {
@@ -36,11 +59,12 @@ export function classifyWorkerError(err: unknown, status?: number): WorkerErrorC
 }
 
 export async function workerFetch(path: string, init: RequestInit = {}) {
+  const base = await resolveWorkerBase();
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${SECRET}`);
   headers.set("x-worker-secret", SECRET);
   if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  return fetch(`${workerBase()}${path}`, {
+  return fetch(`${base}${path}`, {
     ...init,
     headers,
     cache: "no-store",
@@ -55,7 +79,8 @@ export async function getWorkerLive(timeoutMs = 4000): Promise<{
   code?: WorkerErrorCode;
 }> {
   try {
-    const response = await fetch(`${workerBase()}/health/live`, {
+    const base = await resolveWorkerBase();
+    const response = await fetch(`${base}/health/live`, {
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -84,7 +109,8 @@ export async function getWorkerReady(timeoutMs = 4000): Promise<{
   code?: WorkerErrorCode;
 }> {
   try {
-    const response = await fetch(`${workerBase()}/health/ready`, {
+    const base = await resolveWorkerBase();
+    const response = await fetch(`${base}/health/ready`, {
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -106,7 +132,8 @@ export async function getWorkerDetails(timeoutMs = 5000): Promise<{
   code?: WorkerErrorCode;
 }> {
   try {
-    const response = await fetch(`${workerBase()}/health/details`, {
+    const base = await resolveWorkerBase();
+    const response = await fetch(`${base}/health/details`, {
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -158,7 +185,8 @@ export async function sendWorkerCommand<T = unknown>(
 }
 
 export async function workerHealth() {
-  const response = await fetch(`${workerBase()}/health`, {
+  const base = await resolveWorkerBase();
+  const response = await fetch(`${base}/health`, {
     cache: "no-store",
     signal: AbortSignal.timeout(8_000),
   });

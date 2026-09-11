@@ -184,6 +184,27 @@ export const WORKER_INSTANCE_ID = `worker_${process.pid}_${Math.random().toStrin
 export async function syncWorkerHeartbeat() {
   try {
     const snap = getSnapshot();
+    let tunnelUrl = process.env.PUBLIC_WORKER_URL?.trim() || null;
+    if (!tunnelUrl) {
+      const candidates = [
+        path.resolve(process.cwd(), "tools", "tunnel-url.txt"),
+        path.resolve(process.cwd(), "..", "..", "tools", "tunnel-url.txt"),
+        path.resolve(process.cwd(), "..", "tools", "tunnel-url.txt"),
+      ];
+      for (const tunnelFile of candidates) {
+        if (existsSync(tunnelFile)) {
+          try {
+            const raw = (await readFile(tunnelFile, "utf8")).trim();
+            if (raw.startsWith("http")) {
+              tunnelUrl = raw;
+              break;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
     await Promise.all([
       saveWorkerHeartbeat({
         phase: snap.phase,
@@ -191,6 +212,7 @@ export async function syncWorkerHeartbeat() {
         phone: snap.phone ?? null,
         pairingCode: snap.pairingCode ?? null,
         qrDataUrl: snap.qrDataUrl ?? null,
+        tunnelUrl: tunnelUrl ?? null,
         error: snap.error ?? null,
         updatedAt: new Date().toISOString(),
       }),

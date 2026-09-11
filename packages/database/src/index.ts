@@ -86,14 +86,24 @@ function id(prefix: string) {
 }
 
 function supabase(): SupabaseClient | null {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
 export function usingSupabase() {
-  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  return Boolean(url && key);
 }
 
 export async function wasProcessed(whatsappMessageId: string) {
@@ -486,6 +496,7 @@ export type WorkerHeartbeat = {
   phone: string | null;
   pairingCode: string | null;
   qrDataUrl: string | null;
+  tunnelUrl?: string | null;
   error: string | null;
   updatedAt: string;
 };
