@@ -49,7 +49,7 @@ import {
 } from "@bot/engine";
 import { shouldReplyTool } from "@bot/engine/tools";
 import { personForChat } from "./people-map.ts";
-import { isSendableJid, resolveChat } from "./chat-address.ts";
+import { isSendableJid, registerLidMapping, resolveChat, resolveSendJid } from "./chat-address.ts";
 import { authDir, migrateLegacyAuth } from "./paths.ts";
 import { credsAreLinked, phoneFromCreds, shouldWipeAuth } from "./session-policy.ts";
 import { connectionGuardian } from "./connection-guardian.ts";
@@ -93,7 +93,9 @@ async function sendText(jid: string, text: string) {
   const sock = manager.sock;
   if (!sock) throw new Error("WhatsApp socket down");
   if (!isSendableJid(jid)) throw new Error("WhatsApp chat id missing");
-  await sock.sendMessage(jid, { text });
+  const targetJid = resolveSendJid(jid);
+  console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid})`);
+  await sock.sendMessage(targetJid, { text });
   manager.snapshot.lastMessageSentAt = new Date().toISOString();
   touchFrame();
 }
@@ -640,6 +642,16 @@ async function openSocket(pairingPhone?: string) {
     persistAuthDirSoon();
   });
 
+  sock.ev.on("chats.phoneNumberShare" as never, (data: unknown) => {
+    if (data && typeof data === "object") {
+      const share = data as { lid?: string; jid?: string };
+      if (share.lid && share.jid) {
+        registerLidMapping(share.lid, share.jid);
+        console.log(`[whatsapp] Registered phoneNumberShare: ${share.lid} -> ${share.jid}`);
+      }
+    }
+  });
+
   sock.ev.on("connection.update", async (update) => {
     if (generation !== manager.generation || manager.sock !== sock) return;
     const { connection, lastDisconnect, qr } = update;
@@ -789,10 +801,10 @@ async function openSocket(pairingPhone?: string) {
     // 3. Ignore broadcast/status channels
     if (jid.endsWith("@broadcast") || jid.includes("status@broadcast")) return;
 
-    // 4. Strict recency gate: discard stale messages older than 60s
+    // 4. Recency gate: allow normal mobile clock skew (up to 2m future) and delivery latency (up to 5m old)
     const ageMs = Date.now() - waTimestampMs(raw);
-    if (ageMs > 60_000 || ageMs < -10_000) {
-      console.log(`[whatsapp] Discarding stale message (${Math.round(ageMs / 1000)}s old):`, id);
+    if (ageMs > 300_000 || ageMs < -120_000) {
+      console.log(`[whatsapp] Discarding message outside live window (${Math.round(ageMs / 1000)}s old):`, id);
       return;
     }
 

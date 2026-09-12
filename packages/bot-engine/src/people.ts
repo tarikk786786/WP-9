@@ -13,7 +13,7 @@ export const SPECIAL_PEOPLE: SpecialPerson[] = [
   {
     id: "dazy",
     name: "DAZy",
-    phones: ["917903956968", "7903956968"],
+    phones: ["917903956968", "7903956968", "232839253623024"],
     names: ["dazy", "dazzy", "daazy"],
     voice: "love",
   },

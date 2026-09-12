@@ -9,12 +9,17 @@ export interface DazyEvaluationResult {
 
 export const DAZY_PHONE_PATTERNS = ["917903956968", "7903956968"];
 export const DAZY_NAME_PATTERNS = ["dazy", "dazzy", "daazy"];
+export const DAZY_LID_PATTERNS = ["232839253623024"];
 
 /**
  * Checks whether this chat is with DAZY
  */
 export function isDazyContact(chatId: string, sender?: string, fromName?: string): boolean {
-  const blob = `${chatId} ${sender ?? ""} ${fromName ?? ""}`.replace(/\D/g, "");
+  const rawStr = `${chatId} ${sender ?? ""} ${fromName ?? ""}`;
+  for (const lid of DAZY_LID_PATTERNS) {
+    if (rawStr.includes(lid)) return true;
+  }
+  const blob = rawStr.replace(/\D/g, "");
   for (const phone of DAZY_PHONE_PATTERNS) {
     if (blob.includes(phone) || blob.endsWith(phone)) return true;
   }
