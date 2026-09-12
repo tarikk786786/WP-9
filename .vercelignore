@@ -1,6 +1,6 @@
-tools
+/tools/
 apps/worker/cloudflared.bin
-data
+/data/
 *.log
 .env
 .env.*
