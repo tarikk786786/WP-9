@@ -1,14 +1,27 @@
 import type { ConversationHistoryEntry } from "./context.ts";
 import type { EmotionState } from "./state.ts";
 import { validateDazyEthics } from "./dazy-profile.ts";
+import {
+  humanLanguageQualityEngine,
+  HumanLanguageQualityEngine,
+  type QualityScores,
+  type QualityChecklist,
+  type QualityPipelineResult,
+  type QualityPipelineOptions,
+} from "./language-quality-engine.ts";
 
 export interface QualityGateAudit {
   passed: boolean;
   sanitizedText: string;
   reasons: string[];
+  scores?: QualityScores;
+  checklist?: QualityChecklist;
+  repairsMade?: string[];
 }
 
 export class ResponseQualityGate {
+  private engine: HumanLanguageQualityEngine;
+
   private roboticPhrases: RegExp[] = [
     /as an ai language model/i,
     /as an ai/i,
@@ -18,6 +31,7 @@ export class ResponseQualityGate {
     /how may i assist you today/i,
     /feel free to reach out if you have any questions/i,
     /is there anything else i can help you with\??/i,
+    /is there anything else i can assist you with\??/i,
     /thank you for (your )?compliment/i,
     /<think>[\s\S]*?<\/think>/gi,
   ];
@@ -28,6 +42,10 @@ export class ResponseQualityGate {
     { pattern: /i\s+know\s+exactly\s+how\s+you\s+feel/i, replacement: "I can see why you'd feel that way." },
     { pattern: /i\s+love\s+talking\s+to\s+you\s+so\s+much/i, replacement: "Glad we connected." },
   ];
+
+  constructor(engine?: HumanLanguageQualityEngine) {
+    this.engine = engine ?? humanLanguageQualityEngine;
+  }
 
   public sanitize(text: string, isDazy = false): string {
     let clean = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
@@ -42,74 +60,40 @@ export class ResponseQualityGate {
       }
     }
 
-    // Clean redundant multiple spaces or dangling dashes
-    clean = clean.replace(/\s+/g, " ").replace(/^[-–—]\s*/, "").trim();
-    return clean;
+    // Run through Human Language Quality stages
+    const result = this.engine.process(clean, [], { isDazy });
+    return result.sanitizedText;
   }
 
   /**
    * Anti-repetition check against last N outbound messages
    */
   public checkRepetition(text: string, history: ConversationHistoryEntry[]): boolean {
-    const recentAssistant = history
-      .filter((h) => h.role === "assistant")
-      .slice(-3)
-      .map((h) => h.text.trim().toLowerCase().replace(/[^\p{L}\p{N}]/gu, ""));
-
-    const candidateNorm = text.trim().toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
-
-    for (const past of recentAssistant) {
-      if (candidateNorm === past) return true;
-      // High similarity (>85% character length match and substring)
-      if (past.length > 15 && (candidateNorm.includes(past) || past.includes(candidateNorm))) {
-        return true;
-      }
-    }
-    return false;
+    return this.engine.contextChecker.checkRepetition(text, history);
   }
 
   public audit(
     text: string,
     history: ConversationHistoryEntry[],
-    options?: { isDazy?: boolean; emotionState?: EmotionState }
+    options?: QualityPipelineOptions
   ): QualityGateAudit {
-    const reasons: string[] = [];
-    let sanitized = this.sanitize(text, options?.isDazy);
+    const pipelineResult: QualityPipelineResult = this.engine.process(text, history, options);
 
-    if (!sanitized) {
-      sanitized = options?.isDazy
-        ? "haan meri jaan ❤️ batao"
-        : "Ji samajh gaya. Bataiye main aapki kya madad kar sakta hoon?";
-      reasons.push("Empty after stripping robotic noise");
-    }
-
-    // Ethical boundary check for DAZY profile
-    if (options?.isDazy) {
-      const ethics = validateDazyEthics(sanitized);
-      if (!ethics.valid) {
-        reasons.push(`DAZY ethics violation detected: ${ethics.violation}`);
-        sanitized = "Main hamesha tumhari baat samajhne aur saath dene ke liye hoon ❤️";
-      }
-    }
-
-    // Check repetition
-    if (this.checkRepetition(sanitized, history)) {
-      reasons.push("Accidental repetitive response detected");
-      sanitized = options?.isDazy ? `${sanitized}` : `Ji bilkul! ${sanitized}`;
-    }
-
-    // Enforce WhatsApp Brevity: max 1200 characters
-    if (sanitized.length > 1200) {
-      sanitized = sanitized.slice(0, 1150).trim() + "...";
-      reasons.push("Truncated excessive length for WhatsApp readability");
+    const reasons = [...pipelineResult.reasons];
+    if (pipelineResult.repairsMade.length > 0) {
+      reasons.push(`Repairs applied: ${pipelineResult.repairsMade.slice(0, 3).join(", ")}`);
     }
 
     return {
-      passed: reasons.length === 0,
-      sanitizedText: sanitized,
+      passed: pipelineResult.passed,
+      sanitizedText: pipelineResult.sanitizedText,
       reasons,
+      scores: pipelineResult.scores,
+      checklist: pipelineResult.checklist,
+      repairsMade: pipelineResult.repairsMade,
     };
   }
 }
 
 export const qualityGate = new ResponseQualityGate();
+export * from "./language-quality-engine.ts";

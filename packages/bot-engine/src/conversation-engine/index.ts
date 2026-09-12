@@ -322,10 +322,17 @@ export class AuthoritativeConversationEngine {
       // 7. Response Planning
       const plan = this.responsePlanner.plan(context, candidate);
 
-      // 8. Response Quality Gate
-      const qualityAudit = this.qualityGate.audit(plan.answer, history);
+      // 8. Response Quality Gate (Human Language Quality Engine)
+      const qualityAudit = this.qualityGate.audit(plan.answer, history, {
+        isDazy: context.isDazy,
+        emotionState: context.understanding?.emotionState,
+        userLanguage: context.understanding?.detectedLanguage,
+        rawUserInput: turn.combinedText,
+      });
       const finalText = qualityAudit.sanitizedText;
-      console.log(`[trace] QUALITY_CHECKED turnId=${turn.turnId} passed=${qualityAudit.passed}`);
+      console.log(
+        `[trace] QUALITY_AUDIT turnId=${turn.turnId} passed=${qualityAudit.passed} humility=${qualityAudit.scores?.humility ?? 100} naturalness=${qualityAudit.scores?.naturalness ?? 100}`
+      );
 
       // 9. Atomic Response Commit (Strict 1 Response per Turn)
       return await this.commitAndEnqueue(turn, finalText, plan.intent, context, plan);
