@@ -102,18 +102,68 @@ async function sendText(jid: string, text: string) {
   if (!sock) throw new Error("WhatsApp socket down");
   if (!isSendableJid(jid)) throw new Error("WhatsApp chat id missing");
   const targetJid = resolveSendJid(jid);
-  console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid})`);
-  const sent = await sock.sendMessage(targetJid, { text: clean });
-  if (sent?.key?.id) {
-    const rawMsg = (sent.message as Record<string, unknown>) ?? { conversation: clean };
-    sentMessageStore.set(sent.key.id, rawMsg);
-    if (sentMessageStore.size > 2000) {
-      const firstKey = sentMessageStore.keys().next().value;
-      if (firstKey) sentMessageStore.delete(firstKey);
-    }
+  console.log(`[whatsapp] Sending dual-encoded text to ${targetJid} (requested: ${jid}): "${clean.slice(0, 40)}"`);
+
+  // Construct dual-format payload: BOTH conversation (Field 1) AND extendedTextMessage (Field 6)
+  // This completely eliminates blank bubbles across all WhatsApp Web, Desktop, iOS, and Android clients
+  const messagePayload: Record<string, unknown> = {
+    conversation: clean,
+    extendedTextMessage: {
+      text: clean,
+    },
+  };
+
+  const baileys = await import("@whiskeysockets/baileys");
+  const { generateWAMessageFromContent } = baileys;
+
+  const fullMsg = generateWAMessageFromContent(
+    targetJid,
+    messagePayload,
+    {
+      userJid: sock.user?.id || undefined,
+    } as never
+  );
+
+  const messageId = fullMsg.key.id;
+  if (!messageId) throw new Error("Failed to generate message ID");
+  if (!fullMsg.message) throw new Error("Failed to generate message payload");
+
+  sentMessageStore.set(messageId, messagePayload);
+  if (sentMessageStore.size > 2000) {
+    const firstKey = sentMessageStore.keys().next().value;
+    if (firstKey) sentMessageStore.delete(firstKey);
   }
+
+  await sock.relayMessage(targetJid, fullMsg.message, {
+    messageId,
+  });
+
   manager.snapshot.lastMessageSentAt = new Date().toISOString();
   touchFrame();
+  persistAuthDirSoon();
+
+  try {
+    const db = getSupabaseClient();
+    if (db) {
+      const customer = await upsertCustomer({
+        number: targetJid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
+        name: targetJid,
+      });
+      const convo = await upsertConversation(customer.id, targetJid);
+      await addMessage({
+        conversation_id: convo.id,
+        whatsapp_message_id: messageId,
+        direction: "out",
+        message_type: "text",
+        text: clean,
+        media_reference: null,
+        ai_generated: true,
+        intent: null,
+      });
+    }
+  } catch {
+    /* non-fatal DB audit insert */
+  }
 }
 
 // Authoritative Single-Turn Conversation Engine Setup
@@ -665,7 +715,7 @@ async function openSocket(pairingPhone?: string) {
     emitOwnEvents: false,
     syncFullHistory: false,
     shouldIgnoreJid: (jid: string) => Boolean(jid?.endsWith("@broadcast") || jid?.endsWith("@newsletter")),
-    getMessage: async (key: { id?: string | null }) => {
+    getMessage: async (key: { id?: string | null; remoteJid?: string | null; fromMe?: boolean | null }) => {
       if (!key?.id) return undefined;
       const sent = sentMessageStore.get(key.id);
       if (sent) return sent as never;
@@ -680,7 +730,28 @@ async function openSocket(pairingPhone?: string) {
             .eq("whatsapp_message_id", key.id)
             .maybeSingle();
           if (data?.text && data.text.trim()) {
-            return { conversation: data.text.trim() } as never;
+            const cleanText = data.text.trim();
+            return {
+              conversation: cleanText,
+              extendedTextMessage: { text: cleanText },
+            } as never;
+          }
+
+          if (key.fromMe) {
+            const { data: latestOut } = await db
+              .from("messages")
+              .select("text")
+              .eq("direction", "out")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (latestOut?.text && latestOut.text.trim()) {
+              const cleanText = latestOut.text.trim();
+              return {
+                conversation: cleanText,
+                extendedTextMessage: { text: cleanText },
+              } as never;
+            }
           }
         }
       } catch {
@@ -690,6 +761,13 @@ async function openSocket(pairingPhone?: string) {
     },
   });
   manager.sock = sock;
+
+  const authPeriodicTimer = setInterval(() => {
+    persistAuthDirSoon();
+  }, 45_000);
+  if (authPeriodicTimer && typeof authPeriodicTimer.unref === "function") {
+    authPeriodicTimer.unref();
+  }
 
   const digits = pairingPhone?.replace(/\D/g, "") ?? "";
   if (digits.length >= 10 && !state.creds.registered) {

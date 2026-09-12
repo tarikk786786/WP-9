@@ -1,4 +1,4 @@
-﻿# Persistent Baileys worker. Production Web Service.
+# Persistent Baileys worker. Production Web Service.
 FROM node:22-bookworm-slim
 ARG TARGETARCH
 WORKDIR /app
@@ -12,6 +12,9 @@ COPY apps/worker/package.json apps/worker/
 COPY packages/shared/package.json packages/shared/
 COPY packages/bot-engine/package.json packages/bot-engine/
 COPY packages/database/package.json packages/database/
+COPY packages/control-plane/package.json packages/control-plane/
+COPY packages/conversation-timing/package.json packages/conversation-timing/
+COPY packages/media-intelligence/package.json packages/media-intelligence/
 
 RUN npm install --workspace=worker --include-workspace-root
 
