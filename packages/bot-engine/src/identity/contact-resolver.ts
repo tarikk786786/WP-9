@@ -85,3 +85,11 @@ export class ContactResolver {
 }
 
 export const contactResolver = new ContactResolver();
+
+export function resolveContactIdentity(jidOrPhone: string, fromName?: string): ContactIdentity {
+  return contactResolver.resolve({
+    jid: jidOrPhone,
+    senderNumber: jidOrPhone,
+    fromName,
+  });
+}

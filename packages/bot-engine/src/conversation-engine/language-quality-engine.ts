@@ -568,7 +568,8 @@ export class ContextChecker {
    * Anti-repetition check against the last 3 outbound assistant messages
    */
   public checkRepetition(text: string, history: ConversationHistoryEntry[]): boolean {
-    const recentAssistant = history
+    const safeHistory = Array.isArray(history) ? history : [];
+    const recentAssistant = safeHistory
       .filter((h) => h.role === "assistant")
       .slice(-3)
       .map((h) => h.text.trim().toLowerCase().replace(/[^\p{L}\p{N}]/gu, ""));

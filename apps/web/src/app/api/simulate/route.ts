@@ -4,7 +4,7 @@ import { recordReply } from "@/lib/record-reply";
 import { getRules } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { fromName?: string; text?: string };

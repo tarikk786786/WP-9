@@ -35,6 +35,8 @@ export * from "./response-commit.ts";
 export * from "./outbox.ts";
 export * from "./state.ts";
 export * from "./dazy-profile.ts";
+export * from "./dazy-spelling-intelligence.ts";
+export * from "./language-quality-engine.ts";
 export * from "./memory.ts";
 export * from "./telemetry.ts";
 

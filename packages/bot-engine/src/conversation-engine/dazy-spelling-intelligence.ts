@@ -268,3 +268,8 @@ export function normalizeDazyMessage(
     suggestedSmartReply,
   };
 }
+
+export function normalizeDazySpelling(text: string): string {
+  return normalizeDazyMessage(text).normalizedText;
+}
+

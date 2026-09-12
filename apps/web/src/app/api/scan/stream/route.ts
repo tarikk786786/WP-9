@@ -2,7 +2,7 @@ import { loadWorkerHeartbeat } from "@bot/database";
 import { getWorkerLive, resolveWorkerBase, workerLooksLocal } from "@/lib/worker-client";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   return proxyStream(request);

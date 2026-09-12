@@ -36,11 +36,12 @@ export class CanonicalContextBuilder {
     quotedText?: string,
     activeState?: ActiveConversationState
   ): { resolvedEntity?: string; resolvedText: string } {
+    const safeHistory = Array.isArray(history) ? history : [];
     let referencedEntity: string | undefined = activeState?.entity;
 
     // Scan recent assistant and user messages for subjects/products/entities
-    for (let i = history.length - 1; i >= 0; i--) {
-      const msg = history[i].text;
+    for (let i = safeHistory.length - 1; i >= 0; i--) {
+      const msg = safeHistory[i]?.text || "";
       const match = msg.match(/\b(Premium Plan|Starter Plan|Basic Plan|Website Design|SEO Service|Hosting|Product X|X)\b/i);
       if (match) {
         referencedEntity = match[0];
@@ -73,12 +74,12 @@ export class CanonicalContextBuilder {
 
     // "Haan" / "Nahi" confirmation after question
     if (/^(haan|hn|yes|sahi hai|theek hai)$/i.test(normalizedText.trim())) {
-      const lastAssistantMsg = history.filter((h) => h.role === "assistant").pop()?.text;
+      const lastAssistantMsg = safeHistory.filter((h) => h.role === "assistant").pop()?.text;
       if (lastAssistantMsg) {
         resolvedText = `User confirms "haan" to previous context: "${lastAssistantMsg}"`;
       }
     } else if (/^(nahi|na|no|nahi yaar)$/i.test(normalizedText.trim())) {
-      const lastAssistantMsg = history.filter((h) => h.role === "assistant").pop()?.text;
+      const lastAssistantMsg = safeHistory.filter((h) => h.role === "assistant").pop()?.text;
       if (lastAssistantMsg) {
         resolvedText = `User declines or clarifies "nahi" to previous context: "${lastAssistantMsg}"`;
       }

@@ -74,9 +74,14 @@ export class ResponseQualityGate {
 
   public audit(
     text: string,
-    history: ConversationHistoryEntry[],
-    options?: QualityPipelineOptions
+    historyOrOptions?: ConversationHistoryEntry[] | QualityPipelineOptions,
+    maybeOptions?: QualityPipelineOptions
   ): QualityGateAudit {
+    const history: ConversationHistoryEntry[] = Array.isArray(historyOrOptions) ? historyOrOptions : [];
+    const options: QualityPipelineOptions | undefined = Array.isArray(historyOrOptions)
+      ? maybeOptions
+      : historyOrOptions;
+
     const pipelineResult: QualityPipelineResult = this.engine.process(text, history, options);
 
     const reasons = [...pipelineResult.reasons];

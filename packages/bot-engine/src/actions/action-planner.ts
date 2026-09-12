@@ -44,6 +44,21 @@ export class ActionPlanner {
       };
     }
 
+    // 4. Delete / Cleanup requests (Sensitive: requires confirmation)
+    if (/\b(delete|remove|clear chat|erase|hata do|delete conversation|forget all)\b/i.test(clean)) {
+      return {
+        actionId,
+        verb: "DELETE",
+        targetResource: "conversation_store",
+        parameters: { rawRequest: text },
+        requiresConfirmation: true,
+        confirmationPrompt: context?.isDazy
+          ? "Kya aap sach mein chat delete karna chahti hain jaan? ❤️"
+          : "Kya aap sach mein conversation history delete karna chahte hain? Kripya confirm kijiye.",
+        priority: 72,
+      };
+    }
+
     // 4. Memory Retention
     if (/\b(yaad rakhna|remember this|save note|mera number note kar)\b/i.test(clean)) {
       return {

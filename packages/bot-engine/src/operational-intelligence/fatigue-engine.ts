@@ -32,3 +32,4 @@ export class ConversationFatigueEngine {
 }
 
 export const conversationFatigueEngine = new ConversationFatigueEngine();
+export const fatigueEngine = conversationFatigueEngine;
