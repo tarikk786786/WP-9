@@ -4,9 +4,12 @@ module.exports = {
   apps: [
     {
       name: 'whatsapp-worker',
-      script: path.resolve(__dirname, 'node_modules/tsx/dist/cli.mjs'),
-      args: 'apps/worker/src/guard.ts',
+      script: path.resolve(__dirname, 'apps/worker/src/guard.ts'),
+      node_args: '--import tsx',
+      interpreter: 'node',
+      exec_mode: 'fork',
       cwd: __dirname,
+      windowsHide: true,
       env: {
         NODE_ENV: 'production',
         WORKER_PORT: '8788',

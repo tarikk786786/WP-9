@@ -69,7 +69,7 @@ function killChild(child: ChildProcess | null) {
   const pid = child.pid;
   try {
     if (process.platform === "win32") {
-      spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+      spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
     } else {
       child.kill("SIGTERM");
     }
@@ -79,16 +79,10 @@ function killChild(child: ChildProcess | null) {
 }
 
 function tsxBin(): { bin: string; args: string[] } {
-  const candidates = [
-    path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs"),
-    path.join(workerDir, "node_modules", "tsx", "dist", "cli.mjs"),
-  ];
-  for (const c of candidates) {
-    if (existsSync(c)) {
-      return { bin: process.execPath, args: [c, path.join(workerDir, "src", "keep.ts")] };
-    }
-  }
-  return { bin: process.execPath, args: ["-e", "require('child_process').spawnSync('npx', ['tsx', 'src/keep.ts'], { stdio: 'inherit', shell: true })"] };
+  return {
+    bin: process.execPath,
+    args: ["--import", "tsx", path.join(workerDir, "src", "keep.ts")],
+  };
 }
 
 function startWorker() {
@@ -101,6 +95,7 @@ function startWorker() {
     stdio: ["ignore", "inherit", "inherit"],
     env: process.env,
     shell: false,
+    windowsHide: true,
   });
   worker.on("exit", () => {
     worker = null;
@@ -144,6 +139,7 @@ function syncPublicWorkerUrl(url: string) {
     cwd: repoRoot,
     env: process.env,
     stdio: "inherit",
+    windowsHide: true,
   });
   child.on("exit", (code) => {
     if (code !== 0) console.error("[live] Vercel worker URL sync failed", code);
@@ -180,6 +176,7 @@ function startTunnel() {
   tunnel = spawn(bin, args, {
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
   });
   tunnel.stdout?.on("data", (buf) => rememberTunnelUrl(String(buf)));
   tunnel.stderr?.on("data", (buf) => {

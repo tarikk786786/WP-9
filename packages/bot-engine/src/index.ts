@@ -29,3 +29,6 @@ export * from "./multimodal/audio.ts";
 export * from "./multimodal/vision.ts";
 export * from "./tools/index.ts";
 export * from "./conversation-engine/index.ts";
+export * from "./web-intelligence/index.ts";
+export * from "./skills/index.ts";
+export * from "./personality/index.ts";

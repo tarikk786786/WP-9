@@ -8,7 +8,7 @@ function startNext() {
   const child = spawn(
     process.execPath,
     ["./node_modules/next/dist/bin/next", "dev", "--port", port, "--hostname", host],
-    { stdio: "inherit", cwd: process.cwd(), env: process.env },
+    { stdio: "inherit", cwd: process.cwd(), env: process.env, windowsHide: true },
   );
   child.on("exit", (code) => {
     console.log(`[always-live] Next exited ${code ?? "null"}. Restarting in 2s…`);

@@ -13,6 +13,7 @@ console.log("[tunnel] Starting Cloudflare Tunnel for WhatsApp worker on http://1
 
 const child = spawn(binPath, ["tunnel", "--url", "http://127.0.0.1:8788"], {
   stdio: ["ignore", "pipe", "pipe"],
+  windowsHide: true,
 });
 
 let foundUrl = false;

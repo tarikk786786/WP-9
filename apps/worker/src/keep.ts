@@ -60,14 +60,13 @@ async function boot() {
   }
   booting = true;
   try {
-    const cli = tsxCliPath();
-    const exe = cli ? process.execPath : process.platform === "win32" ? "npx.cmd" : "npx";
-    const args = cli ? [cli, path.join(workerRoot, "src", "index.ts")] : ["tsx", "src/index.ts"];
-    child = spawn(exe, args, {
+    const args = ["--import", "tsx", path.join(workerRoot, "src", "index.ts")];
+    child = spawn(process.execPath, args, {
       cwd: workerRoot,
       stdio: ["ignore", "inherit", "inherit"],
       env: process.env,
       shell: false,
+      windowsHide: true,
     });
     console.log(`[keep] WhatsApp worker pid ${child.pid}`);
     child.on("exit", (code, signal) => {
