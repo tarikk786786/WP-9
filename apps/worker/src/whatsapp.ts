@@ -102,41 +102,18 @@ async function sendText(jid: string, text: string) {
   if (!sock) throw new Error("WhatsApp socket down");
   if (!isSendableJid(jid)) throw new Error("WhatsApp chat id missing");
   const targetJid = resolveSendJid(jid);
-  console.log(`[whatsapp] Sending dual-encoded text to ${targetJid} (requested: ${jid}): "${clean.slice(0, 40)}"`);
+  console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid}): "${clean.slice(0, 40)}"`);
 
-  // Construct dual-format payload: BOTH conversation (Field 1) AND extendedTextMessage (Field 6)
-  // This completely eliminates blank bubbles across all WhatsApp Web, Desktop, iOS, and Android clients
-  const messagePayload: Record<string, unknown> = {
-    conversation: clean,
-    extendedTextMessage: {
-      text: clean,
-    },
-  };
+  const sent = await sock.sendMessage(targetJid, { text: clean });
+  const messageId = sent?.key?.id;
 
-  const baileys = await import("@whiskeysockets/baileys");
-  const { generateWAMessageFromContent } = baileys;
-
-  const fullMsg = generateWAMessageFromContent(
-    targetJid,
-    messagePayload,
-    {
-      userJid: sock.user?.id || undefined,
-    } as never
-  );
-
-  const messageId = fullMsg.key.id;
-  if (!messageId) throw new Error("Failed to generate message ID");
-  if (!fullMsg.message) throw new Error("Failed to generate message payload");
-
-  sentMessageStore.set(messageId, messagePayload);
-  if (sentMessageStore.size > 2000) {
-    const firstKey = sentMessageStore.keys().next().value;
-    if (firstKey) sentMessageStore.delete(firstKey);
+  if (messageId && sent?.message) {
+    sentMessageStore.set(messageId, sent.message as Record<string, unknown>);
+    if (sentMessageStore.size > 2000) {
+      const firstKey = sentMessageStore.keys().next().value;
+      if (firstKey) sentMessageStore.delete(firstKey);
+    }
   }
-
-  await sock.relayMessage(targetJid, fullMsg.message, {
-    messageId,
-  });
 
   manager.snapshot.lastMessageSentAt = new Date().toISOString();
   touchFrame();
@@ -144,7 +121,7 @@ async function sendText(jid: string, text: string) {
 
   try {
     const db = getSupabaseClient();
-    if (db) {
+    if (db && messageId) {
       const customer = await upsertCustomer({
         number: targetJid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
         name: targetJid,
@@ -732,7 +709,6 @@ async function openSocket(pairingPhone?: string) {
           if (data?.text && data.text.trim()) {
             const cleanText = data.text.trim();
             return {
-              conversation: cleanText,
               extendedTextMessage: { text: cleanText },
             } as never;
           }
@@ -748,7 +724,6 @@ async function openSocket(pairingPhone?: string) {
             if (latestOut?.text && latestOut.text.trim()) {
               const cleanText = latestOut.text.trim();
               return {
-                conversation: cleanText,
                 extendedTextMessage: { text: cleanText },
               } as never;
             }
