@@ -24,11 +24,14 @@ export const maxDuration = 60;
 
 const ChatPayloadSchema = z.object({
   message: z.string().min(1, "Message cannot be empty"),
-  senderId: z.string().optional().default("sim:anonymous"),
-  senderName: z.string().optional().default("Guest"),
+  senderId: z.string().optional(),
+  from: z.string().optional(),
+  senderName: z.string().optional(),
+  name: z.string().optional(),
   role: z.enum(["customer", "special_contact", "admin", "ai_agent", "system"]).optional(),
   includeTelemetry: z.boolean().optional().default(true),
 });
+
 
 export async function POST(request: Request) {
   const startTime = Date.now();
@@ -47,10 +50,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const { message, senderId, senderName, role } = parseResult.data;
+    const { message, senderId, from, senderName, name, role } = parseResult.data;
+    const resolvedSenderId = senderId || from || "sim:anonymous";
+    const resolvedSenderName = senderName || name || "Guest";
 
     // 1. Contact Identity Resolution
-    const contactIdentity = resolveContactIdentity(senderId, senderName);
+    const contactIdentity = resolveContactIdentity(resolvedSenderId, resolvedSenderName);
     const effectiveRole: SubjectRole =
       role ||
       (contactIdentity.relationship === "romantic_partner"
