@@ -97,7 +97,36 @@ UNDERSTANDING ENGINE                      CONTEXT BUILDER
    - `packages/bot-engine/src/conversation-engine/response-commit.ts`: Atomic DB commits with unique constraints ensuring exactly one response per turn.
    - `packages/bot-engine/src/conversation-engine/outbox.ts`: Durable outbox with exponential backoff retries. Retries delivery of the committed response, never regenerates.
 10. **Telemetry & Observability**:
-   - `packages/bot-engine/src/conversation-engine/telemetry.ts`: `TurnTrace` capturing full lifecycle spans (`intake` → `understanding` → `decision` → `model` → `quality` → `commit` → `send`). Support for Langfuse and OpenTelemetry.
+11. **Authorization & Fine-Grained Permissions (`packages/bot-engine/src/authorization/`)**:
+    - `resource-scope.ts`: Typed resource scopes (`chat`, `message`, `tool`, `memory`, `admin`).
+    - `action-permissions.ts`: Action permission levels (`read`, `execute`, `write`, `delete`, `admin`) with allowed roles and confirmation requirements.
+    - `permission-check.ts`: Relationship-based authorization checker (OpenFGA model) verifying subject roles and scoping.
+    - `policy-engine.ts`: OPA-style declarative policy engine evaluating contextual conditions (bot enabled, human handoff, quiet hours, rate limits, confirmation gates).
+12. **Contact Identity Resolution & Profiles as Data (`packages/bot-engine/src/identity/`)**:
+    - `phone-normalizer.ts`: E.164 and Indian 10-digit mobile number normalization.
+    - `jid-resolver.ts`: Dissects PN JIDs (`@s.whatsapp.net`), LIDs (`@lid`), and group JIDs (`@g.us`).
+    - `contact-profile-model.ts`: Contact profiles stored as structured data (`contactId`, `displayName`, `language`, `tone`, `warmth`, `romanceLevel`, `formality`, `emojiLevel`, `memoryEnabled`, `relationshipType`, `privateLexiconId`).
+    - `relationship-resolver.ts`: Resolves relationship types (`romantic_partner`, `client`, `colleague`, `friend`, `admin`, `unknown`).
+    - `contact-resolver.ts`: Constructs canonical `ContactIdentity` from incoming events.
+13. **Action Planner & Two-Phase Confirmation Engine (`packages/bot-engine/src/actions/`)**:
+    - `action-types.ts`: Action vocabulary (`ANSWER`, `ASK`, `SEARCH`, `OPEN`, `CALCULATE`, `REMEMBER`, `FORGET`, `SCHEDULE`, `SEND`, `UPDATE`, `CREATE`, `DELETE`, `ESCALATE`, `WAIT`, `CONFIRM`).
+    - `action-planner.ts`: Parses intents into structured executable action plans.
+    - `confirmation.ts`: Two-phase `PLAN → PREVIEW → CONFIRM → EXECUTE` state machine for sensitive actions.
+    - `action-validator.ts`: Evaluates action plans against authorization and policy rules.
+    - `action-executor.ts`: Safely executes approved actions.
+14. **Browser Action Layer & Session Manager (`packages/bot-engine/src/browser/`)**:
+    - `domain-policy.ts`: Strictly allowed/blocked domain verification with SSRF and metadata IP blocking.
+    - `credential-policy.ts`: Automatic redaction of passwords, tokens, and API keys.
+    - `browser-session.ts`: Isolated browser automation execution with timeout safeguards.
+15. **Operational Structured Logging & Action Audit (`packages/bot-engine/src/logging/`)**:
+    - `structured-logger.ts`: Low-overhead JSON logger with automatic credential and API key redaction.
+    - `action-audit.ts`: Audits executed actions, permissions, policy decisions, and results.
+16. **Operational Intelligence & Conversation State (`packages/bot-engine/src/operational-intelligence/`)**:
+    - `conversation-state.ts`: Structured state tracking active goals, entities, and conversation modes (`CASUAL`, `SUPPORT`, `RESEARCH`, `TASK`, `TRANSACTION`, `EMOTIONAL`, `ROMANTIC`, `ADMIN`, `HUMAN_HANDOFF`).
+    - `open-loops.ts`: Tracks multi-turn open workflows across worker turns.
+    - `question-decision.ts`: Decides whether to `ANSWER_DIRECTLY`, `ASK_CLARIFICATION`, or `MAKE_BEST_REASONABLE_INTERPRETATION`.
+    - `fatigue-engine.ts`: Detects repeated passive affirmations (`ok`, `haan`, `hmm`, `thik`) and lowers initiative without annoying the user.
+    - `quiet-hours.ts`: Enforces quiet hours (e.g. 22:00–08:00 local time).
 
 ---
 
@@ -105,7 +134,7 @@ UNDERSTANDING ENGINE                      CONTEXT BUILDER
 
 - `@bot/shared`: Core shared schemas, Zod validators, and types.
 - `@bot/database`: Supabase client, pgvector queries, and transaction helpers.
-- `@bot/engine`: Authoritative conversation orchestrator, tools, quality gate, telemetry, web intelligence, skills, personality.
+- `@bot/engine`: Authoritative conversation orchestrator, tools, quality gate, telemetry, web intelligence, skills, personality, authorization, identity, actions, browser, logging, operational intelligence.
 - `openai`: Cloud LLM and embeddings client.
 - `baileys`: WhatsApp Web Multi-Device socket transport.
 
@@ -115,7 +144,7 @@ UNDERSTANDING ENGINE                      CONTEXT BUILDER
 
 | Service | Environment | Status | Verification URL |
 |---|---|---|---|
-| **Render Worker** (`wp9-worker`) | Production 24/7 Web Service | Live (`4606df3` -> updating) | `https://wp-9.onrender.com/health/ready` |
+| **Render Worker** (`wp9-worker`) | Production 24/7 Web Service | Live (`17bf61c` -> updating) | `https://wp-9.onrender.com/health/ready` |
 | **Vercel Control Plane** | Admin Dashboard / UI | Live | `https://daziai-whatsapp-crm.vercel.app` |
 | **Railway** | Production Alternative | Configured (`railway.json`) | `/health/live` |
 | **Fly.io** | Regional Alternative | Configured (`fly.toml`) | `/health/live` |
@@ -125,7 +154,7 @@ UNDERSTANDING ENGINE                      CONTEXT BUILDER
 
 ## 5. Test Suite Status
 
-- **Total Tests**: 122 passing across 14 test suites.
+- **Total Tests**: 130 passing across 15 test suites.
 - **Pass Rate**: 100%.
 - **Multiple Response Rate**: 0.00% (Strictly guaranteed).
 - **TypeScript Typecheck**: 0 errors across monorepo (`npm run typecheck`).
@@ -136,6 +165,6 @@ UNDERSTANDING ENGINE                      CONTEXT BUILDER
 ## 6. Next Recommended Phase
 
 1. **Multimodal UnifiedMessageContext**:
-   - Integration of voice transcription pipeline (`faster-whisper`), document extraction (`MarkItDown`), and image understanding into a unified message context.
-2. **Conversation Goals & Open Loop Tracking**:
-   - Durable multi-turn workflow tracking surviving worker restarts.
+   - Voice message transcription pipeline (`faster-whisper`), document extraction (`MarkItDown`), and image understanding integrated into the UnifiedMessageContext.
+2. **End-to-End Browser Tool Execution**:
+   - Playwright / Chromium headless worker support in production Docker container.

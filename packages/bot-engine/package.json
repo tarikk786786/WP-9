@@ -9,7 +9,7 @@
     "./tools": "./src/tools/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/engine.test.ts src/orchestrate.test.ts src/people.test.ts src/tools.test.ts src/handoff.test.ts src/evals.test.ts src/conversation-engine/conversation-engine.test.ts src/conversation-engine/language-quality-engine.test.ts src/conversation-engine/telemetry.test.ts src/conversation-engine/dazy-spelling-intelligence.test.ts src/evaluation/duplicates.test.ts src/evaluation/web-research.test.ts src/evaluation/personality-skills.test.ts",
+    "test": "tsx --test src/engine.test.ts src/orchestrate.test.ts src/people.test.ts src/tools.test.ts src/handoff.test.ts src/evals.test.ts src/conversation-engine/conversation-engine.test.ts src/conversation-engine/language-quality-engine.test.ts src/conversation-engine/telemetry.test.ts src/conversation-engine/dazy-spelling-intelligence.test.ts src/evaluation/duplicates.test.ts src/evaluation/web-research.test.ts src/evaluation/personality-skills.test.ts src/evaluation/agentic-safety.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
