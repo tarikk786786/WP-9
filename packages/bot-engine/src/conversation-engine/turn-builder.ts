@@ -43,15 +43,17 @@ export interface ConversationTurn {
   generationId?: string;
 }
 
+import { isDazyContact } from "./dazy-profile.ts";
+
 export function isSemanticallyComplete(text: string): boolean {
   const clean = text.trim().toLowerCase();
   if (!clean) return false;
 
-  // Single word callouts or preambles
+  // Single word callouts or preambles that are truly incomplete and expect immediate follow-up
   const incompleteWords = new Set([
-    "bhai", "bhaiya", "bro", "bhaii", "bhaijaan", "sun", "suno", "sunona", "hey", "hi", "hello",
-    "yaar", "yr", "plz", "please", "dekho", "ek", "aur", "and", "so", "but", "kya", "kyu", "kyun",
-    "haan", "hn", "acha", "achha", "okk", "ok", "listen", "bata", "bol", "wait", "ruko"
+    "bhai", "bhaiya", "bro", "bhaii", "bhaijaan", "sun", "suno", "sunona",
+    "dekho", "ek", "aur", "and", "so", "but",
+    "listen", "wait", "ruko", "ruk"
   ]);
   if (incompleteWords.has(clean)) return false;
 
@@ -105,9 +107,9 @@ export class ConversationTurnBuilder {
     incompleteDebounceMs?: number;
     maxWaitMs?: number;
   }) {
-    this.defaultDebounceMs = opts?.defaultDebounceMs ?? 800;
-    this.incompleteDebounceMs = opts?.incompleteDebounceMs ?? 1800;
-    this.maxWaitMs = opts?.maxWaitMs ?? 4000;
+    this.defaultDebounceMs = opts?.defaultDebounceMs ?? 350;
+    this.incompleteDebounceMs = opts?.incompleteDebounceMs ?? 750;
+    this.maxWaitMs = opts?.maxWaitMs ?? 2000;
   }
 
   public onTurnReady(handler: TurnReadyHandler) {
@@ -124,6 +126,7 @@ export class ConversationTurnBuilder {
     const key = `${fragment.tenantId}:${fragment.chatId}`;
     const now = Date.now();
     const existing = this.buffers.get(key);
+    const isDazy = isDazyContact(fragment.chatId, fragment.sender, fragment.fromName);
 
     if (existing) {
       clearTimeout(existing.timer);
@@ -137,6 +140,9 @@ export class ConversationTurnBuilder {
       const remainingBeforeMax = Math.max(100, this.maxWaitMs - elapsed);
 
       let targetDelay = complete ? this.defaultDebounceMs : this.incompleteDebounceMs;
+      if (isDazy) {
+        targetDelay = Math.min(targetDelay, 300);
+      }
       targetDelay = Math.min(targetDelay, remainingBeforeMax);
 
       existing.timer = setTimeout(() => {
@@ -144,7 +150,10 @@ export class ConversationTurnBuilder {
       }, targetDelay);
     } else {
       const complete = isSemanticallyComplete(fragment.text);
-      const delay = complete ? this.defaultDebounceMs : this.incompleteDebounceMs;
+      let delay = complete ? this.defaultDebounceMs : this.incompleteDebounceMs;
+      if (isDazy) {
+        delay = Math.min(delay, 300);
+      }
 
       const timer = setTimeout(() => {
         void this.flush(key);

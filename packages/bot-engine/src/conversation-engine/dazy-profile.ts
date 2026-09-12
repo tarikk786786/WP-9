@@ -1,10 +1,14 @@
 import type { EmotionState } from "./state.ts";
+import { normalizeDazyMessage, type DazyNormalizationResult } from "./dazy-spelling-intelligence.ts";
+
+export { normalizeDazyMessage, type DazyNormalizationResult };
 
 export interface DazyEvaluationResult {
   isDazy: boolean;
   romanticLevel: number; // 0 to 4
   tone: string;
   suggestedReply?: string;
+  normalization?: DazyNormalizationResult;
 }
 
 export const DAZY_PHONE_PATTERNS = ["917903956968", "7903956968"];
@@ -39,7 +43,21 @@ export function evaluateDazyMessage(
   emotion?: EmotionState,
   recentHistory?: Array<{ role: "user" | "assistant"; text: string }>
 ): DazyEvaluationResult {
-  const clean = text.trim().toLowerCase();
+  // Stage 1: DAZY Spelling Intelligence & Multi-stage Normalization
+  const norm = normalizeDazyMessage(text, recentHistory);
+
+  // If a smart, authentic reply is matched directly from spelling intelligence, return immediately
+  if (norm.suggestedSmartReply) {
+    return {
+      isDazy: true,
+      romanticLevel: norm.hasYearning || norm.isAffectionate ? 3 : norm.isPlayful ? 2 : 1,
+      tone: norm.isPlayful ? "playful_romance" : norm.hasYearning ? "romantic_yearning" : "warm_affectionate",
+      suggestedReply: norm.suggestedSmartReply,
+      normalization: norm,
+    };
+  }
+
+  const clean = norm.normalizedText.toLowerCase();
 
   // 1. Tiny text -> Tiny sweet reply
   if (/^(hehe|heh|haha|huhu)\??$/i.test(clean)) {
