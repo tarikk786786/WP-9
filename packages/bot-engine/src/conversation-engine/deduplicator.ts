@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { isMessageDeduped, recordMessageDedup, type MessageDedupRecord } from "@bot/database";
+import { isMessageDeduped, recordMessageDedup, claimInboundEvent, type MessageDedupRecord } from "@bot/database";
 
 export interface DedupCheckParams {
   messageId: string;
@@ -40,36 +40,21 @@ export class MultiLayerDeduplicator {
    * Layer 3: contentHash + sender + chat within 15s
    */
   public async isDuplicateInbound(params: DedupCheckParams): Promise<{ isDuplicate: boolean; layer?: number }> {
-    // Layer 1: WhatsApp Message ID
-    if (this.memoryMessageIds.has(params.messageId)) {
-      return { isDuplicate: true, layer: 1 };
-    }
-
-    // Layer 2: Event ID
-    if (this.memoryEventIds.has(params.eventId)) {
-      return { isDuplicate: true, layer: 2 };
-    }
-
-    // Layer 3: Content Hash within short window (15s)
-    const contentHash = this.computeContentHash(params.text, params.senderId, params.chatId);
-    const lastSeenTime = this.memoryContentHashes.get(contentHash);
-    if (lastSeenTime && Date.now() - lastSeenTime < 15_000) {
-      return { isDuplicate: true, layer: 3 };
-    }
-
-    // Persistent Database Deduplication Check
+    // Layer 1: WhatsApp Message ID & Database finalized status
     const dbDuplicate = await isMessageDeduped({
       messageId: params.messageId,
       eventId: params.eventId,
-      contentHash,
       chatId: params.chatId,
       senderId: params.senderId,
-      windowMs: 15_000,
     });
 
     if (dbDuplicate) {
-      this.rememberInbound(params.messageId, params.eventId, contentHash);
       return { isDuplicate: true, layer: 1 };
+    }
+
+    // Layer 2: Fast in-memory duplicate check
+    if (this.memoryMessageIds.has(params.messageId)) {
+      return { isDuplicate: true, layer: 2 };
     }
 
     return { isDuplicate: false };
@@ -82,19 +67,30 @@ export class MultiLayerDeduplicator {
     const contentHash = this.computeContentHash(params.text, params.senderId, params.chatId);
     const normalizedHash = this.computeNormalizedHash(params.text);
 
-    this.rememberInbound(params.messageId, params.eventId, contentHash, params.timestamp);
-
-    const record: MessageDedupRecord = {
+    const claim = await claimInboundEvent({
       messageId: params.messageId,
       eventId: params.eventId,
       chatId: params.chatId,
       senderId: params.senderId,
       contentHash,
-      normalizedHash,
-      createdAt: params.timestamp ?? Date.now(),
-    };
+      source: "notify",
+      leaseMs: 120_000,
+    });
 
-    return await recordMessageDedup(record);
+    if (claim.claimed) {
+      const record: MessageDedupRecord = {
+        messageId: params.messageId,
+        eventId: params.eventId,
+        chatId: params.chatId,
+        senderId: params.senderId,
+        contentHash,
+        normalizedHash,
+        createdAt: params.timestamp ?? Date.now(),
+      };
+      await recordMessageDedup(record);
+    }
+
+    return claim.claimed;
   }
 
   public isTurnKnown(turnId: string): boolean {

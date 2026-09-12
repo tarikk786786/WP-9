@@ -110,3 +110,32 @@ export interface AnswerPlan {
   isDazyProfile?: boolean;
   romanticLevel?: number;
 }
+
+export type InboundEventStatus =
+  | "RECEIVED"
+  | "CLAIMED"
+  | "TURN_BUILT"
+  | "DECISION_PENDING"
+  | "REPLY_REQUIRED"
+  | "NO_REPLY"
+  | "GENERATING"
+  | "RESPONSE_COMMITTED"
+  | "OUTBOX_PENDING"
+  | "SENDING"
+  | "SENT"
+  | "CLAIM_FAILED"
+  | "GENERATION_FAILED"
+  | "COMMIT_FAILED"
+  | "SEND_FAILED";
+
+export type FinalizeReason =
+  | "RESPONDED"
+  | "IGNORED_DUPLICATE"
+  | "HISTORY_EVENT"
+  | "BOT_DISABLED"
+  | "HUMAN_HANDOFF"
+  | "NO_REPLY_RULE"
+  | "INVALID_EVENT"
+  | "FAILED_RETRYABLE"
+  | "FAILED_TERMINAL";
+

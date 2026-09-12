@@ -80,6 +80,40 @@ export interface OutboxDbRecord {
   lastError?: string;
 }
 
+export type InboundEventStatus =
+  | "RECEIVED"
+  | "CLAIMED"
+  | "TURN_BUILT"
+  | "DECISION_PENDING"
+  | "REPLY_REQUIRED"
+  | "NO_REPLY"
+  | "GENERATING"
+  | "RESPONSE_COMMITTED"
+  | "OUTBOX_PENDING"
+  | "SENDING"
+  | "SENT"
+  | "CLAIM_FAILED"
+  | "GENERATION_FAILED"
+  | "COMMIT_FAILED"
+  | "SEND_FAILED";
+
+export interface InboundClaimRecord {
+  messageId: string;
+  eventId: string;
+  chatId: string;
+  senderId: string;
+  contentHash?: string;
+  source?: string;
+  status: InboundEventStatus;
+  ownerId?: string;
+  leaseUntil?: number;
+  turnId?: string;
+  attemptCount: number;
+  createdAt: number;
+  updatedAt: number;
+  error?: string;
+}
+
 type Memory = {
   customers: Customer[];
   conversations: Conversation[];
@@ -92,6 +126,8 @@ type Memory = {
   authFiles: Record<string, string>;
   knowledge: Array<{ id: string; title: string; content: string; enabled: boolean }>;
   dedup: Map<string, { messageId: string; eventId: string; chatId: string; senderId: string; contentHash: string; normalizedHash: string; createdAt: number }>;
+  inboundClaims: Map<string, InboundClaimRecord>;
+  noReplyDecisions: Map<string, { turnId: string; chatId: string; reason: string; messageIds: string[]; createdAt: number }>;
   turns: Map<string, { turnId: string; chatId: string; messageIds: string[]; combinedText: string; status: string; createdAt: number }>;
   responseCommits: Map<string, ResponseCommitRecord>;
   conversationLocks: Map<string, { chatId: string; turnId: string; ownerId: string; acquiredAt: number; expiresAt: number }>;
@@ -110,6 +146,8 @@ const memory: Memory = {
   authFiles: {},
   knowledge: [],
   dedup: new Map(),
+  inboundClaims: new Map(),
+  noReplyDecisions: new Map(),
   turns: new Map(),
   responseCommits: new Map(),
   conversationLocks: new Map(),
@@ -694,27 +732,141 @@ export interface MessageDedupRecord {
 
 export interface InboundClaimResult {
   claimed: boolean;
-  reason?: "ALREADY_CLAIMED" | "DUPLICATE_HASH" | "DB_ERROR";
+  status: InboundEventStatus;
+  existingStatus?: InboundEventStatus;
+  reason?: "ALREADY_CLAIMED" | "DUPLICATE_HASH" | "DB_ERROR" | "LEASE_ACTIVE" | "RECOVERED";
+  claimRecord?: InboundClaimRecord;
 }
 
-export async function claimInboundMessage(params: {
+export async function claimInboundEvent(params: {
   messageId: string;
   eventId: string;
   chatId: string;
   senderId: string;
   contentHash?: string;
   source?: string;
+  ownerId?: string;
+  leaseMs?: number;
 }): Promise<InboundClaimResult> {
-  // In-memory check first
-  if (memory.dedup.has(params.messageId) || memory.dedup.has(params.eventId)) {
-    return { claimed: false, reason: "ALREADY_CLAIMED" };
+  const nowMs = Date.now();
+  const leaseMs = params.leaseMs ?? 120_000; // 2 minutes default lease
+  const leaseUntil = nowMs + leaseMs;
+  const ownerId = params.ownerId || `worker_${process.pid}`;
+
+  // 1. Check in-memory first
+  const existing = memory.inboundClaims.get(params.messageId) || memory.inboundClaims.get(params.eventId);
+  if (existing) {
+    if (existing.status === "RESPONSE_COMMITTED" || existing.status === "SENT" || existing.status === "NO_REPLY") {
+      return { claimed: false, status: existing.status, existingStatus: existing.status, reason: "ALREADY_CLAIMED", claimRecord: existing };
+    }
+
+    if ((existing.status === "GENERATING" || existing.status === "CLAIMED") && existing.leaseUntil && existing.leaseUntil > nowMs) {
+      return { claimed: false, status: existing.status, existingStatus: existing.status, reason: "LEASE_ACTIVE", claimRecord: existing };
+    }
+
+    // Recover expired lease or retryable failure
+    existing.ownerId = ownerId;
+    existing.leaseUntil = leaseUntil;
+    existing.attemptCount += 1;
+    existing.status = "CLAIMED";
+    existing.updatedAt = nowMs;
+    memory.inboundClaims.set(params.messageId, existing);
+    memory.inboundClaims.set(params.eventId, existing);
+
+    const db = supabase();
+    if (db) {
+      try {
+        await db
+          .from("inbound_event_claims")
+          .update({
+            status: "CLAIMED",
+            owner_id: ownerId,
+            lease_until: new Date(leaseUntil).toISOString(),
+            attempt_count: existing.attemptCount,
+            updated_at: new Date(nowMs).toISOString(),
+          })
+          .or(`message_id.eq.${params.messageId},event_id.eq.${params.eventId}`);
+      } catch {
+        /* fallback */
+      }
+    }
+
+    return { claimed: true, status: "CLAIMED", existingStatus: existing.status, reason: "RECOVERED", claimRecord: existing };
   }
 
-  const nowMs = Date.now();
+  // 2. Check database
   const db = supabase();
-
   if (db) {
     try {
+      const { data: dbExisting } = await db
+        .from("inbound_event_claims")
+        .select("*")
+        .or(`message_id.eq.${params.messageId},event_id.eq.${params.eventId}`)
+        .maybeSingle();
+
+      if (dbExisting) {
+        const dbStatus = (dbExisting.status as InboundEventStatus) || "CLAIMED";
+        const dbLeaseUntil = dbExisting.lease_until ? new Date(dbExisting.lease_until).getTime() : 0;
+
+        if (dbStatus === "RESPONSE_COMMITTED" || dbStatus === "SENT" || dbStatus === "NO_REPLY") {
+          const rec: InboundClaimRecord = {
+            messageId: dbExisting.message_id,
+            eventId: dbExisting.event_id,
+            chatId: dbExisting.chat_id,
+            senderId: dbExisting.sender_id,
+            contentHash: dbExisting.content_hash,
+            source: dbExisting.source,
+            status: dbStatus,
+            ownerId: dbExisting.owner_id,
+            leaseUntil: dbLeaseUntil,
+            turnId: dbExisting.turn_id,
+            attemptCount: dbExisting.attempt_count ?? 1,
+            createdAt: new Date(dbExisting.created_at).getTime(),
+            updatedAt: new Date(dbExisting.updated_at || dbExisting.created_at).getTime(),
+          };
+          memory.inboundClaims.set(params.messageId, rec);
+          memory.inboundClaims.set(params.eventId, rec);
+          return { claimed: false, status: dbStatus, existingStatus: dbStatus, reason: "ALREADY_CLAIMED", claimRecord: rec };
+        }
+
+        if ((dbStatus === "GENERATING" || dbStatus === "CLAIMED") && dbLeaseUntil > nowMs) {
+          return { claimed: false, status: dbStatus, existingStatus: dbStatus, reason: "LEASE_ACTIVE" };
+        }
+
+        // Expired or retryable: reclaim
+        const newAttempt = (dbExisting.attempt_count ?? 1) + 1;
+        await db
+          .from("inbound_event_claims")
+          .update({
+            status: "CLAIMED",
+            owner_id: ownerId,
+            lease_until: new Date(leaseUntil).toISOString(),
+            attempt_count: newAttempt,
+            updated_at: new Date(nowMs).toISOString(),
+          })
+          .eq("id", dbExisting.id);
+
+        const rec: InboundClaimRecord = {
+          messageId: dbExisting.message_id,
+          eventId: dbExisting.event_id,
+          chatId: dbExisting.chat_id,
+          senderId: dbExisting.sender_id,
+          contentHash: dbExisting.content_hash,
+          source: dbExisting.source,
+          status: "CLAIMED",
+          ownerId,
+          leaseUntil,
+          turnId: dbExisting.turn_id,
+          attemptCount: newAttempt,
+          createdAt: new Date(dbExisting.created_at).getTime(),
+          updatedAt: nowMs,
+        };
+        memory.inboundClaims.set(params.messageId, rec);
+        memory.inboundClaims.set(params.eventId, rec);
+        return { claimed: true, status: "CLAIMED", existingStatus: dbStatus, reason: "RECOVERED", claimRecord: rec };
+      }
+
+      // Insert new claim into database
       const { error } = await db.from("inbound_event_claims").insert({
         message_id: params.messageId,
         event_id: params.eventId,
@@ -722,19 +874,38 @@ export async function claimInboundMessage(params: {
         sender_id: params.senderId,
         content_hash: params.contentHash ?? null,
         source: params.source ?? "notify",
+        status: "CLAIMED",
+        owner_id: ownerId,
+        lease_until: new Date(leaseUntil).toISOString(),
+        attempt_count: 1,
       });
 
-      if (error) {
-        if (error.code === "23505" || /duplicate key|unique constraint/i.test(error.message)) {
-          return { claimed: false, reason: "ALREADY_CLAIMED" };
-        }
+      if (error && (error.code === "23505" || /duplicate key|unique constraint/i.test(error.message))) {
+        return { claimed: false, status: "CLAIMED", reason: "ALREADY_CLAIMED" };
       }
     } catch {
-      // fallback to memory
+      /* fallback to memory */
     }
   }
 
-  // Claim in memory
+  // 3. New record in memory
+  const newRecord: InboundClaimRecord = {
+    messageId: params.messageId,
+    eventId: params.eventId,
+    chatId: params.chatId,
+    senderId: params.senderId,
+    contentHash: params.contentHash,
+    source: params.source ?? "notify",
+    status: "CLAIMED",
+    ownerId,
+    leaseUntil,
+    attemptCount: 1,
+    createdAt: nowMs,
+    updatedAt: nowMs,
+  };
+
+  memory.inboundClaims.set(params.messageId, newRecord);
+  memory.inboundClaims.set(params.eventId, newRecord);
   memory.dedup.set(params.messageId, {
     messageId: params.messageId,
     eventId: params.eventId,
@@ -744,23 +915,192 @@ export async function claimInboundMessage(params: {
     normalizedHash: "",
     createdAt: nowMs,
   });
-  memory.dedup.set(params.eventId, {
-    messageId: params.messageId,
-    eventId: params.eventId,
+
+  return { claimed: true, status: "CLAIMED", claimRecord: newRecord };
+}
+
+export async function claimInboundMessage(params: {
+  messageId: string;
+  eventId: string;
+  chatId: string;
+  senderId: string;
+  contentHash?: string;
+  source?: string;
+  ownerId?: string;
+  leaseMs?: number;
+}): Promise<{ claimed: boolean; reason?: "ALREADY_CLAIMED" | "DUPLICATE_HASH" | "DB_ERROR" }> {
+  const res = await claimInboundEvent(params);
+  return {
+    claimed: res.claimed,
+    reason: res.reason === "LEASE_ACTIVE" || res.reason === "ALREADY_CLAIMED" ? "ALREADY_CLAIMED" : undefined,
+  };
+}
+
+export async function updateInboundClaimStatus(
+  messageIdOrEventId: string,
+  status: InboundEventStatus,
+  details?: {
+    turnId?: string;
+    ownerId?: string;
+    leaseMs?: number;
+    error?: string;
+  }
+): Promise<void> {
+  const nowMs = Date.now();
+  const existing = memory.inboundClaims.get(messageIdOrEventId);
+  if (existing) {
+    existing.status = status;
+    existing.updatedAt = nowMs;
+    if (details?.turnId) existing.turnId = details.turnId;
+    if (details?.ownerId) existing.ownerId = details.ownerId;
+    if (details?.leaseMs) existing.leaseUntil = nowMs + details.leaseMs;
+    if (details?.error) existing.error = details.error;
+
+    memory.inboundClaims.set(existing.messageId, existing);
+    memory.inboundClaims.set(existing.eventId, existing);
+  }
+
+  const db = supabase();
+  if (db) {
+    try {
+      const updates: Record<string, unknown> = {
+        status,
+        updated_at: new Date(nowMs).toISOString(),
+      };
+      if (details?.turnId) updates.turn_id = details.turnId;
+      if (details?.ownerId) updates.owner_id = details.ownerId;
+      if (details?.leaseMs) updates.lease_until = new Date(nowMs + details.leaseMs).toISOString();
+      if (details?.error) updates.error = details.error;
+
+      await db
+        .from("inbound_event_claims")
+        .update(updates)
+        .or(`message_id.eq.${messageIdOrEventId},event_id.eq.${messageIdOrEventId}`);
+    } catch {
+      /* fallback */
+    }
+  }
+}
+
+export async function recordNoReplyCommit(params: {
+  turnId: string;
+  chatId: string;
+  reason: string;
+  messageIds: string[];
+}): Promise<void> {
+  const nowMs = Date.now();
+  memory.noReplyDecisions.set(params.turnId, {
+    turnId: params.turnId,
     chatId: params.chatId,
-    senderId: params.senderId,
-    contentHash: params.contentHash ?? "",
-    normalizedHash: "",
+    reason: params.reason,
+    messageIds: params.messageIds,
     createdAt: nowMs,
   });
 
-  return { claimed: true };
+  for (const mid of params.messageIds) {
+    await updateInboundClaimStatus(mid, "NO_REPLY");
+  }
+
+  const db = supabase();
+  if (db) {
+    try {
+      await db.from("no_reply_decisions").upsert(
+        {
+          turn_id: params.turnId,
+          chat_id: params.chatId,
+          reason: params.reason,
+          message_ids: params.messageIds,
+        },
+        { onConflict: "turn_id" }
+      );
+    } catch {
+      /* fallback */
+    }
+  }
+}
+
+export async function isTurnDecidedNoReply(turnId: string): Promise<boolean> {
+  if (memory.noReplyDecisions.has(turnId)) return true;
+  const db = supabase();
+  if (db) {
+    try {
+      const { data } = await db.from("no_reply_decisions").select("id").eq("turn_id", turnId).maybeSingle();
+      if (data) return true;
+    } catch {
+      /* fallback */
+    }
+  }
+  return false;
+}
+
+export async function getStuckConversationsDb(maxAgeMs = 120_000): Promise<{
+  stuckClaims: InboundClaimRecord[];
+  stuckOutbox: OutboxDbRecord[];
+}> {
+  const nowMs = Date.now();
+  const stuckClaims: InboundClaimRecord[] = [];
+
+  for (const claim of memory.inboundClaims.values()) {
+    if (claim.messageId === claim.eventId) continue;
+    const isExpired = claim.leaseUntil && claim.leaseUntil < nowMs;
+    if (
+      isExpired &&
+      (claim.status === "CLAIMED" || claim.status === "GENERATING" || claim.status === "TURN_BUILT" || claim.status === "DECISION_PENDING")
+    ) {
+      if (!stuckClaims.some((sc) => sc.messageId === claim.messageId)) {
+        stuckClaims.push(claim);
+      }
+    }
+  }
+
+  const stuckOutbox: OutboxDbRecord[] = [];
+  for (const item of memory.messageOutbox.values()) {
+    if (item.status === "pending" || (item.status === "sending" && nowMs - item.createdAt > 30_000)) {
+      stuckOutbox.push(item);
+    }
+  }
+
+  const db = supabase();
+  if (db) {
+    try {
+      const { data: claims } = await db
+        .from("inbound_event_claims")
+        .select("*")
+        .in("status", ["CLAIMED", "GENERATING", "TURN_BUILT", "DECISION_PENDING"])
+        .lt("lease_until", new Date(nowMs).toISOString());
+      if (claims && claims.length > 0) {
+        for (const c of claims) {
+          if (!stuckClaims.some((sc) => sc.messageId === c.message_id)) {
+            stuckClaims.push({
+              messageId: c.message_id,
+              eventId: c.event_id,
+              chatId: c.chat_id,
+              senderId: c.sender_id,
+              contentHash: c.content_hash,
+              source: c.source,
+              status: c.status,
+              ownerId: c.owner_id,
+              leaseUntil: c.lease_until ? new Date(c.lease_until).getTime() : undefined,
+              turnId: c.turn_id,
+              attemptCount: c.attempt_count ?? 1,
+              createdAt: new Date(c.created_at).getTime(),
+              updatedAt: new Date(c.updated_at || c.created_at).getTime(),
+              error: c.error,
+            });
+          }
+        }
+      }
+    } catch {
+      /* fallback */
+    }
+  }
+
+  return { stuckClaims, stuckOutbox };
 }
 
 export async function recordMessageDedup(entry: MessageDedupRecord): Promise<boolean> {
   const db = supabase();
   const nowMs = Date.now();
-  // Check in-memory first
   if (memory.dedup.has(entry.messageId) || memory.dedup.has(entry.eventId)) {
     return false;
   }
@@ -795,31 +1135,42 @@ export async function isMessageDeduped(params: {
   senderId?: string;
   windowMs?: number;
 }): Promise<boolean> {
-  if (params.messageId && memory.dedup.has(params.messageId)) return true;
-  if (params.eventId && memory.dedup.has(params.eventId)) return true;
+  // Check memory status
+  if (params.messageId) {
+    const claim = memory.inboundClaims.get(params.messageId);
+    if (claim && (claim.status === "RESPONSE_COMMITTED" || claim.status === "SENT" || claim.status === "NO_REPLY")) {
+      return true;
+    }
+  }
+  if (params.eventId) {
+    const claim = memory.inboundClaims.get(params.eventId);
+    if (claim && (claim.status === "RESPONSE_COMMITTED" || claim.status === "SENT" || claim.status === "NO_REPLY")) {
+      return true;
+    }
+  }
 
   const db = supabase();
   if (db) {
     try {
       if (params.messageId) {
-        const { data } = await db.from("message_dedup").select("id").eq("message_id", params.messageId).maybeSingle();
-        if (data) return true;
+        const { data } = await db
+          .from("inbound_event_claims")
+          .select("status")
+          .eq("message_id", params.messageId)
+          .maybeSingle();
+        if (data && (data.status === "RESPONSE_COMMITTED" || data.status === "SENT" || data.status === "NO_REPLY")) {
+          return true;
+        }
       }
       if (params.eventId) {
-        const { data } = await db.from("message_dedup").select("id").eq("event_id", params.eventId).maybeSingle();
-        if (data) return true;
-      }
-      if (params.contentHash && params.chatId && params.senderId) {
-        const windowStart = new Date(Date.now() - (params.windowMs ?? 15_000)).toISOString();
         const { data } = await db
-          .from("message_dedup")
-          .select("id")
-          .eq("content_hash", params.contentHash)
-          .eq("chat_id", params.chatId)
-          .eq("sender_id", params.senderId)
-          .gte("created_at", windowStart)
+          .from("inbound_event_claims")
+          .select("status")
+          .eq("event_id", params.eventId)
           .maybeSingle();
-        if (data) return true;
+        if (data && (data.status === "RESPONSE_COMMITTED" || data.status === "SENT" || data.status === "NO_REPLY")) {
+          return true;
+        }
       }
     } catch {
       /* ignore db error, rely on memory */

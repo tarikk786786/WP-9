@@ -1,4 +1,5 @@
 import type { CanonicalContext } from "./context.ts";
+import type { FinalizeReason } from "./state.ts";
 
 export type ShouldReplyDecision =
   | "REPLY"
@@ -11,6 +12,7 @@ export type ShouldReplyDecision =
 export interface DecisionResult {
   decision: ShouldReplyDecision;
   reason: string;
+  finalizeReason?: FinalizeReason;
   escalateStatus?: "waiting_human" | "human";
 }
 
@@ -23,6 +25,7 @@ export class DecisionEngine {
       return {
         decision: "DO_NOT_REPLY",
         reason: "Bot is disabled in settings",
+        finalizeReason: "BOT_DISABLED",
       };
     }
 
@@ -31,6 +34,7 @@ export class DecisionEngine {
       return {
         decision: "DO_NOT_REPLY",
         reason: `Conversation is currently in ${status} mode. Bot must remain completely silent.`,
+        finalizeReason: "HUMAN_HANDOFF",
       };
     }
 
@@ -48,6 +52,7 @@ export class DecisionEngine {
       return {
         decision: "IGNORE",
         reason: "Empty text",
+        finalizeReason: "INVALID_EVENT",
       };
     }
 

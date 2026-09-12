@@ -1,4 +1,10 @@
 import type { AutomationRule, Faq } from "@bot/shared";
+import {
+  recordNoReplyCommit,
+  updateInboundClaimStatus,
+  claimInboundEvent,
+  getStuckConversationsDb,
+} from "@bot/database";
 import { MultiLayerDeduplicator, deduplicator } from "./deduplicator.ts";
 import { EventGate, eventGate, type InboundEventPayload } from "./event-gate.ts";
 import { ConversationTurnBuilder, turnBuilder, type ConversationTurn } from "./turn-builder.ts";
@@ -32,8 +38,14 @@ export * from "./memory.ts";
 
 export interface ConversationEngineMetrics {
   messages_received: number;
-  duplicate_messages: number;
+  messages_claimed: number;
+  messages_duplicate: number;
+  messages_finalized: number;
   logical_turns: number;
+  reply_required: number;
+  no_reply: number;
+  generation_success: number;
+  generation_failure: number;
   responses_generated: number;
   responses_committed: number;
   responses_sent: number;
@@ -44,7 +56,11 @@ export interface ConversationEngineMetrics {
   lock_conflicts: number;
   send_retries: number;
   send_failures: number;
+  stuck_turns_recovered: number;
+  missing_reply_recovery: number;
+  reply_success_rate: number;
   multiple_response_rate: number;
+  stuck_turn_rate: number;
 }
 
 export interface EngineDependencies {
@@ -90,8 +106,14 @@ export class AuthoritativeConversationEngine {
   private deps: EngineDependencies;
   private metrics: ConversationEngineMetrics = {
     messages_received: 0,
-    duplicate_messages: 0,
+    messages_claimed: 0,
+    messages_duplicate: 0,
+    messages_finalized: 0,
     logical_turns: 0,
+    reply_required: 0,
+    no_reply: 0,
+    generation_success: 0,
+    generation_failure: 0,
     responses_generated: 0,
     responses_committed: 0,
     responses_sent: 0,
@@ -102,7 +124,11 @@ export class AuthoritativeConversationEngine {
     lock_conflicts: 0,
     send_retries: 0,
     send_failures: 0,
+    stuck_turns_recovered: 0,
+    missing_reply_recovery: 0,
+    reply_success_rate: 100,
     multiple_response_rate: 0,
+    stuck_turn_rate: 0,
   };
 
   constructor(deps: EngineDependencies = {}) {
@@ -147,6 +173,10 @@ export class AuthoritativeConversationEngine {
     const totalCommitted = this.metrics.responses_committed;
     const dupAttempts = this.metrics.duplicate_response_attempts;
     this.metrics.multiple_response_rate = totalCommitted > 0 ? (dupAttempts / totalCommitted) * 100 : 0;
+    const replyReq = this.metrics.reply_required;
+    this.metrics.reply_success_rate = replyReq > 0 ? (totalCommitted / replyReq) * 100 : 100;
+    const turns = this.metrics.logical_turns;
+    this.metrics.stuck_turn_rate = turns > 0 ? (this.metrics.stuck_turns_recovered / turns) * 100 : 0;
     return { ...this.metrics };
   }
 
@@ -159,12 +189,13 @@ export class AuthoritativeConversationEngine {
 
     const result = await this.eventGate.acceptEvent(event);
     if (!result.accepted) {
-      this.metrics.duplicate_messages += 1;
+      this.metrics.messages_duplicate += 1;
       this.metrics.responses_suppressed += 1;
       console.log(`[trace] DEDUPED eventId=${event.messageId} reason=${result.reason}`);
       return false;
     }
 
+    this.metrics.messages_claimed += 1;
     console.log(`[trace] ACCEPTED eventId=${result.eventId} pushing to TurnBuilder`);
     this.turnBuilder.pushFragment(event);
     return true;
@@ -188,6 +219,10 @@ export class AuthoritativeConversationEngine {
     console.log(`[trace] LOCK_ACQUIRED turnId=${turn.turnId} owner=${lockOwner}`);
 
     try {
+      for (const mid of turn.messageIds) {
+        await updateInboundClaimStatus(mid, "DECISION_PENDING", { turnId: turn.turnId });
+      }
+
       // 2. Fetch Dependencies
       const settings = this.deps.getSettings ? await this.deps.getSettings() : { enabled: true, aiEnabled: true };
       const status = this.deps.getConversationStatus ? await this.deps.getConversationStatus(turn.chatId) : "bot";
@@ -221,11 +256,24 @@ export class AuthoritativeConversationEngine {
       console.log(`[trace] DECISION turnId=${turn.turnId} decision=${decision.decision} reason="${decision.reason}"`);
 
       if (decision.decision === "DO_NOT_REPLY" || decision.decision === "IGNORE" || decision.decision === "DUPLICATE") {
+        this.metrics.no_reply += 1;
+        this.metrics.messages_finalized += turn.messageIds.length;
         this.metrics.responses_suppressed += 1;
+        await recordNoReplyCommit({
+          turnId: turn.turnId,
+          chatId: turn.chatId,
+          reason: decision.reason,
+          messageIds: turn.messageIds,
+        });
+        for (const frag of turn.fragments) {
+          const evtId = this.eventGate.generateEventId(frag.tenantId, frag.chatId, frag.messageId);
+          this.eventGate.markProcessed(evtId);
+        }
         return null;
       }
 
       if (decision.decision === "ESCALATE") {
+        this.metrics.reply_required += 1;
         if (this.deps.setConversationStatus) {
           await this.deps.setConversationStatus(turn.chatId, "waiting_human");
         }
@@ -233,11 +281,43 @@ export class AuthoritativeConversationEngine {
         return await this.commitAndEnqueue(turn, escalateText, "human_escalate", context);
       }
 
+      this.metrics.reply_required += 1;
+      for (const mid of turn.messageIds) {
+        await updateInboundClaimStatus(mid, "GENERATING", { turnId: turn.turnId, leaseMs: 120_000 });
+      }
+
       // 6. Pre-Commit Candidate Resolution (ModelRouter)
-      const candidate = await this.modelRouter.resolveCandidate(context);
-      this.metrics.responses_generated += 1;
-      if (candidate.source === "fallback") this.metrics.fallback_attempts += 1;
-      console.log(`[trace] ANSWER_GENERATED turnId=${turn.turnId} source=${candidate.source} timeMs=${candidate.executionTimeMs}`);
+      let candidate;
+      try {
+        candidate = await this.modelRouter.resolveCandidate(context);
+        this.metrics.generation_success += 1;
+        this.metrics.responses_generated += 1;
+        if (candidate.source === "fallback") this.metrics.fallback_attempts += 1;
+        console.log(`[trace] ANSWER_GENERATED turnId=${turn.turnId} source=${candidate.source} timeMs=${candidate.executionTimeMs}`);
+      } catch (genErr) {
+        this.metrics.generation_failure += 1;
+        console.error(`[trace] GENERATION_FAILED turnId=${turn.turnId}:`, genErr);
+        candidate = {
+          source: "fallback" as const,
+          text: "Ji samajh gaya. Iske baare mein aapko aur jankari chahiye toh batayein.",
+          confidence: 0.5,
+          executionTimeMs: 0,
+        };
+      }
+
+      // Stale AI result / mid-generation status switch protection
+      const liveStatus = this.deps.getConversationStatus ? await this.deps.getConversationStatus(turn.chatId) : "bot";
+      const liveSettings = this.deps.getSettings ? await this.deps.getSettings() : { enabled: true };
+      if (liveStatus !== "bot" || liveSettings.enabled === false) {
+        console.warn(`[trace] CONVERSATION_STATE_CHANGED_DURING_GENERATION turnId=${turn.turnId} status=${liveStatus} enabled=${liveSettings.enabled}. Discarding candidate.`);
+        await recordNoReplyCommit({
+          turnId: turn.turnId,
+          chatId: turn.chatId,
+          reason: "STATE_CHANGED_DURING_GENERATION",
+          messageIds: turn.messageIds,
+        });
+        return null;
+      }
 
       // 7. Response Planning
       const plan = this.responsePlanner.plan(context, candidate);
@@ -288,8 +368,13 @@ export class AuthoritativeConversationEngine {
     }
 
     this.metrics.responses_committed += 1;
+    this.metrics.messages_finalized += turn.messageIds.length;
     const response = commitResult.committedResponse;
     console.log(`[trace] RESPONSE_COMMITTED turnId=${turn.turnId} responseId=${response.responseId}`);
+
+    for (const mid of turn.messageIds) {
+      await updateInboundClaimStatus(mid, "RESPONSE_COMMITTED", { turnId: turn.turnId });
+    }
 
     // Authoritative Outbox Enqueue
     await this.outbox.enqueue({
@@ -303,6 +388,10 @@ export class AuthoritativeConversationEngine {
       },
     });
     console.log(`[trace] OUTBOX_ENQUEUED responseId=${response.responseId}`);
+
+    for (const mid of turn.messageIds) {
+      await updateInboundClaimStatus(mid, "OUTBOX_PENDING", { turnId: turn.turnId });
+    }
 
     // Notify persistence callback
     if (this.deps.onMessageCommitted) {
@@ -320,6 +409,59 @@ export class AuthoritativeConversationEngine {
     }
 
     return response;
+  }
+
+  /**
+   * Periodic recovery worker: finds expired claims and pending outbox items and recovers them
+   */
+  public async recoverStuckConversations(): Promise<{
+    recoveredClaims: number;
+    recoveredOutbox: number;
+  }> {
+    try {
+      const { stuckClaims, stuckOutbox } = await getStuckConversationsDb();
+      let recoveredClaims = 0;
+      let recoveredOutbox = 0;
+
+      // 1. Recover stuck outbox items (pending or sending with expired lease)
+      if (stuckOutbox.length > 0) {
+        for (const item of stuckOutbox) {
+          await this.outbox.enqueue({
+            responseId: item.responseId,
+            turnId: item.turnId,
+            chatId: item.chatId,
+            text: item.text,
+          });
+          recoveredOutbox += 1;
+        }
+        await this.outbox.processQueue(true);
+      }
+
+      // 2. Recover stuck claims whose lease expired
+      if (stuckClaims.length > 0) {
+        for (const claim of stuckClaims) {
+          const reclaim = await claimInboundEvent({
+            messageId: claim.messageId,
+            eventId: claim.eventId,
+            chatId: claim.chatId,
+            senderId: claim.senderId,
+            source: claim.source,
+            leaseMs: 120_000,
+          });
+          if (reclaim.claimed) {
+            recoveredClaims += 1;
+            this.metrics.stuck_turns_recovered += 1;
+            this.metrics.missing_reply_recovery += 1;
+            console.log(`[recovery] Recovered stuck message ${claim.messageId} in chat ${claim.chatId}`);
+          }
+        }
+      }
+
+      return { recoveredClaims, recoveredOutbox };
+    } catch (err) {
+      console.error("[recovery] Error in recoverStuckConversations:", err);
+      return { recoveredClaims: 0, recoveredOutbox: 0 };
+    }
   }
 }
 

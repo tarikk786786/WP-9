@@ -30,7 +30,7 @@ export class ConnectionGuardian {
   constructor(config: GuardianConfig = {}) {
     this.instanceId = config.instanceId || `worker_${process.pid}_${Math.random().toString(36).substring(2, 8)}`;
     this.heartbeatIntervalMs = config.heartbeatIntervalMs || 20_000;
-    this.staleSocketThresholdMs = config.staleSocketThresholdMs || 180_000; // 3 minutes
+    this.staleSocketThresholdMs = config.staleSocketThresholdMs || 900_000; // 15 minutes (avoids false-positive reconnects during idle periods)
     this.getSnapshotFn = config.getSnapshot || null;
   }
 

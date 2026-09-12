@@ -377,16 +377,18 @@ server.on("error", (error: NodeJS.ErrnoException) => {
 
 function startCloudKeepalive() {
   const target =
-    process.env.RENDER_EXTERNAL_URL ||
     process.env.PUBLIC_WORKER_URL ||
-    (process.env.DEPLOYMENT_MODE === "render" ? "https://wp-9.onrender.com" : null);
+    process.env.RENDER_EXTERNAL_URL ||
+    (process.env.RENDER || process.env.DEPLOYMENT_MODE === "render" || process.env.NODE_ENV === "production"
+      ? "https://wp-9.onrender.com"
+      : null);
 
   if (!target || !target.startsWith("http")) return;
 
   const pingUrl = `${target.replace(/\/$/, "")}/health/live`;
-  console.log(`[worker] Cloud keepalive self-pinger active for: ${pingUrl}`);
+  console.log(`[worker] Cloud keepalive self-pinger active for: ${pingUrl} (every 4 min)`);
 
-  setInterval(async () => {
+  const runTick = async () => {
     try {
       const res = await fetch(pingUrl, {
         headers: { "User-Agent": "WP-9-Worker-KeepAlive/1.0" },
@@ -398,7 +400,21 @@ function startCloudKeepalive() {
     } catch (err) {
       console.warn(`[worker] Cloud keepalive ping warning:`, err instanceof Error ? err.message : String(err));
     }
-  }, 8 * 60 * 1000).unref();
+
+    try {
+      const rec = await conversationEngine.recoverStuckConversations();
+      if (rec.recoveredClaims > 0 || rec.recoveredOutbox > 0) {
+        console.log(`[worker] Periodic recovery recovered ${rec.recoveredClaims} claims and ${rec.recoveredOutbox} outbox items.`);
+      }
+    } catch (err) {
+      console.error("[worker] Background recovery error:", err);
+    }
+  };
+
+  // Run initial tick after 10s
+  setTimeout(() => void runTick(), 10_000).unref();
+  // Repeat every 4 minutes (resets Render 15m idle shutdown)
+  setInterval(() => void runTick(), 4 * 60 * 1000).unref();
 }
 
 server.listen(port, host, () => {

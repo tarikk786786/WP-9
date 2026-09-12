@@ -1,4 +1,4 @@
-import { upsertConversationTurn } from "@bot/database";
+import { upsertConversationTurn, updateInboundClaimStatus } from "@bot/database";
 import type { InboundEventPayload } from "./event-gate.ts";
 import type { ActiveConversationState, EmotionState, UserGoal } from "./state.ts";
 
@@ -40,6 +40,7 @@ export interface ConversationTurn {
   confidence?: number;
   quoted?: QuotedContext;
   createdAt: number;
+  generationId?: string;
 }
 
 export function isSemanticallyComplete(text: string): boolean {
@@ -195,6 +196,7 @@ export class ConversationTurnBuilder {
       isGroup: Boolean(last.isGroup),
       quoted,
       createdAt: buffer.firstReceivedAt,
+      generationId: `gen_${turnId}_${Date.now()}`,
     };
 
     // Persist conversation turn to database
@@ -205,6 +207,10 @@ export class ConversationTurnBuilder {
       combinedText: turn.combinedText,
       status: "created",
     });
+
+    for (const msgId of turn.messageIds) {
+      await updateInboundClaimStatus(msgId, "TURN_BUILT", { turnId: turn.turnId });
+    }
 
     if (this.handler) {
       try {

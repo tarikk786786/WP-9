@@ -266,7 +266,7 @@ function isSocketLive() {
   return manager.snapshot.phase === "ready" || manager.snapshot.connected === true;
 }
 
-const STALE_MS = 90_000;
+const STALE_MS = 600_000; // 10 minutes (prevents premature socket tear-down during idle periods)
 
 function isSocketReallyLive() {
   return isSocketLive() && Date.now() - lastFrameAt < STALE_MS;
@@ -477,19 +477,19 @@ async function pulseWhatsApp() {
     const sock = manager.sock as { user?: { id?: string }; ws?: { readyState?: number } } | null;
     const wsOpen = Boolean(sock?.user) && (typeof sock?.ws?.readyState !== "number" || sock.ws.readyState === 1);
     const stale = Date.now() - lastFrameAt >= STALE_MS;
-    if (wsOpen && !stale) {
+    if (wsOpen) {
       const ok = await withTimeout(
         Promise.resolve(manager.sock?.sendPresenceUpdate("available")).then(() => true),
-        4000,
+        5000,
       );
       if (ok) {
         touchFrame();
         return;
       }
-      if (Date.now() - lastFrameAt < STALE_MS) return;
+      if (!stale) return;
     }
     if (wsOpen && stale) {
-      console.warn("[whatsapp] socket looks open but WhatsApp is silent — reconnecting");
+      console.warn("[whatsapp] socket inactive for over 10m — reconnecting safely");
     }
     await startWhatsApp(undefined, { force: true });
   } finally {
@@ -786,27 +786,13 @@ async function openSocket(pairingPhone?: string) {
     // 2. Strict live-event gate: NEVER auto-reply on historical sync, appends, or updates
     if (source !== "notify") return;
 
-    // 3. Strict recency gate: discard stale messages older than 60s
+    // 3. Ignore broadcast/status channels
+    if (jid.endsWith("@broadcast") || jid.includes("status@broadcast")) return;
+
+    // 4. Strict recency gate: discard stale messages older than 60s
     const ageMs = Date.now() - waTimestampMs(raw);
     if (ageMs > 60_000 || ageMs < -10_000) {
       console.log(`[whatsapp] Discarding stale message (${Math.round(ageMs / 1000)}s old):`, id);
-      return;
-    }
-
-    // 4. Strict deduplication check across memory and database
-    if (await wasProcessed(id) || await wasProcessed(`out_${id}`)) return;
-    if (isDuplicate(id)) return;
-
-    // 5. Atomic inbound message claim (Phase 22 / Phase 23)
-    const claim = await claimInboundMessage({
-      messageId: id,
-      eventId: `evt_${id}`,
-      chatId: jid,
-      senderId: raw.key.participant || jid,
-      source: "notify",
-    });
-    if (!claim.claimed) {
-      console.log(`[whatsapp] Message ${id} already claimed by another turn or instance, dropping.`);
       return;
     }
 
@@ -832,9 +818,6 @@ async function openSocket(pairingPhone?: string) {
           ? "Received. Please let me know what you need."
           : "Received. Please describe what you need in text.";
     }
-
-    // Persist processed marker immediately in database and memory
-    await markProcessed(id);
 
     manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
     connectionGuardian.recordMessage();

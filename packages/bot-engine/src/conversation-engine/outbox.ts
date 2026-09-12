@@ -2,6 +2,7 @@ import {
   enqueueMessageOutboxDb,
   updateOutboxStatusDb,
   getPendingOutboxItemsDb,
+  updateInboundClaimStatus,
   type OutboxDbRecord,
 } from "@bot/database";
 import { responseCommitManager } from "./response-commit.ts";
@@ -163,6 +164,9 @@ export class WhatsAppOutbox {
 
         await responseCommitManager.markSent(responseId);
         await updateOutboxStatusDb(responseId, "sent");
+        if (item.turnId) {
+          await updateInboundClaimStatus(item.turnId, "SENT");
+        }
 
         // Evict from active queue cache after 5 minutes
         const timer = setTimeout(() => {
@@ -180,6 +184,9 @@ export class WhatsAppOutbox {
           console.error(`[outbox] Message ${responseId} moved to DEAD_LETTER after ${item.attempts} attempts:`, item.error);
           await responseCommitManager.markFailed(responseId, item.error);
           await updateOutboxStatusDb(responseId, "dead_letter", item.error);
+          if (item.turnId) {
+            await updateInboundClaimStatus(item.turnId, "SEND_FAILED", { error: item.error });
+          }
         } else {
           item.status = "failed";
           console.warn(`[outbox] Message ${responseId} failed attempt ${item.attempts}. Will retry with backoff:`, item.error);
