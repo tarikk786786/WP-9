@@ -6,6 +6,7 @@ import {
   type OutboxDbRecord,
 } from "@bot/database";
 import { responseCommitManager } from "./response-commit.ts";
+import { brainTelemetry } from "./telemetry.ts";
 
 export type OutboxItemStatus = "pending" | "sending" | "sent" | "failed" | "dead_letter";
 
@@ -166,6 +167,7 @@ export class WhatsAppOutbox {
         await updateOutboxStatusDb(responseId, "sent");
         if (item.turnId) {
           await updateInboundClaimStatus(item.turnId, "SENT");
+          brainTelemetry.recordSendResult(item.turnId, { status: "SENT" });
         }
 
         // Evict from active queue cache after 5 minutes
@@ -186,6 +188,7 @@ export class WhatsAppOutbox {
           await updateOutboxStatusDb(responseId, "dead_letter", item.error);
           if (item.turnId) {
             await updateInboundClaimStatus(item.turnId, "SEND_FAILED", { error: item.error });
+            brainTelemetry.recordSendResult(item.turnId, { status: "FAILED", error: item.error });
           }
         } else {
           item.status = "failed";

@@ -18,6 +18,7 @@ import { ResponsePlanner, responsePlanner, type ResponsePlan } from "./response-
 import { ResponseQualityGate, qualityGate } from "./quality-gate.ts";
 import { ResponseCommitManager, responseCommitManager, type CommittedResponse } from "./response-commit.ts";
 import { WhatsAppOutbox, whatsAppOutbox, type OutboundSender } from "./outbox.ts";
+import { brainTelemetry, type TurnTrace, type TurnSpan } from "./telemetry.ts";
 
 export * from "./deduplicator.ts";
 export * from "./event-gate.ts";
@@ -35,6 +36,7 @@ export * from "./outbox.ts";
 export * from "./state.ts";
 export * from "./dazy-profile.ts";
 export * from "./memory.ts";
+export * from "./telemetry.ts";
 
 export interface ConversationEngineMetrics {
   messages_received: number;
@@ -208,6 +210,15 @@ export class AuthoritativeConversationEngine {
     this.metrics.logical_turns += 1;
     console.log(`[trace] TURN_CREATED turnId=${turn.turnId} fragments=${turn.messageIds.length} text="${turn.combinedText.slice(0, 40)}"`);
 
+    // Start Unified Turn Trace
+    const trace = brainTelemetry.startTrace({
+      turnId: turn.turnId,
+      chatId: turn.chatId,
+      sender: turn.sender,
+      userText: turn.combinedText,
+      isDazy: false,
+    });
+
     // 1. Single-Flight Conversation Lock per Chat
     const lockOwner = await this.conversationLock.acquireLock(turn.chatId, turn.turnId);
     if (!lockOwner) {
@@ -250,6 +261,10 @@ export class AuthoritativeConversationEngine {
         faqs,
         rules,
       });
+
+      trace.isDazy = context.isDazy;
+      brainTelemetry.recordUnderstanding(turn.turnId, understanding.primaryIntent, understanding.emotion);
+      brainTelemetry.recordMemory(turn.turnId, knowledge);
 
       // 5. Decision Engine
       const decision = this.decisionEngine.evaluate(context);
@@ -319,6 +334,8 @@ export class AuthoritativeConversationEngine {
         return null;
       }
 
+      brainTelemetry.recordGeneration(turn.turnId, candidate);
+
       // 7. Response Planning
       const plan = this.responsePlanner.plan(context, candidate);
 
@@ -329,6 +346,7 @@ export class AuthoritativeConversationEngine {
         userLanguage: context.understanding?.detectedLanguage,
         rawUserInput: turn.combinedText,
       });
+      brainTelemetry.recordQualityAudit(turn.turnId, qualityAudit);
       const finalText = qualityAudit.sanitizedText;
       console.log(
         `[trace] QUALITY_AUDIT turnId=${turn.turnId} passed=${qualityAudit.passed} humility=${qualityAudit.scores?.humility ?? 100} naturalness=${qualityAudit.scores?.naturalness ?? 100}`
@@ -377,6 +395,7 @@ export class AuthoritativeConversationEngine {
     this.metrics.responses_committed += 1;
     this.metrics.messages_finalized += turn.messageIds.length;
     const response = commitResult.committedResponse;
+    brainTelemetry.recordCommit(turn.turnId, response.responseId, response.text);
     console.log(`[trace] RESPONSE_COMMITTED turnId=${turn.turnId} responseId=${response.responseId}`);
 
     for (const mid of turn.messageIds) {

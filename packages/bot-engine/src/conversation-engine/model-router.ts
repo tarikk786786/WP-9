@@ -3,7 +3,7 @@ import { toolRunner } from "./tool-runner.ts";
 import { evaluateDazyMessage } from "./dazy-profile.ts";
 
 export interface CandidateResponse {
-  source: "rule" | "faq" | "ai_fast" | "ai_strong" | "tool" | "dazy_profile" | "emotional_empathy" | "fallback";
+  source: "rule" | "faq" | "ai_fast" | "ai_strong" | "local_ai" | "tool" | "dazy_profile" | "emotional_empathy" | "fallback";
   text: string;
   confidence: number;
   modelId?: string;
@@ -147,6 +147,25 @@ export class ModelRouter {
       }
     }
 
+    // 4b. Local AI / llama.cpp Server Fallback (OpenAI-compatible /v1/chat/completions)
+    const localAiUrl = process.env.LOCAL_AI_URL || process.env.LLAMA_CPP_URL;
+    if (localAiUrl) {
+      try {
+        const localCandidate = await this.queryLocalAi(localAiUrl, context);
+        if (localCandidate) {
+          return {
+            source: "local_ai",
+            text: localCandidate,
+            confidence: 0.82,
+            modelId: "local-llama-cpp",
+            executionTimeMs: Date.now() - start,
+          };
+        }
+      } catch (localErr) {
+        console.warn("[model-router] Local AI fallback failed:", localErr instanceof Error ? localErr.message : localErr);
+      }
+    }
+
     // 5. Contextual Conversational & Emotional Empathy
     const emotionalResponse = this.resolveEmotionalOrRepairReply(context);
     if (emotionalResponse) {
@@ -243,6 +262,40 @@ export class ModelRouter {
     }
 
     return null;
+  }
+
+  private async queryLocalAi(baseUrl: string, context: CanonicalContext): Promise<string | null> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    try {
+      const url = `${baseUrl.replace(/\/+$/, "")}/v1/chat/completions`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: "local-model",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are Tarik's WhatsApp AI assistant. Answer concisely and naturally in Hinglish/English based on context.",
+            },
+            ...context.history.slice(-3).map((h) => ({ role: h.role, content: h.text })),
+            { role: "user", content: context.turn.combinedText },
+          ],
+          max_tokens: 150,
+          temperature: 0.7,
+        }),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      return data.choices?.[0]?.message?.content?.trim() || null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 }
 

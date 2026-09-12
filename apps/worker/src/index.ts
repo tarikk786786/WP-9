@@ -19,7 +19,7 @@ import {
 import { defaultBotSettings, SendMessageBody } from "@bot/shared";
 import { isAuthorizedWorkerRequest } from "./auth.ts";
 import { ensureAlwaysOn, getSnapshot, logoutWhatsApp, sendWhatsApp, startWhatsApp, uptimeMs, exportAuthArchive, importAuthArchive } from "./whatsapp.ts";
-import { connectionStateMachine, aiCircuitBreaker, whatsappCircuitBreaker, messageOutbox, conversationEngine } from "@bot/engine";
+import { connectionStateMachine, aiCircuitBreaker, whatsappCircuitBreaker, messageOutbox, conversationEngine, brainTelemetry } from "@bot/engine";
 
 function keepProcessAlive(kind: string, error: unknown) {
   const text = error instanceof Error ? error.stack || error.message : String(error);
@@ -45,16 +45,23 @@ function validateStartupConfig() {
 }
 validateStartupConfig();
 
+const SECURITY_HEADERS = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "1; mode=block",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+};
+
 function unauthorized(res: ServerResponse) {
-  res.writeHead(401, { "Content-Type": "application/json" });
+  res.writeHead(401, SECURITY_HEADERS);
   res.end(JSON.stringify({ error: "Unauthorized worker request." }));
 }
 
 function json(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-  });
+  res.writeHead(status, SECURITY_HEADERS);
   res.end(JSON.stringify(body));
 }
 
@@ -248,6 +255,15 @@ const server = createServer(async (req, res) => {
         },
         analytics: analyticsSnapshot(),
         settings: await getSettings(),
+      });
+      return;
+    }
+    if (url.pathname === "/traces" && req.method === "GET") {
+      const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 20)));
+      const chatId = url.searchParams.get("chatId") || undefined;
+      json(res, 200, {
+        ok: true,
+        traces: brainTelemetry.getRecentTraces(limit, chatId),
       });
       return;
     }
