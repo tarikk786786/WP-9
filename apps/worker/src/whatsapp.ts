@@ -53,6 +53,7 @@ import { isSendableJid, registerLidMapping, resolveChat, resolveSendJid } from "
 import { authDir, migrateLegacyAuth } from "./paths.ts";
 import { credsAreLinked, phoneFromCreds, shouldWipeAuth } from "./session-policy.ts";
 import { connectionGuardian } from "./connection-guardian.ts";
+import { presenceController } from "@bot/conversation-timing";
 
 type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
 
@@ -458,6 +459,15 @@ export async function ensureAlwaysOn() {
     await whatsappCircuitBreaker.execute(async () => {
       await sendText(destJid, outText);
     });
+  });
+  presenceController.setAdapter(async (chatId: string, state: string) => {
+    if (manager.sock && isSocketLive()) {
+      try {
+        await manager.sock.sendPresenceUpdate(state as never, chatId);
+      } catch {
+        /* presence is best-effort */
+      }
+    }
   });
   await conversationEngine.outbox.initFromDatabase();
   await markPersistedFromDisk();

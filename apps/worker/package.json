@@ -14,8 +14,11 @@
     "test": "tsx --test src/auth.test.ts src/session-policy.test.ts src/singleton.test.ts src/chat-address.test.ts"
   },
   "dependencies": {
+    "@bot/control-plane": "*",
+    "@bot/conversation-timing": "*",
     "@bot/database": "*",
     "@bot/engine": "*",
+    "@bot/media-intelligence": "*",
     "@bot/shared": "*",
     "@whiskeysockets/baileys": "^6.7.21",
     "pino": "^10.3.1",

@@ -1,0 +1,19 @@
+{
+  "name": "@bot/media-intelligence",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "tsx --test src/media.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@bot/shared": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

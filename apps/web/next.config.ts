@@ -5,7 +5,14 @@ import type { NextConfig } from "next";
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@bot/shared", "@bot/engine", "@bot/database"],
+  transpilePackages: [
+    "@bot/shared",
+    "@bot/engine",
+    "@bot/database",
+    "@bot/media-intelligence",
+    "@bot/conversation-timing",
+    "@bot/control-plane",
+  ],
   outputFileTracingRoot: root,
   serverExternalPackages: ["pino", "qrcode", "@huggingface/transformers"],
   turbopack: {

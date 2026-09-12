@@ -17,6 +17,10 @@ import {
   confirmationEngine,
   qualityGate,
   TARIK_PUBLIC_FACTS,
+  inputGuard,
+  outputGuard,
+  groundingChecker,
+  TruthLevel,
 } from "@bot/engine";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +67,28 @@ export async function POST(request: Request) {
         : contactIdentity.relationship === "admin"
           ? "admin"
           : "customer");
+
+    // 1b. Inbound Security Gate (Prompt Injection, PII, Secrets)
+    const inputSecurity = inputGuard.evaluate(message, {
+      senderId: resolvedSenderId,
+      isSpecialContact: contactIdentity.isDazy,
+    });
+
+    if (!inputSecurity.allowed) {
+      return NextResponse.json(
+        {
+          ok: true,
+          reply: "I cannot fulfill this request as it contains unauthorized instructions or potential prompt manipulation.",
+          security: {
+            blocked: true,
+            riskLevel: inputSecurity.riskLevel,
+            violations: inputSecurity.violations,
+          },
+          latencyMs: Date.now() - startTime,
+        },
+        { status: 200 }
+      );
+    }
 
     // 2. Authorization & Policy Gate (AI agent executes outbound reply)
     const agentPermReq: PermissionCheckRequest = {
@@ -169,12 +195,33 @@ export async function POST(request: Request) {
       rawUserInput: message,
       isDazy: isSpecialRomantic,
     });
+    let finalReply = qualityAudit.sanitizedText || replyText;
+
+    // 9. Grounding & Hallucination Verifier
+    const groundingAudit = groundingChecker.verify(finalReply, [
+      {
+        id: "ev_tarik_facts",
+        source: "tarik_public_facts",
+        level: TruthLevel.TRUSTED_INTERNAL_DATABASE,
+        confidence: 1.0,
+        content: Object.values(TARIK_PUBLIC_FACTS).join(" "),
+      },
+    ]);
+    if (groundingAudit.repairedText) {
+      finalReply = groundingAudit.repairedText;
+    }
+
+    // 10. Outbound Security Gate (Mask secrets, token leakage)
+    const outputAudit = outputGuard.evaluate(finalReply);
+    if (outputAudit.sanitizedText) {
+      finalReply = outputAudit.sanitizedText;
+    }
 
     const latencyMs = Date.now() - startTime;
 
     return NextResponse.json({
       ok: true,
-      reply: qualityAudit.sanitizedText || replyText,
+      reply: finalReply,
       confirmation: confirmationRequired
         ? {
             required: true,
@@ -206,6 +253,14 @@ export async function POST(request: Request) {
           passed: qualityAudit.passed,
           humilityScore: qualityAudit.scores?.humility ?? 100,
           naturalnessScore: qualityAudit.scores?.naturalness ?? 100,
+        },
+        security: {
+          riskLevel: inputSecurity.riskLevel,
+          violations: inputSecurity.violations,
+        },
+        grounding: {
+          grounded: groundingAudit.grounded,
+          certainty: groundingAudit.certainty.state,
         },
         latencyMs,
       },

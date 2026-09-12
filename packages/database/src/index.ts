@@ -177,6 +177,10 @@ export function getSupabaseClient(): SupabaseClient | null {
   return supabase();
 }
 
+export function getSupabaseAdmin(): SupabaseClient | null {
+  return supabase();
+}
+
 export function usingSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
