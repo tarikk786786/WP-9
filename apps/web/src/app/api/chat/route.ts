@@ -110,6 +110,7 @@ export async function POST(request: Request) {
     const plannedAction = actionPlanner.planAction(normalizedText);
     let confirmationRequired = false;
     let confirmationPrompt: string | undefined;
+    let pendingActionId: string | undefined;
 
     if (plannedAction.requiresConfirmation) {
       const entry = confirmationEngine.registerPending(
@@ -117,6 +118,7 @@ export async function POST(request: Request) {
         plannedAction,
       );
       confirmationRequired = true;
+      pendingActionId = entry.plan.actionId;
       confirmationPrompt = entry.plan.confirmationPrompt || "Should I proceed with this action?";
     }
 
@@ -173,6 +175,13 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       reply: qualityAudit.sanitizedText || replyText,
+      confirmation: confirmationRequired
+        ? {
+            required: true,
+            pendingActionId,
+            prompt: confirmationPrompt,
+          }
+        : undefined,
       metadata: {
         contact: {
           id: contactIdentity.contactId,

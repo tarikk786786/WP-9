@@ -63,5 +63,8 @@ test("Vercel Chat API: triggers confirmation engine for sensitive delete/send ac
   const data = await res.json();
   assert.equal(data.ok, true);
   assert.equal(data.metadata.skill, "ConfirmationEngine");
+  assert.equal(data.confirmation?.required, true);
+  assert.ok(data.confirmation?.pendingActionId);
   assert.ok(data.reply.length > 0);
 });
+
