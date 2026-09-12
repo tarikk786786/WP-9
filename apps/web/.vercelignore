@@ -3,3 +3,7 @@
 ../../data
 .env
 .env.*
+.next
+../../.next
+.turbo
+

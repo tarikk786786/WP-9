@@ -30,11 +30,7 @@
   "crons": [
     {
       "path": "/api/health",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/admin/outbox/retry",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 6 * * *"
     }
   ]
 }

@@ -4,3 +4,7 @@ data
 *.log
 .env
 .env.*
+.next
+apps/web/.next
+.turbo
+
