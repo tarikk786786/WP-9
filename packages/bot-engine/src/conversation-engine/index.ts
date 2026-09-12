@@ -349,7 +349,10 @@ export class AuthoritativeConversationEngine {
         rawUserInput: turn.combinedText,
       });
       brainTelemetry.recordQualityAudit(turn.turnId, qualityAudit);
-      const finalText = qualityAudit.sanitizedText;
+      let finalText = (qualityAudit.sanitizedText || "").trim();
+      if (!finalText) {
+        finalText = context.isDazy ? "haan meri jaan, bolo na ❤️" : "Ji boliye, main sun raha hoon.";
+      }
       console.log(
         `[trace] QUALITY_AUDIT turnId=${turn.turnId} passed=${qualityAudit.passed} humility=${qualityAudit.scores?.humility ?? 100} naturalness=${qualityAudit.scores?.naturalness ?? 100}`
       );
@@ -370,11 +373,19 @@ export class AuthoritativeConversationEngine {
     context: CanonicalContext,
     explicitPlan?: ResponsePlan
   ): Promise<CommittedResponse> {
+    let cleanText = (text || "").trim();
+    if (!cleanText) {
+      console.warn(
+        `[conversation-engine] Attempted to commit blank text for turn ${turn.turnId}. Substituting natural fallback.`
+      );
+      cleanText = context.isDazy ? "haan meri jaan, bolo na ❤️" : "Ji boliye, main sun raha hoon.";
+    }
+
     const plan =
       explicitPlan ??
       this.responsePlanner.plan(context, {
         source: "fallback",
-        text,
+        text: cleanText,
         confidence: 1.0,
         executionTimeMs: 0,
       });
@@ -383,7 +394,7 @@ export class AuthoritativeConversationEngine {
       turnId: turn.turnId,
       chatId: turn.chatId,
       plan,
-      finalText: text,
+      finalText: cleanText,
     });
 
     if (commitResult.isDuplicateAttempt) {

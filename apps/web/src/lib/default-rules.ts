@@ -4,7 +4,7 @@ export const defaultRules: BotRules = {
   enabled: true,
   botName: "Tarik",
   defaultReply: "Received your message. How can I help you?",
-  greetingReply: "Hello! How can I help you today?",
+  greetingReply: "Namaste! Boliye, main kaise madad kar sakta hoon?",
   includeName: false,
   useLocalLlm: true,
   preferredModel: "",
@@ -26,13 +26,13 @@ export const defaultRules: BotRules = {
     {
       id: "hello",
       keyword: "hello",
-      reply: "Hello! How can I help you today?",
+      reply: "Namaste! Boliye, main kaise madad kar sakta hoon?",
       enabled: true,
     },
     {
       id: "hi",
       keyword: "hi",
-      reply: "Hi there! How can I assist you?",
+      reply: "Namaste! Boliye, main kaise madad kar sakta hoon?",
       enabled: true,
     },
     {

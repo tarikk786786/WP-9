@@ -57,13 +57,15 @@ export class ResponseCommitManager {
       return { committedResponse: existingCommitted, isDuplicateAttempt: true };
     }
 
+    const cleanFinalText = (params.finalText || "").trim() || "Ji boliye, main sun raha hoon.";
+
     // 3. Atomically record commit
     const record: ResponseCommitRecord = {
       responseId: params.plan.responseId,
       turnId: params.turnId,
       chatId: params.chatId,
       status: "COMMITTED",
-      finalText: params.finalText,
+      finalText: cleanFinalText,
       intent: params.plan.intent,
       modelId: params.plan.modelUsed,
       plan: params.plan as unknown as Record<string, unknown>,

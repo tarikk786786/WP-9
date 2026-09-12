@@ -73,12 +73,15 @@ export class IdempotentOutbox {
       return { entry: existing, isDuplicate: true };
     }
 
+    const cleanText = (params.text || "").trim();
+    const verifiedText = cleanText || "Ji boliye, main sun raha hoon.";
+
     const now = Date.now();
     const entry: OutboxEntry = {
       responseId: params.responseId,
       tenantId: params.tenantId,
       chatId: params.chatId,
-      text: params.text,
+      text: verifiedText,
       status: "PENDING",
       attempts: 0,
       maxAttempts: params.maxAttempts ?? 2,
@@ -113,7 +116,14 @@ export class IdempotentOutbox {
           item.updatedAt = Date.now();
 
           try {
-            await this.sender(item.chatId, item.text, item.metadata);
+            const cleanSend = (item.text || "").trim();
+            if (!cleanSend) {
+              item.status = "DEAD_LETTER";
+              item.error = "Empty text payload rejected";
+              item.updatedAt = Date.now();
+              continue;
+            }
+            await this.sender(item.chatId, cleanSend, item.metadata);
             item.status = "SENT";
             item.sentAt = Date.now();
             item.updatedAt = Date.now();

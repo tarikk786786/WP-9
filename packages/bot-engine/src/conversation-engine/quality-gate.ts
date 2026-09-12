@@ -48,7 +48,7 @@ export class ResponseQualityGate {
   }
 
   public sanitize(text: string, isDazy = false): string {
-    let clean = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    let clean = (text || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
     for (const phrase of this.roboticPhrases) {
       clean = clean.replace(phrase, "").trim();
@@ -60,9 +60,14 @@ export class ResponseQualityGate {
       }
     }
 
+    clean = clean.trim();
+    if (!clean) {
+      clean = isDazy ? "haan meri jaan ❤️ batao" : "Ji, boliye kya baat hai?";
+    }
+
     // Run through Human Language Quality stages
     const result = this.engine.process(clean, [], { isDazy });
-    return result.sanitizedText;
+    return result.sanitizedText?.trim() || (isDazy ? "haan meri jaan ❤️ batao" : "Ji, boliye kya baat hai?");
   }
 
   /**

@@ -675,4 +675,59 @@ describe("Authoritative Conversation Engine — Architectural Test Suite", () =>
     assert.equal(metrics.multiple_response_rate, 0);
     assert.equal(metrics.duplicate_response_attempts, 0);
   });
+
+  // Test R: Zero blank messages invariant across Outbox, QualityGate, and CommitManager
+  it("Test R: Zero blank messages emitted when given empty or whitespace text", async () => {
+    const testOutbox = new WhatsAppOutbox();
+    const emitted: string[] = [];
+    testOutbox.setSender(async (_chatId, text) => {
+      emitted.push(text);
+    });
+
+    // Enqueue empty string
+    await testOutbox.enqueue({
+      responseId: "resp_blank_1",
+      chatId: "919114411000@s.whatsapp.net",
+      text: "",
+    });
+
+    // Enqueue whitespace string
+    await testOutbox.enqueue({
+      responseId: "resp_blank_2",
+      chatId: "919114411000@s.whatsapp.net",
+      text: "    \n\t  ",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(emitted.length, 2);
+    for (const text of emitted) {
+      assert.ok(text.trim().length > 0, "Emitted text must never be empty or whitespace");
+      assert.ok(!/^\s*$/.test(text), "Emitted text cannot be blank");
+    }
+
+    // QualityGate sanitize check
+    const sanitizedEmpty = qualityGate.sanitize("");
+    const sanitizedWhitespace = qualityGate.sanitize("   \t\n  ");
+    assert.ok(sanitizedEmpty.trim().length > 0, "Sanitized empty string must return non-empty fallback");
+    assert.ok(sanitizedWhitespace.trim().length > 0, "Sanitized whitespace must return non-empty fallback");
+
+    // QualityGate audit check
+    const auditEmpty = qualityGate.audit("");
+    assert.ok(auditEmpty.sanitizedText.trim().length > 0, "Audited empty string must have non-empty sanitizedText");
+  });
+
+  // Test S: Repetitive 'hi' turns rotate naturally instead of outputting blank bubbles
+  it("Test S: Repetitive greeting turns rotate and never become blank", async () => {
+    const chat = "919114411099@s.whatsapp.net";
+    const history = [
+      { role: "user" as const, text: "hi" },
+      { role: "assistant" as const, text: "Namaste! Boliye, main kaise madad kar sakta hoon?" },
+      { role: "user" as const, text: "hi" },
+      { role: "assistant" as const, text: "Ji boliye, main sun raha hoon." },
+    ];
+
+    const audit = qualityGate.audit("Namaste! Boliye, main kaise madad kar sakta hoon?", history);
+    assert.ok(audit.sanitizedText.trim().length > 0, "Sanitized text must never be blank");
+    assert.notEqual(audit.sanitizedText, "", "Sanitized text cannot be empty string");
+  });
 });

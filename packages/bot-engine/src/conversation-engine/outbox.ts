@@ -88,12 +88,15 @@ export class WhatsAppOutbox {
       return { entry: existing, isDuplicate: true };
     }
 
+    const cleanText = (params.text || "").trim();
+    const verifiedText = cleanText || "Ji boliye, main sun raha hoon.";
+
     const now = Date.now();
     const entry: OutboxEntry = {
       responseId: params.responseId,
       turnId: params.turnId,
       chatId: params.chatId,
-      text: params.text,
+      text: verifiedText,
       status: "pending",
       attempts: 0,
       maxAttempts: params.maxAttempts ?? 2,
@@ -109,7 +112,7 @@ export class WhatsAppOutbox {
       responseId: params.responseId,
       turnId: params.turnId,
       chatId: params.chatId,
-      text: params.text,
+      text: verifiedText,
       maxAttempts: entry.maxAttempts,
     });
 
@@ -157,7 +160,16 @@ export class WhatsAppOutbox {
     this.sendMutex = this.sendMutex.then(async () => {
       try {
         if (!this.sender) throw new Error("No outbound sender configured");
-        await this.sender(item.chatId, item.text, item.metadata);
+        const cleanSendText = (item.text || "").trim();
+        if (!cleanSendText) {
+          console.warn(`[outbox] Message ${responseId} has blank text payload. Suppressing to prevent blank bubble.`);
+          item.status = "dead_letter";
+          item.error = "Empty text payload rejected";
+          await responseCommitManager.markFailed(responseId, item.error);
+          await updateOutboxStatusDb(responseId, "dead_letter", item.error);
+          return;
+        }
+        await this.sender(item.chatId, cleanSendText, item.metadata);
 
         item.status = "sent";
         item.sentAt = Date.now();

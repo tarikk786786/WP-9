@@ -608,7 +608,20 @@ export class ContextChecker {
       if (options?.isDazy) {
         clean = clean.includes("❤️") ? clean : `${clean} ❤️`;
       } else {
-        clean = clean.startsWith("Ji") ? clean.replace(/^Ji\s*/i, "") : `Haan, ${clean}`;
+        const variations = [
+          "Namaste! Boliye, main kaise madad kar sakta hoon?",
+          "Ji boliye, main sun raha hoon.",
+          "Yahin hoon, boliye kya scene hai?",
+          "Haan ji, bataiye kya baat hai?",
+        ];
+        const recentAssistantTexts = (history || [])
+          .filter((h) => h.role === "assistant")
+          .map((h) => h.text.toLowerCase());
+        const fresh =
+          variations.find(
+            (v) => !recentAssistantTexts.some((r) => r.includes(v.toLowerCase().slice(0, 15)))
+          ) || variations[1];
+        clean = fresh;
       }
     }
 
@@ -779,7 +792,7 @@ export class HumanLanguageQualityEngine {
     if (!finalSanitized) {
       finalSanitized = options?.isDazy
         ? "haan meri jaan ❤️ batao"
-        : "Ji samajh gaya. Bataiye main aapki kya madad kar sakta hoon?";
+        : "Namaste! Boliye, main kaise madad kar sakta hoon?";
       allReasons.push("Sanitized text was empty; substituted natural conversational default");
     }
 

@@ -111,7 +111,7 @@ export const defaultBotSettings = (): BotSettings => ({
   faqEnabled: true,
   welcomeEnabled: true,
   defaultLanguage: "english",
-  welcomeMessage: "Hello! How can I help you today?",
+  welcomeMessage: "Namaste! Boliye, main kaise madad kar sakta hoon?",
   fallbackMessage: "Received your message. How can I help you?",
   humanHandoffMessage: "Sure, transferring you to a human agent. Please hold on.",
   timezone: "Asia/Kolkata",
@@ -127,8 +127,8 @@ export const defaultBotSettings = (): BotSettings => ({
 });
 
 export const defaultAutomationRules = (): AutomationRule[] => [
-  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "Hello! How can I help you today?", priority: 10, enabled: true },
-  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "Hello! How can I help you today?", priority: 10, enabled: true },
+  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "Namaste! Boliye, main kaise madad kar sakta hoon?", priority: 10, enabled: true },
+  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "Namaste! Boliye, main kaise madad kar sakta hoon?", priority: 10, enabled: true },
   { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "Pricing depends on project scope. Share your requirements and I'll send a quote.", priority: 20, enabled: true },
   { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "Operating in IST hours (typically 9 AM - 6 PM), responding within 24 hours.", priority: 20, enabled: true },
   { id: "human", name: "Human", triggerType: "keyword", triggerValue: "talk to a human", response: "Sure, transferring you to a human agent. Please hold on.", priority: 5, enabled: true },

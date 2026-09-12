@@ -62,12 +62,15 @@ export class ModelRouter {
     if (!isDazy && rules && rules.length > 0) {
       for (const rule of rules) {
         if (rule.triggerValue && cleanText.includes(rule.triggerValue.toLowerCase())) {
-          return {
-            source: "rule",
-            text: rule.response,
-            confidence: 1.0,
-            executionTimeMs: Date.now() - start,
-          };
+          const ruleText = (rule.response || "").trim();
+          if (ruleText) {
+            return {
+              source: "rule",
+              text: ruleText,
+              confidence: 1.0,
+              executionTimeMs: Date.now() - start,
+            };
+          }
         }
       }
     }
@@ -91,12 +94,15 @@ export class ModelRouter {
       for (const faq of faqs) {
         const qClean = faq.question.toLowerCase().trim();
         if (cleanText === qClean || (qClean.length > 5 && cleanText.includes(qClean))) {
-          return {
-            source: "faq",
-            text: faq.answer,
-            confidence: 0.9,
-            executionTimeMs: Date.now() - start,
-          };
+          const faqText = (faq.answer || "").trim();
+          if (faqText) {
+            return {
+              source: "faq",
+              text: faqText,
+              confidence: 0.9,
+              executionTimeMs: Date.now() - start,
+            };
+          }
         }
       }
     }
@@ -180,7 +186,7 @@ export class ModelRouter {
     // 6. Deterministic Fallback
     let fallbackText = "Ji samajh gaya. Iske baare mein aapko aur jankari chahiye toh batayein.";
     if (understanding.primaryIntent === "greeting") {
-      fallbackText = "Hey! Kaise hain aap? Bataiye main aapki kya madad kar sakta hoon?";
+      fallbackText = "Namaste! Boliye, main kaise madad kar sakta hoon?";
     } else if (understanding.primaryIntent === "pricing") {
       const subject = understanding.entities.referencedSubject || context.referencedEntity || "Humare services";
       fallbackText = `${subject} ka basic plan ₹999 se start hota hai. Aapko kaunsa package chahiye?`;

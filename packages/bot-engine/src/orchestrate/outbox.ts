@@ -37,11 +37,13 @@ export class OutboxQueue {
   }
 
   public enqueue(chatJid: string, text: string, metadata?: Record<string, unknown>): OutboxItem {
+    const cleanText = (text || "").trim();
+    const verifiedText = cleanText || "Ji boliye, main sun raha hoon.";
     const id = "outbox_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
     const item: OutboxItem = {
       id,
       chatJid,
-      text,
+      text: verifiedText,
       status: 'pending',
       attempts: 0,
       maxAttempts: 3,
@@ -74,7 +76,14 @@ export class OutboxQueue {
           item.updatedAt = new Date().toISOString();
 
           try {
-            await this.sender(item.chatJid, item.text);
+            const cleanSend = (item.text || "").trim();
+            if (!cleanSend) {
+              item.status = 'dead_letter';
+              item.error = "Empty text payload rejected";
+              item.updatedAt = new Date().toISOString();
+              continue;
+            }
+            await this.sender(item.chatJid, cleanSend);
             item.status = 'sent';
             item.sentAt = new Date().toISOString();
             item.updatedAt = new Date().toISOString();

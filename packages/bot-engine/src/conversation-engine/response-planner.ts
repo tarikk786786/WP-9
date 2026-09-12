@@ -31,7 +31,10 @@ export class ResponsePlanner {
     let style: ResponseStyle = "WARM";
     let length: AnswerPlan["length"] = "short";
     let emotionalApproach = "neutral_balanced";
-    let finalAnswer = candidate.text;
+    let finalAnswer = (candidate.text || "").trim();
+    if (!finalAnswer) {
+      finalAnswer = isDazy ? "haan meri jaan, bolo na ❤️" : "Ji boliye, main sun raha hoon.";
+    }
 
     if (isDazy) {
       action = "romantic_connection";

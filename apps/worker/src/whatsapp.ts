@@ -91,19 +91,39 @@ async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
 }
 
 async function sendText(jid: string, text: string) {
+  const clean = (text || "").trim();
+  if (!clean) {
+    console.warn(`[whatsapp] Discarding attempt to send empty/blank text to ${jid}`);
+    return;
+  }
   const sock = manager.sock;
   if (!sock) throw new Error("WhatsApp socket down");
   if (!isSendableJid(jid)) throw new Error("WhatsApp chat id missing");
   const targetJid = resolveSendJid(jid);
   console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid})`);
-  await sock.sendMessage(targetJid, { text });
+  await sock.sendMessage(targetJid, { text: clean });
   manager.snapshot.lastMessageSentAt = new Date().toISOString();
   touchFrame();
 }
 
 // Authoritative Single-Turn Conversation Engine Setup
 conversationEngine.setSender(async (chatId, text) => {
-  await sendText(chatId, text);
+  const clean = (text || "").trim();
+  if (!clean) {
+    console.warn(`[whatsapp] conversationEngine tried sending blank text to ${chatId}. Suppressed.`);
+    return;
+  }
+  await sendText(chatId, clean);
+});
+
+// Legacy orchestrate outbox setup
+messageOutbox.setSender(async (chatId, text) => {
+  const clean = (text || "").trim();
+  if (!clean) {
+    console.warn(`[whatsapp] messageOutbox tried sending blank text to ${chatId}. Suppressed.`);
+    return;
+  }
+  await sendText(chatId, clean);
 });
 
 conversationEngine.setAiGenerator(async (context, tier) => {
@@ -524,6 +544,10 @@ export async function logoutWhatsApp() {
 }
 
 export async function sendWhatsApp(chatId: string, text: string) {
+  const clean = (text || "").trim();
+  if (!clean) {
+    throw new Error("Cannot send empty message.");
+  }
   if (!isSocketLive() || !manager.sock) {
     throw new Error("WhatsApp is not linked.");
   }
@@ -531,7 +555,7 @@ export async function sendWhatsApp(chatId: string, text: string) {
   await conversationEngine.outbox.enqueue({
     responseId,
     chatId,
-    text,
+    text: clean,
     metadata: { source: "admin" },
   });
   const customer = await upsertCustomer({
