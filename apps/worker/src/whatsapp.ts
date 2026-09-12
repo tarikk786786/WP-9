@@ -24,6 +24,7 @@ import {
   wasProcessed,
   markProcessed,
   claimInboundMessage,
+  getSupabaseClient,
 } from "@bot/database";
 import type { NormalizedMessage } from "@bot/shared";
 import {
@@ -74,6 +75,7 @@ const AUTH_DIR = authDir();
 const startedAt = Date.now();
 
 const inboundStore = new Map<string, Record<string, unknown>>();
+const sentMessageStore = new Map<string, Record<string, unknown>>();
 
 async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
   return new Promise((resolve) => {
@@ -101,7 +103,15 @@ async function sendText(jid: string, text: string) {
   if (!isSendableJid(jid)) throw new Error("WhatsApp chat id missing");
   const targetJid = resolveSendJid(jid);
   console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid})`);
-  await sock.sendMessage(targetJid, { text: clean });
+  const sent = await sock.sendMessage(targetJid, { text: clean });
+  if (sent?.key?.id) {
+    const rawMsg = (sent.message as Record<string, unknown>) ?? { conversation: clean };
+    sentMessageStore.set(sent.key.id, rawMsg);
+    if (sentMessageStore.size > 2000) {
+      const firstKey = sentMessageStore.keys().next().value;
+      if (firstKey) sentMessageStore.delete(firstKey);
+    }
+  }
   manager.snapshot.lastMessageSentAt = new Date().toISOString();
   touchFrame();
 }
@@ -656,8 +666,27 @@ async function openSocket(pairingPhone?: string) {
     syncFullHistory: false,
     shouldIgnoreJid: (jid: string) => Boolean(jid?.endsWith("@broadcast") || jid?.endsWith("@newsletter")),
     getMessage: async (key: { id?: string | null }) => {
-      const stored = key.id ? inboundStore.get(key.id) : undefined;
-      return (stored ?? { conversation: "" }) as never;
+      if (!key?.id) return undefined;
+      const sent = sentMessageStore.get(key.id);
+      if (sent) return sent as never;
+      const stored = inboundStore.get(key.id);
+      if (stored) return stored as never;
+      try {
+        const db = getSupabaseClient();
+        if (db) {
+          const { data } = await db
+            .from("messages")
+            .select("text")
+            .eq("whatsapp_message_id", key.id)
+            .maybeSingle();
+          if (data?.text && data.text.trim()) {
+            return { conversation: data.text.trim() } as never;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+      return undefined;
     },
   });
   manager.sock = sock;
@@ -823,11 +852,14 @@ async function openSocket(pairingPhone?: string) {
     const id = raw.key.id;
     if (!isSendableJid(jid) || !id) return;
     personForChat(jid, raw.pushName || undefined, phoneHints);
-    if (raw.message) inboundStore.set(id, raw.message);
-    if (inboundStore.size > 500) inboundStore.delete(inboundStore.keys().next().value ?? "");
+    if (raw.message && !raw.key.fromMe) inboundStore.set(id, raw.message as Record<string, unknown>);
+    if (inboundStore.size > 1000) inboundStore.delete(inboundStore.keys().next().value ?? "");
 
     // 1. Ignore own messages
-    if (raw.key.fromMe) return;
+    if (raw.key.fromMe) {
+      if (raw.message) sentMessageStore.set(id, raw.message as Record<string, unknown>);
+      return;
+    }
 
     // 2. Strict live-event gate: NEVER auto-reply on historical sync, appends, or updates
     if (source !== "notify") return;
@@ -935,7 +967,11 @@ async function openSocket(pairingPhone?: string) {
         const message = (row.update as { message?: Record<string, unknown> } | undefined)?.message;
         const id = row.key?.id;
         if (id && message) {
-          inboundStore.set(id, message);
+          if (row.key?.fromMe) {
+            sentMessageStore.set(id, message);
+          } else {
+            inboundStore.set(id, message);
+          }
         }
       }
     })().catch((error) => {
@@ -949,7 +985,11 @@ async function openSocket(pairingPhone?: string) {
     for (const raw of messages) {
       const id = raw.key?.id;
       if (id && raw.message) {
-        inboundStore.set(id, raw.message);
+        if (raw.key?.fromMe) {
+          sentMessageStore.set(id, raw.message as Record<string, unknown>);
+        } else {
+          inboundStore.set(id, raw.message as Record<string, unknown>);
+        }
       }
     }
   });
