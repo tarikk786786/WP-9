@@ -208,18 +208,19 @@ export class ConversationTurnBuilder {
       generationId: `gen_${turnId}_${Date.now()}`,
     };
 
-    // Persist conversation turn to database
-    await upsertConversationTurn({
-      turnId: turn.turnId,
-      chatId: turn.chatId,
-      messageIds: turn.messageIds,
-      combinedText: turn.combinedText,
-      status: "created",
+    // Persist conversation turn to database asynchronously (non-blocking for sub-second turns)
+    void Promise.all([
+      upsertConversationTurn({
+        turnId: turn.turnId,
+        chatId: turn.chatId,
+        messageIds: turn.messageIds,
+        combinedText: turn.combinedText,
+        status: "created",
+      }),
+      Promise.all(turn.messageIds.map((msgId) => updateInboundClaimStatus(msgId, "TURN_BUILT", { turnId: turn.turnId }))),
+    ]).catch((err) => {
+      console.error(`[turn-builder] Error persisting turn ${turn.turnId}:`, err);
     });
-
-    for (const msgId of turn.messageIds) {
-      await updateInboundClaimStatus(msgId, "TURN_BUILT", { turnId: turn.turnId });
-    }
 
     if (this.handler) {
       try {

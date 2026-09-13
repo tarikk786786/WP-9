@@ -107,13 +107,15 @@ export class WhatsAppOutbox {
 
     this.queue.set(params.responseId, entry);
 
-    // Persist to database
-    await enqueueMessageOutboxDb({
+    // Persist to database asynchronously (non-blocking for fast dispatch)
+    void enqueueMessageOutboxDb({
       responseId: params.responseId,
       turnId: params.turnId,
       chatId: params.chatId,
       text: verifiedText,
       maxAttempts: entry.maxAttempts,
+    }).catch((err) => {
+      console.error("[outbox] enqueueMessageOutboxDb background error:", err);
     });
 
     void this.processQueue();
@@ -143,10 +145,10 @@ export class WhatsAppOutbox {
           item.attempts += 1;
           item.updatedAt = Date.now();
 
-          await responseCommitManager.markSending(responseId);
-          await updateOutboxStatusDb(responseId, "sending");
+          void responseCommitManager.markSending(responseId).catch(() => {});
+          void updateOutboxStatusDb(responseId, "sending").catch(() => {});
 
-          // Execute serialized send
+          // Execute serialized send immediately
           await this.executeSerializedSend(item, responseId);
         }
       }
@@ -165,8 +167,8 @@ export class WhatsAppOutbox {
           console.warn(`[outbox] Message ${responseId} has blank text payload. Suppressing to prevent blank bubble.`);
           item.status = "dead_letter";
           item.error = "Empty text payload rejected";
-          await responseCommitManager.markFailed(responseId, item.error);
-          await updateOutboxStatusDb(responseId, "dead_letter", item.error);
+          void responseCommitManager.markFailed(responseId, item.error).catch(() => {});
+          void updateOutboxStatusDb(responseId, "dead_letter", item.error).catch(() => {});
           return;
         }
         await this.sender(item.chatId, cleanSendText, item.metadata);
@@ -175,10 +177,12 @@ export class WhatsAppOutbox {
         item.sentAt = Date.now();
         item.updatedAt = Date.now();
 
-        await responseCommitManager.markSent(responseId);
-        await updateOutboxStatusDb(responseId, "sent");
+        void Promise.allSettled([
+          responseCommitManager.markSent(responseId),
+          updateOutboxStatusDb(responseId, "sent"),
+          item.turnId ? updateInboundClaimStatus(item.turnId, "SENT") : Promise.resolve(),
+        ]);
         if (item.turnId) {
-          await updateInboundClaimStatus(item.turnId, "SENT");
           brainTelemetry.recordSendResult(item.turnId, { status: "SENT" });
         }
 

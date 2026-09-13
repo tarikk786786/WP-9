@@ -76,6 +76,32 @@ const startedAt = Date.now();
 
 const inboundStore = new Map<string, Record<string, unknown>>();
 const sentMessageStore = new Map<string, Record<string, unknown>>();
+const chatCustomerCache = new Map<string, { customerId: string; convoId: string; status: string; cachedAt: number }>();
+
+export async function getCachedChatEntities(
+  chatId: string,
+  name?: string
+): Promise<{ customerId: string; convoId: string; status: string }> {
+  const now = Date.now();
+  const cached = chatCustomerCache.get(chatId);
+  if (cached && now - cached.cachedAt < 300_000) {
+    return cached;
+  }
+  const cleanNumber = chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, "");
+  const customer = await upsertCustomer({
+    number: cleanNumber,
+    name: name || chatId,
+  });
+  const convo = await upsertConversation(customer.id, chatId);
+  const entry = {
+    customerId: customer.id,
+    convoId: convo.id,
+    status: convo.status,
+    cachedAt: now,
+  };
+  chatCustomerCache.set(chatId, entry);
+  return entry;
+}
 
 async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
   return new Promise((resolve) => {
@@ -104,31 +130,33 @@ async function sendText(jid: string, text: string) {
   const targetJid = resolveSendJid(jid);
   console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid}): "${clean.slice(0, 40)}"`);
 
-  const sent = await sock.sendMessage(targetJid, { text: clean });
-  const messageId = sent?.key?.id;
+  const baileys = await import("@whiskeysockets/baileys");
+  const fullMsg = baileys.generateWAMessageFromContent(
+    targetJid,
+    { conversation: clean },
+    { userJid: sock.user?.id || undefined } as never
+  );
+  const messageId = fullMsg.key.id || baileys.generateMessageIDV2(sock.user?.id);
+  fullMsg.key.id = messageId;
 
-  if (messageId && sent?.message) {
-    sentMessageStore.set(messageId, sent.message as Record<string, unknown>);
-    if (sentMessageStore.size > 2000) {
-      const firstKey = sentMessageStore.keys().next().value;
-      if (firstKey) sentMessageStore.delete(firstKey);
-    }
+  // Store pure verified conversation in sentMessageStore
+  sentMessageStore.set(messageId, { conversation: clean });
+  if (sentMessageStore.size > 2000) {
+    const firstKey = sentMessageStore.keys().next().value;
+    if (firstKey) sentMessageStore.delete(firstKey);
   }
+
+  await sock.relayMessage(targetJid, fullMsg.message!, { messageId });
 
   manager.snapshot.lastMessageSentAt = new Date().toISOString();
   touchFrame();
   persistAuthDirSoon();
 
-  try {
-    const db = getSupabaseClient();
-    if (db && messageId) {
-      const customer = await upsertCustomer({
-        number: targetJid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
-        name: targetJid,
-      });
-      const convo = await upsertConversation(customer.id, targetJid);
+  void (async () => {
+    try {
+      const { convoId } = await getCachedChatEntities(targetJid);
       await addMessage({
-        conversation_id: convo.id,
+        conversation_id: convoId,
         whatsapp_message_id: messageId,
         direction: "out",
         message_type: "text",
@@ -137,10 +165,10 @@ async function sendText(jid: string, text: string) {
         ai_generated: true,
         intent: null,
       });
+    } catch {
+      /* non-fatal background DB audit insert */
     }
-  } catch {
-    /* non-fatal DB audit insert */
-  }
+  })();
 }
 
 // Authoritative Single-Turn Conversation Engine Setup
@@ -215,28 +243,21 @@ conversationEngine.updateDependencies({
     return await getSettings();
   },
   getConversationStatus: async (chatId: string) => {
-    const customer = await upsertCustomer({
-      number: chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
-      name: chatId,
-    });
-    const convo = await upsertConversation(customer.id, chatId);
-    return convo.status;
+    const { status } = await getCachedChatEntities(chatId);
+    return status;
   },
   setConversationStatus: async (chatId: string, status: string) => {
-    const customer = await upsertCustomer({
-      number: chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
-      name: chatId,
-    });
-    const convo = await upsertConversation(customer.id, chatId);
-    await setConversationStatus(convo.id, status as never);
+    const { convoId } = await getCachedChatEntities(chatId);
+    await setConversationStatus(convoId, status as never);
+    const existing = chatCustomerCache.get(chatId);
+    if (existing) {
+      existing.status = status;
+      existing.cachedAt = Date.now();
+    }
   },
   getHistory: async (chatId: string) => {
-    const customer = await upsertCustomer({
-      number: chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
-      name: chatId,
-    });
-    const convo = await upsertConversation(customer.id, chatId);
-    const history = await recentMessages(convo.id);
+    const { convoId } = await getCachedChatEntities(chatId);
+    const history = await recentMessages(convoId);
     return history
       .slice()
       .reverse()
@@ -255,21 +276,6 @@ conversationEngine.updateDependencies({
     return await getRules();
   },
   onMessageCommitted: async (chatId, message, turn) => {
-    const customer = await upsertCustomer({
-      number: chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
-      name: chatId,
-    });
-    const convo = await upsertConversation(customer.id, chatId);
-    await addMessage({
-      conversation_id: convo.id,
-      whatsapp_message_id: message.responseId,
-      direction: "out",
-      message_type: "text",
-      text: message.text,
-      media_reference: null,
-      ai_generated: Boolean(message.modelId),
-      intent: message.intent,
-    });
     await markProcessed(message.responseId);
     await markProcessed(message.turnId);
     await markProcessed(`out_${message.turnId}`);
@@ -695,9 +701,20 @@ async function openSocket(pairingPhone?: string) {
     getMessage: async (key: { id?: string | null; remoteJid?: string | null; fromMe?: boolean | null }) => {
       if (!key?.id) return undefined;
       const sent = sentMessageStore.get(key.id);
-      if (sent) return sent as never;
+      if (sent && !isInboundStub(sent)) {
+        const text = (sent.conversation as string) || (sent.extendedTextMessage as { text?: string })?.text;
+        if (text && text.trim()) {
+          return { conversation: text.trim() } as never;
+        }
+      }
       const stored = inboundStore.get(key.id);
-      if (stored) return stored as never;
+      if (stored && !isInboundStub(stored)) {
+        const text = (stored.conversation as string) || (stored.extendedTextMessage as { text?: string })?.text;
+        if (text && text.trim()) {
+          return { conversation: text.trim() } as never;
+        }
+        return stored as never;
+      }
       try {
         const db = getSupabaseClient();
         if (db) {
@@ -709,7 +726,7 @@ async function openSocket(pairingPhone?: string) {
           if (data?.text && data.text.trim()) {
             const cleanText = data.text.trim();
             return {
-              extendedTextMessage: { text: cleanText },
+              conversation: cleanText,
             } as never;
           }
 
@@ -724,7 +741,7 @@ async function openSocket(pairingPhone?: string) {
             if (latestOut?.text && latestOut.text.trim()) {
               const cleanText = latestOut.text.trim();
               return {
-                extendedTextMessage: { text: cleanText },
+                conversation: cleanText,
               } as never;
             }
           }
@@ -879,12 +896,12 @@ async function openSocket(pairingPhone?: string) {
     return n > 1e12 ? n : n * 1000;
   }
 
-  const decryptWait = new Set<string>();
+  const decryptTimers = new Map<string, NodeJS.Timeout>();
 
   function scheduleDecryptWait(jid: string, id: string, raw: WaRaw) {
-    if (decryptWait.has(id)) return;
-    decryptWait.add(id);
-    setTimeout(() => {
+    if (decryptTimers.has(id)) return;
+    const timer = setTimeout(() => {
+      decryptTimers.delete(id);
       void (async () => {
         if (await wasProcessed(id) || await wasProcessed(`out_${id}`)) return;
         if (isDuplicate(id)) return;
@@ -895,7 +912,8 @@ async function openSocket(pairingPhone?: string) {
       })().catch((error) => {
         console.error("[whatsapp] decrypt wait failed", error);
       });
-    }, 7000);
+    }, 2500);
+    decryptTimers.set(id, timer);
   }
 
   async function ingestRaw(raw: WaRaw, source: "notify" | "append" | "history" | "update") {
@@ -952,13 +970,10 @@ async function openSocket(pairingPhone?: string) {
 
     manager.snapshot.lastMessageReceivedAt = new Date().toISOString();
     connectionGuardian.recordMessage();
-    const customer = await upsertCustomer({
-      number: jid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, ""),
-      name: normalized.fromName,
-    });
-    const convo = await upsertConversation(customer.id, jid);
-    await addMessage({
-      conversation_id: convo.id,
+
+    const { convoId } = await getCachedChatEntities(jid, normalized.fromName);
+    void addMessage({
+      conversation_id: convoId,
       whatsapp_message_id: id,
       direction: "in",
       message_type: normalized.type,
@@ -966,7 +981,10 @@ async function openSocket(pairingPhone?: string) {
       media_reference: null,
       ai_generated: false,
       intent: null,
+    }).catch((err) => {
+      console.error("[whatsapp] non-fatal DB inbound insert error", err);
     });
+
     const contextInfo = (body?.extendedTextMessage as { contextInfo?: Record<string, unknown> } | undefined)?.contextInfo;
     const quotedRaw = contextInfo?.quotedMessage as Record<string, unknown> | undefined;
     const quotedText = quotedRaw
@@ -1014,7 +1032,6 @@ async function openSocket(pairingPhone?: string) {
   });
 
   sock.ev.on("messages.update", (updates) => {
-    // Phase 23: messages.update updates decrypted payload cache only, NEVER triggers a new reply
     void (async () => {
       for (const row of updates) {
         const message = (row.update as { message?: Record<string, unknown> } | undefined)?.message;
@@ -1024,6 +1041,18 @@ async function openSocket(pairingPhone?: string) {
             sentMessageStore.set(id, message);
           } else {
             inboundStore.set(id, message);
+            // If this is an inbound message that was previously a stub, and is now decrypted:
+            if (!isInboundStub(message)) {
+              const pendingTimer = decryptTimers.get(id);
+              if (pendingTimer) {
+                clearTimeout(pendingTimer);
+                decryptTimers.delete(id);
+              }
+              if (!(await wasProcessed(id)) && !(await wasProcessed(`out_${id}`)) && !isDuplicate(id)) {
+                console.log(`[whatsapp] Immediate ingest on decrypted message update: ${id}`);
+                await ingestRaw({ key: row.key, message, messageTimestamp: Date.now() }, "notify");
+              }
+            }
           }
         }
       }
