@@ -140,8 +140,34 @@ process.on("uncaughtException", (error) => {
   console.error("[keep] uncaughtException (kept alive)", error);
 });
 
+const publicWorkerUrl =
+  process.env.PUBLIC_WORKER_URL?.trim() ||
+  process.env.RENDER_EXTERNAL_URL?.trim() ||
+  process.env.PUBLIC_URL?.trim() ||
+  "https://wp-9.onrender.com";
+
+async function pingPublicKeepAlive() {
+  try {
+    const liveEndpoint = `${publicWorkerUrl.replace(/\/$/, "")}/health/live`;
+    const res = await fetch(liveEndpoint, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      // Successfully refreshed Render idle timer
+    }
+  } catch {
+    /* ignore network hiccups */
+  }
+}
+
 async function main() {
   migrateLegacyAuth();
+  // Keep Render container permanently awake 24/7 (Render free tier sleeps after 15m idle)
+  setInterval(() => {
+    void pingPublicKeepAlive();
+  }, 180_000);
+  setTimeout(() => {
+    void pingPublicKeepAlive();
+  }, 10_000);
+
   for (;;) {
     if (stopping) return;
     const lock = acquireWorkerLock(dataDir());
@@ -161,3 +187,4 @@ async function main() {
 }
 
 void main();
+

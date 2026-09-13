@@ -278,5 +278,5 @@ export const WorkerDetailedHealth = z.object({
 });
 export type WorkerDetailedHealth = z.infer<typeof WorkerDetailedHealth>;
 
-export * from "./telemetry";
-export * from "./worker-client";
+export * from "./telemetry.ts";
+export * from "./worker-client.ts";

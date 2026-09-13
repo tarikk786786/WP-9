@@ -118,6 +118,8 @@ async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
   });
 }
 
+const freshSessionVerified = new Set<string>();
+
 async function sendText(jid: string, text: string) {
   const clean = (text || "").trim();
   if (!clean) {
@@ -129,6 +131,21 @@ async function sendText(jid: string, text: string) {
   if (!isSendableJid(jid)) throw new Error("WhatsApp chat id missing");
   const targetJid = resolveSendJid(jid);
   console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid}): "${clean.slice(0, 40)}"`);
+
+  // Ensure fresh Signal E2E session for target participant to completely prevent
+  // the "Waiting for this message" / initial blank bubble decryption failure!
+  if (!freshSessionVerified.has(targetJid)) {
+    try {
+      const sockWithAssert = sock as { assertSessions?: (jids: string[], force: boolean) => Promise<boolean> };
+      if (typeof sockWithAssert.assertSessions === "function") {
+        await sockWithAssert.assertSessions([targetJid], true);
+        freshSessionVerified.add(targetJid);
+        console.log(`[whatsapp] E2E fresh session asserted for ${targetJid}`);
+      }
+    } catch (sessionErr) {
+      console.warn(`[whatsapp] assertSessions warning for ${targetJid}:`, sessionErr);
+    }
+  }
 
   const baileys = await import("@whiskeysockets/baileys");
   const fullMsg = baileys.generateWAMessageFromContent(
@@ -146,7 +163,7 @@ async function sendText(jid: string, text: string) {
     if (firstKey) sentMessageStore.delete(firstKey);
   }
 
-  await sock.relayMessage(targetJid, fullMsg.message!, { messageId });
+  await sock.relayMessage(targetJid, fullMsg.message!, { messageId, useUserDevicesCache: false });
 
   manager.snapshot.lastMessageSentAt = new Date().toISOString();
   touchFrame();
@@ -442,6 +459,14 @@ export function uptimeMs() {
 
 async function hydrateAuthDir(opts?: { overwrite?: boolean }) {
   await mkdir(AUTH_DIR, { recursive: true });
+  // Clean up any stale local session files on disk on startup so Baileys asserts fresh sessions
+  const diskFiles = await readdir(AUTH_DIR).catch(() => []);
+  for (const f of diskFiles) {
+    if (f.startsWith("session-")) {
+      await rm(path.join(AUTH_DIR, f), { force: true }).catch(() => {});
+    }
+  }
+
   const diskPath = path.join(AUTH_DIR, "creds.json");
   const diskRaw = existsSync(diskPath) ? await readFile(diskPath, "utf8").catch(() => "") : "";
   if (!opts?.overwrite && diskRaw && credsAreLinked(diskRaw)) {
@@ -452,6 +477,10 @@ async function hydrateAuthDir(opts?: { overwrite?: boolean }) {
   const files = await loadAuthFiles();
   for (const [rel, b64] of Object.entries(files)) {
     if (rel.includes("..")) continue;
+    // CRITICAL: NEVER restore stale session-*.json files from database backups!
+    // Stale sessions cause Signal ratchet desynchronization and the infamous
+    // "Waiting for this message" / blank bubble decryption failure on recipient phones.
+    if (rel.startsWith("session-")) continue;
     await writeFile(path.join(AUTH_DIR, rel), Buffer.from(b64, "base64"));
   }
 }
@@ -473,6 +502,9 @@ async function persistAuthDir() {
   const files: Record<string, string> = {};
   const names = await readdir(AUTH_DIR).catch(() => []);
   for (const name of names) {
+    // We only need creds, pre-keys, and app-state synced to database.
+    // Excluding session-*.json prevents restoring stale ratchets across deploys and avoids decryption failures.
+    if (name.startsWith("session-")) continue;
     const buf = await readFile(path.join(AUTH_DIR, name));
     files[name] = buf.toString("base64");
   }
@@ -506,6 +538,7 @@ function scheduleReconnect(immediate = false) {
 }
 
 let keepAliveStarted = false;
+let socketKeepAliveTimer: NodeJS.Timeout | null = null;
 let pulsing = false;
 let lastReconnectAt = 0;
 
@@ -665,6 +698,13 @@ async function openSocket(pairingPhone?: string) {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   await saveCreds();
 
+  // Hook state.keys.set so any E2E key / session changes are persisted
+  const originalKeysSet = state.keys.set;
+  state.keys.set = async (data) => {
+    await originalKeysSet(data);
+    persistAuthDirSoon();
+  };
+
   if (manager.sock) {
     const prev = manager.sock;
     manager.sock = null;
@@ -688,7 +728,7 @@ async function openSocket(pairingPhone?: string) {
     ...(version ? { version } : {}),
     auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
     browser: Browsers.ubuntu("Chrome"),
-    retryRequestDelayMs: 400,
+    retryRequestDelayMs: 0, // Instant retry handling (0ms delay)
     maxMsgRetryCount: 5,
     keepAliveIntervalMs: 15_000,
     connectTimeoutMs: 30_000,
@@ -827,9 +867,21 @@ async function openSocket(pairingPhone?: string) {
       } catch {
         /* presence is best-effort */
       }
+      if (socketKeepAliveTimer) clearInterval(socketKeepAliveTimer);
+      socketKeepAliveTimer = setInterval(() => {
+        if (manager.sock === sock && manager.snapshot.connected) {
+          sock.sendPresenceUpdate("available").catch(() => {});
+          touchFrame();
+        }
+      }, 25_000);
+      if (socketKeepAliveTimer.unref) socketKeepAliveTimer.unref();
       void conversationEngine.outbox.processQueue();
     }
     if (connection === "close") {
+      if (socketKeepAliveTimer) {
+        clearInterval(socketKeepAliveTimer);
+        socketKeepAliveTimer = null;
+      }
       const err = lastDisconnect?.error as { message?: string; output?: { statusCode?: number } } | undefined;
       const statusCode = err?.output?.statusCode;
       const isQrTimeout = Boolean(err?.message && /QR refs attempts ended|QR code expired/i.test(err.message));

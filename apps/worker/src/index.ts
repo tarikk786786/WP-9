@@ -429,8 +429,8 @@ function startCloudKeepalive() {
 
   // Run initial tick after 10s
   setTimeout(() => void runTick(), 10_000).unref();
-  // Repeat every 4 minutes (resets Render 15m idle shutdown)
-  setInterval(() => void runTick(), 4 * 60 * 1000).unref();
+  // Repeat every 3 minutes (resets Render 15m idle shutdown)
+  setInterval(() => void runTick(), 3 * 60 * 1000).unref();
 }
 
 server.listen(port, host, () => {
