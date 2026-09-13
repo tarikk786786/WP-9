@@ -123,3 +123,30 @@ export function forgetDuplicate(whatsappMessageId: string) {
 export function resetDuplicates() {
   seen.clear();
 }
+
+export function extractEphemeralExpiration(message?: Record<string, unknown> | null): number | null {
+  if (!message) return null;
+  const ephemeral = (message.ephemeralMessage as { message?: Record<string, unknown> } | undefined)?.message ?? message;
+  const proto =
+    (message.protocolMessage as { ephemeralExpiration?: number } | undefined) ??
+    (ephemeral?.protocolMessage as { ephemeralExpiration?: number } | undefined);
+  if (typeof proto?.ephemeralExpiration === "number") {
+    return proto.ephemeralExpiration;
+  }
+  const ctx =
+    (ephemeral?.extendedTextMessage as { contextInfo?: Record<string, unknown> } | undefined)?.contextInfo ??
+    (ephemeral?.imageMessage as { contextInfo?: Record<string, unknown> } | undefined)?.contextInfo ??
+    (ephemeral?.videoMessage as { contextInfo?: Record<string, unknown> } | undefined)?.contextInfo ??
+    (ephemeral?.audioMessage as { contextInfo?: Record<string, unknown> } | undefined)?.contextInfo ??
+    (ephemeral?.documentMessage as { contextInfo?: Record<string, unknown> } | undefined)?.contextInfo ??
+    (message.extendedTextMessage as { contextInfo?: Record<string, unknown> } | undefined)?.contextInfo;
+
+  if (typeof ctx?.expiration === "number" && ctx.expiration > 0) {
+    return ctx.expiration;
+  }
+  if (message.ephemeralMessage) {
+    return 86400; // default 24h if wrapped in ephemeral
+  }
+  return null;
+}
+

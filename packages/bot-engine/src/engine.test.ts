@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { defaultAutomationRules, defaultBotSettings, defaultFaqs } from "@bot/shared";
-import { isDuplicate, isInboundStub, normalizeIncoming, resetDuplicates } from "./parser.ts";
+import { isDuplicate, isInboundStub, normalizeIncoming, resetDuplicates, extractEphemeralExpiration } from "./parser.ts";
 import { isWithinBusinessHours, matchFaq, matchRule, routeMessage } from "./router.ts";
 import { analyzeMessage, buildPrompt, missedAsks, planReplyEngines, scoreReplyCompleteness, writeCompleteFallback } from "./ai/provider.ts";
 import { stitchMissingAsks } from "./ai/fallback.ts";
@@ -33,6 +33,51 @@ describe("parser", () => {
     resetDuplicates();
     assert.equal(isDuplicate("m1"), false);
     assert.equal(isDuplicate("m1"), true);
+  });
+
+  it("extracts ephemeral expiration from various message structures", () => {
+    assert.equal(extractEphemeralExpiration(null), null);
+    assert.equal(extractEphemeralExpiration({ conversation: "hi" }), null);
+    assert.equal(
+      extractEphemeralExpiration({
+        ephemeralMessage: {
+          message: {
+            extendedTextMessage: {
+              text: "hi",
+              contextInfo: { expiration: 86400 },
+            },
+          },
+        },
+      }),
+      86400
+    );
+    assert.equal(
+      extractEphemeralExpiration({
+        extendedTextMessage: {
+          text: "hi",
+          contextInfo: { expiration: 604800 },
+        },
+      }),
+      604800
+    );
+    assert.equal(
+      extractEphemeralExpiration({
+        protocolMessage: {
+          type: 3,
+          ephemeralExpiration: 86400,
+        },
+      }),
+      86400
+    );
+    assert.equal(
+      extractEphemeralExpiration({
+        protocolMessage: {
+          type: 3,
+          ephemeralExpiration: 0,
+        },
+      }),
+      0
+    );
   });
 
   it("treats offline protocol stubs as not yet readable", () => {

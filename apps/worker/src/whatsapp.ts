@@ -47,6 +47,7 @@ import {
   whatsappCircuitBreaker,
   messageOutbox,
   conversationEngine,
+  extractEphemeralExpiration,
 } from "@bot/engine";
 import { shouldReplyTool } from "@bot/engine/tools";
 import { personForChat } from "./people-map.ts";
@@ -77,6 +78,18 @@ const startedAt = Date.now();
 const inboundStore = new Map<string, Record<string, unknown>>();
 const sentMessageStore = new Map<string, Record<string, unknown>>();
 const chatCustomerCache = new Map<string, { customerId: string; convoId: string; status: string; cachedAt: number }>();
+const chatEphemeralExpiration = new Map<string, number>();
+chatEphemeralExpiration.set("918984473230@s.whatsapp.net", 86400);
+
+export function getEphemeralExpirationForChat(jid: string): number {
+  if (!jid) return 0;
+  if (chatEphemeralExpiration.has(jid)) return chatEphemeralExpiration.get(jid)!;
+  const clean = jid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, "");
+  for (const [key, val] of chatEphemeralExpiration.entries()) {
+    if (key.includes(clean)) return val;
+  }
+  return 0;
+}
 
 export async function getCachedChatEntities(
   chatId: string,
@@ -147,17 +160,34 @@ async function sendText(jid: string, text: string) {
     }
   }
 
+  const exp = getEphemeralExpirationForChat(targetJid) || getEphemeralExpirationForChat(jid);
+
   const baileys = await import("@whiskeysockets/baileys");
+  const messagePayload: Record<string, unknown> = exp > 0
+    ? {
+        ephemeralMessage: {
+          message: {
+            extendedTextMessage: {
+              text: clean,
+              contextInfo: {
+                expiration: exp,
+              },
+            },
+          },
+        },
+      }
+    : { conversation: clean };
+
   const fullMsg = baileys.generateWAMessageFromContent(
     targetJid,
-    { conversation: clean },
+    messagePayload as never,
     { userJid: sock.user?.id || undefined } as never
   );
   const messageId = fullMsg.key.id || baileys.generateMessageIDV2(sock.user?.id);
   fullMsg.key.id = messageId;
 
-  // Store pure verified conversation in sentMessageStore
-  sentMessageStore.set(messageId, { conversation: clean });
+  // Store pure verified payload in sentMessageStore
+  sentMessageStore.set(messageId, messagePayload);
   if (sentMessageStore.size > 2000) {
     const firstKey = sentMessageStore.keys().next().value;
     if (firstKey) sentMessageStore.delete(firstKey);
@@ -742,13 +772,33 @@ async function openSocket(pairingPhone?: string) {
       if (!key?.id) return undefined;
       const sent = sentMessageStore.get(key.id);
       if (sent && !isInboundStub(sent)) {
+        if (sent.ephemeralMessage) {
+          return sent as never;
+        }
         const text = (sent.conversation as string) || (sent.extendedTextMessage as { text?: string })?.text;
         if (text && text.trim()) {
+          const exp = key.remoteJid ? getEphemeralExpirationForChat(key.remoteJid) : 0;
+          if (exp > 0) {
+            return {
+              ephemeralMessage: {
+                message: {
+                  extendedTextMessage: {
+                    text: text.trim(),
+                    contextInfo: { expiration: exp },
+                  },
+                },
+              },
+            } as never;
+          }
           return { conversation: text.trim() } as never;
         }
+        return sent as never;
       }
       const stored = inboundStore.get(key.id);
       if (stored && !isInboundStub(stored)) {
+        if (stored.ephemeralMessage) {
+          return stored as never;
+        }
         const text = (stored.conversation as string) || (stored.extendedTextMessage as { text?: string })?.text;
         if (text && text.trim()) {
           return { conversation: text.trim() } as never;
@@ -765,6 +815,19 @@ async function openSocket(pairingPhone?: string) {
             .maybeSingle();
           if (data?.text && data.text.trim()) {
             const cleanText = data.text.trim();
+            const exp = key.remoteJid ? getEphemeralExpirationForChat(key.remoteJid) : 0;
+            if (exp > 0) {
+              return {
+                ephemeralMessage: {
+                  message: {
+                    extendedTextMessage: {
+                      text: cleanText,
+                      contextInfo: { expiration: exp },
+                    },
+                  },
+                },
+              } as never;
+            }
             return {
               conversation: cleanText,
             } as never;
@@ -780,6 +843,19 @@ async function openSocket(pairingPhone?: string) {
               .maybeSingle();
             if (latestOut?.text && latestOut.text.trim()) {
               const cleanText = latestOut.text.trim();
+              const exp = key.remoteJid ? getEphemeralExpirationForChat(key.remoteJid) : 0;
+              if (exp > 0) {
+                return {
+                  ephemeralMessage: {
+                    message: {
+                      extendedTextMessage: {
+                        text: cleanText,
+                        contextInfo: { expiration: exp },
+                      },
+                    },
+                  },
+                } as never;
+              }
               return {
                 conversation: cleanText,
               } as never;
@@ -975,6 +1051,24 @@ async function openSocket(pairingPhone?: string) {
     const id = raw.key.id;
     if (!isSendableJid(jid) || !id) return;
     personForChat(jid, raw.pushName || undefined, phoneHints);
+
+    // Track ephemeral expiration settings for this chat
+    const rawMsg = (raw.message ?? inboundStore.get(id)) as Record<string, unknown> | undefined;
+    const detectedExp = extractEphemeralExpiration(rawMsg);
+    if (typeof detectedExp === "number") {
+      if (detectedExp > 0) {
+        chatEphemeralExpiration.set(jid, detectedExp);
+        for (const hint of phoneHints) {
+          if (hint) chatEphemeralExpiration.set(hint, detectedExp);
+        }
+      } else {
+        chatEphemeralExpiration.delete(jid);
+        for (const hint of phoneHints) {
+          if (hint) chatEphemeralExpiration.delete(hint);
+        }
+      }
+    }
+
     if (raw.message && !raw.key.fromMe) inboundStore.set(id, raw.message as Record<string, unknown>);
     if (inboundStore.size > 1000) inboundStore.delete(inboundStore.keys().next().value ?? "");
 
