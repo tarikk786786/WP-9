@@ -99,7 +99,6 @@ const inboundStore = new Map<string, Record<string, unknown>>();
 const sentMessageStore = new Map<string, Record<string, unknown>>();
 const chatCustomerCache = new Map<string, { customerId: string; convoId: string; status: string; cachedAt: number }>();
 const chatEphemeralExpiration = new Map<string, number>();
-chatEphemeralExpiration.set("918984473230@s.whatsapp.net", 86400);
 
 export function getEphemeralExpirationForChat(jid: string): number {
   if (!jid) return 0;
@@ -151,8 +150,6 @@ async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
   });
 }
 
-const freshSessionVerified = new Set<string>();
-
 async function sendText(jid: string, text: string) {
   const clean = (text || "").trim();
   if (!clean) {
@@ -165,55 +162,23 @@ async function sendText(jid: string, text: string) {
   const targetJid = resolveSendJid(jid);
   console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid}): "${clean.slice(0, 40)}"`);
 
-  // Ensure fresh Signal E2E session for target participant to completely prevent
-  // the "Waiting for this message" / initial blank bubble decryption failure!
-  if (!freshSessionVerified.has(targetJid)) {
-    try {
-      const sockWithAssert = sock as { assertSessions?: (jids: string[], force: boolean) => Promise<boolean> };
-      if (typeof sockWithAssert.assertSessions === "function") {
-        await sockWithAssert.assertSessions([targetJid], true);
-        freshSessionVerified.add(targetJid);
-        console.log(`[whatsapp] E2E fresh session asserted for ${targetJid}`);
-      }
-    } catch (sessionErr) {
-      console.warn(`[whatsapp] assertSessions warning for ${targetJid}:`, sessionErr);
-    }
-  }
-
   const exp = getEphemeralExpirationForChat(targetJid) || getEphemeralExpirationForChat(jid);
 
-  const baileys = await import("@whiskeysockets/baileys");
-  const messagePayload: Record<string, unknown> = exp > 0
-    ? {
-        ephemeralMessage: {
-          message: {
-            extendedTextMessage: {
-              text: clean,
-              contextInfo: {
-                expiration: exp,
-              },
-            },
-          },
-        },
-      }
-    : { conversation: clean };
-
-  const fullMsg = baileys.generateWAMessageFromContent(
-    targetJid,
-    messagePayload as never,
-    { userJid: sock.user?.id || undefined } as never
-  );
-  const messageId = fullMsg.key.id || baileys.generateMessageIDV2(sock.user?.id);
-  fullMsg.key.id = messageId;
-
-  // Store pure verified payload in sentMessageStore
-  sentMessageStore.set(messageId, messagePayload);
-  if (sentMessageStore.size > 2000) {
-    const firstKey = sentMessageStore.keys().next().value;
-    if (firstKey) sentMessageStore.delete(firstKey);
+  const options: Record<string, unknown> = {};
+  if (exp > 0) {
+    options.ephemeralExpiration = exp;
   }
 
-  await sock.relayMessage(targetJid, fullMsg.message!, { messageId, useUserDevicesCache: false });
+  const sent = await sock.sendMessage(targetJid, { text: clean }, options as never);
+  const messageId = sent?.key?.id;
+
+  if (messageId && sent?.message) {
+    sentMessageStore.set(messageId, sent.message as Record<string, unknown>);
+    if (sentMessageStore.size > 2000) {
+      const firstKey = sentMessageStore.keys().next().value;
+      if (firstKey) sentMessageStore.delete(firstKey);
+    }
+  }
 
   manager.snapshot.lastMessageSentAt = new Date().toISOString();
   touchFrame();
@@ -224,7 +189,7 @@ async function sendText(jid: string, text: string) {
       const { convoId } = await getCachedChatEntities(targetJid);
       await addMessage({
         conversation_id: convoId,
-        whatsapp_message_id: messageId,
+        whatsapp_message_id: messageId || `out_${Date.now()}`,
         direction: "out",
         message_type: "text",
         text: clean,
@@ -535,13 +500,6 @@ export function uptimeMs() {
 
 async function hydrateAuthDir(opts?: { overwrite?: boolean }) {
   await mkdir(AUTH_DIR, { recursive: true });
-  // Clean up any stale local session files on disk on startup so Baileys asserts fresh sessions
-  const diskFiles = await readdir(AUTH_DIR).catch(() => []);
-  for (const f of diskFiles) {
-    if (f.startsWith("session-")) {
-      await rm(path.join(AUTH_DIR, f), { force: true }).catch(() => {});
-    }
-  }
 
   const diskPath = path.join(AUTH_DIR, "creds.json");
   const diskRaw = existsSync(diskPath) ? await readFile(diskPath, "utf8").catch(() => "") : "";
@@ -864,37 +822,10 @@ async function openSocket(pairingPhone?: string) {
       if (!key?.id) return undefined;
       const sent = sentMessageStore.get(key.id);
       if (sent && !isInboundStub(sent)) {
-        if (sent.ephemeralMessage) {
-          return sent as never;
-        }
-        const text = (sent.conversation as string) || (sent.extendedTextMessage as { text?: string })?.text;
-        if (text && text.trim()) {
-          const exp = key.remoteJid ? getEphemeralExpirationForChat(key.remoteJid) : 0;
-          if (exp > 0) {
-            return {
-              ephemeralMessage: {
-                message: {
-                  extendedTextMessage: {
-                    text: text.trim(),
-                    contextInfo: { expiration: exp },
-                  },
-                },
-              },
-            } as never;
-          }
-          return { conversation: text.trim() } as never;
-        }
         return sent as never;
       }
       const stored = inboundStore.get(key.id);
       if (stored && !isInboundStub(stored)) {
-        if (stored.ephemeralMessage) {
-          return stored as never;
-        }
-        const text = (stored.conversation as string) || (stored.extendedTextMessage as { text?: string })?.text;
-        if (text && text.trim()) {
-          return { conversation: text.trim() } as never;
-        }
         return stored as never;
       }
       try {
@@ -910,13 +841,9 @@ async function openSocket(pairingPhone?: string) {
             const exp = key.remoteJid ? getEphemeralExpirationForChat(key.remoteJid) : 0;
             if (exp > 0) {
               return {
-                ephemeralMessage: {
-                  message: {
-                    extendedTextMessage: {
-                      text: cleanText,
-                      contextInfo: { expiration: exp },
-                    },
-                  },
+                extendedTextMessage: {
+                  text: cleanText,
+                  contextInfo: { expiration: exp },
                 },
               } as never;
             }
@@ -1121,17 +1048,15 @@ async function openSocket(pairingPhone?: string) {
     // Track ephemeral expiration settings for this chat
     const rawMsg = (raw.message ?? inboundStore.get(id)) as Record<string, unknown> | undefined;
     const detectedExp = extractEphemeralExpiration(rawMsg);
-    if (typeof detectedExp === "number") {
-      if (detectedExp > 0) {
-        chatEphemeralExpiration.set(jid, detectedExp);
-        for (const hint of phoneHints) {
-          if (hint) chatEphemeralExpiration.set(hint, detectedExp);
-        }
-      } else {
-        chatEphemeralExpiration.delete(jid);
-        for (const hint of phoneHints) {
-          if (hint) chatEphemeralExpiration.delete(hint);
-        }
+    if (typeof detectedExp === "number" && detectedExp > 0) {
+      chatEphemeralExpiration.set(jid, detectedExp);
+      for (const hint of phoneHints) {
+        if (hint) chatEphemeralExpiration.set(hint, detectedExp);
+      }
+    } else if (rawMsg && !isInboundStub(rawMsg)) {
+      chatEphemeralExpiration.delete(jid);
+      for (const hint of phoneHints) {
+        if (hint) chatEphemeralExpiration.delete(hint);
       }
     }
 
