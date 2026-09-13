@@ -16,9 +16,19 @@ import {
   upsertKnowledge,
   usingSupabase,
 } from "@bot/database";
-import { defaultBotSettings, SendMessageBody } from "@bot/shared";
+import { defaultBotSettings, SendMessageBody, CURRENT_RELEASE_MANIFEST } from "@bot/shared";
 import { isAuthorizedWorkerRequest } from "./auth.ts";
-import { ensureAlwaysOn, getSnapshot, logoutWhatsApp, sendWhatsApp, startWhatsApp, uptimeMs, exportAuthArchive, importAuthArchive } from "./whatsapp.ts";
+import {
+  ensureAlwaysOn,
+  getSnapshot,
+  logoutWhatsApp,
+  sendWhatsApp,
+  startWhatsApp,
+  uptimeMs,
+  exportAuthArchive,
+  importAuthArchive,
+  shutdownWhatsApp,
+} from "./whatsapp.ts";
 import { connectionStateMachine, aiCircuitBreaker, whatsappCircuitBreaker, messageOutbox, conversationEngine, brainTelemetry } from "@bot/engine";
 
 function keepProcessAlive(kind: string, error: unknown) {
@@ -40,8 +50,17 @@ function validateStartupConfig() {
   const isProd = process.env.NODE_ENV === "production";
   const secret = process.env.WORKER_API_SECRET;
   if (isProd && (!secret || secret === "dev-worker-secret-change-me" || secret === "change-me-long-random-secret")) {
-    console.warn("CONFIGURATION_WARNING: Secure WORKER_API_SECRET should be set in production.");
+    console.warn("[config] WARNING: Secure WORKER_API_SECRET should be set in production.");
   }
+  const hasDb = Boolean(process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY));
+  if (!hasDb) {
+    console.log("[config] Notice: Operating with local filesystem/memory database fallback.");
+  }
+  const hasAi = Boolean(process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY);
+  if (!hasAi) {
+    console.log("[config] Notice: AI API key not provided. Rule-based and fallback engines active.");
+  }
+  console.log(`[config] Validated startup configuration (ENV: ${process.env.NODE_ENV || "development"}, Port: ${port})`);
 }
 validateStartupConfig();
 
@@ -207,6 +226,8 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         worker: "ok",
         status: snap.connected ? "healthy" : "degraded",
+        canonicalState: snap.canonicalState,
+        release: CURRENT_RELEASE_MANIFEST,
         uptimeMs: uptimeMs(),
         supabase: usingSupabase(),
         whatsappConnection: connectionStateMachine.currentState || snap.phase,
@@ -215,11 +236,20 @@ const server = createServer(async (req, res) => {
         lastMessageSent: snap.lastMessageSentAt,
         whatsapp: {
           phase: connectionStateMachine.currentState || snap.phase,
+          canonicalState: snap.canonicalState,
           connected: snap.connected,
           phone: snap.phone,
           persisted: snap.persisted,
           error: snap.error,
           lastConnectedAt: snap.lastConnectedAt,
+          lastDisconnectedAt: snap.lastDisconnectedAt,
+          disconnectReason: snap.disconnectReason,
+          reconnectCount: snap.reconnectCount,
+          baileysVersion: snap.baileysVersion,
+          waWebVersion: snap.waWebVersion,
+          authStatus: snap.authStatus,
+          lastCredsSave: snap.lastCredsSave,
+          socketOwner: snap.socketOwner,
           lastMessageReceivedAt: snap.lastMessageReceivedAt,
           lastMessageSentAt: snap.lastMessageSentAt,
         },
@@ -451,11 +481,18 @@ Supabase:  ${usingSupabase() ? "Configured" : "Local disk fallback"}
 });
 
 function gracefulShutdown(signal: string) {
-  console.log(`[worker] Received ${signal}. Closing server gracefully...`);
-  server.close(() => {
-    console.log("[worker] HTTP server closed.");
-    process.exit(0);
-  });
+  console.log(`[worker] Received ${signal}. Closing server and WhatsApp worker gracefully...`);
+  void (async () => {
+    try {
+      await shutdownWhatsApp();
+    } catch (err) {
+      console.error("[worker] Cleanup error during shutdown:", err);
+    }
+    server.close(() => {
+      console.log("[worker] HTTP server closed cleanly. Goodbye.");
+      process.exit(0);
+    });
+  })();
   setTimeout(() => {
     console.error("[worker] Forcefully terminating after shutdown timeout.");
     process.exit(1);

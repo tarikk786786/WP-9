@@ -57,10 +57,20 @@ import { credsAreLinked, phoneFromCreds, shouldWipeAuth } from "./session-policy
 import { connectionGuardian } from "./connection-guardian.ts";
 import { presenceController } from "@bot/conversation-timing";
 
-type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out";
+type ScanPhase = "idle" | "qr" | "connecting" | "ready" | "logged_out" | "standby";
+
+export type CanonicalSessionState =
+  | "HEALTHY"
+  | "CONNECTING"
+  | "RECONNECTING"
+  | "DEGRADED"
+  | "AUTH_REQUIRED"
+  | "RESET_REQUIRED"
+  | "FAILED";
 
 export type WorkerSnapshot = {
   phase: ScanPhase;
+  canonicalState: CanonicalSessionState;
   connected: boolean;
   phone: string | null;
   qrDataUrl: string | null;
@@ -68,6 +78,16 @@ export type WorkerSnapshot = {
   persisted: boolean;
   error: string | null;
   lastConnectedAt: string | null;
+  lastDisconnectedAt: string | null;
+  disconnectReason: string | null;
+  reconnectCount: number;
+  baileysVersion: string;
+  waWebVersion: string | null;
+  authStatus: string;
+  lastCredsSave: string | null;
+  signalStoreStatus: string;
+  socketOwner: string;
+  leaseExpiry: string | null;
   lastMessageReceivedAt: string | null;
   lastMessageSentAt: string | null;
 };
@@ -344,8 +364,11 @@ type Manager = {
   reconnectDelay: number;
 };
 
+export const WORKER_INSTANCE_ID = `worker_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+
 const empty = (): WorkerSnapshot => ({
   phase: "idle",
+  canonicalState: "AUTH_REQUIRED",
   connected: false,
   phone: null,
   qrDataUrl: null,
@@ -353,6 +376,16 @@ const empty = (): WorkerSnapshot => ({
   persisted: false,
   error: null,
   lastConnectedAt: null,
+  lastDisconnectedAt: null,
+  disconnectReason: null,
+  reconnectCount: 0,
+  baileysVersion: "6.7.24",
+  waWebVersion: null,
+  authStatus: "idle",
+  lastCredsSave: null,
+  signalStoreStatus: "initialized",
+  socketOwner: WORKER_INSTANCE_ID,
+  leaseExpiry: null,
   lastMessageReceivedAt: null,
   lastMessageSentAt: null,
 });
@@ -387,27 +420,40 @@ function isSocketReallyLive() {
 
 export function getSnapshot(): WorkerSnapshot {
   const snap = manager.snapshot;
-  if (isSocketReallyLive()) {
-    return { ...snap, phase: "ready", connected: true, error: null };
+  const isReallyLive = isSocketReallyLive();
+  const canonical: CanonicalSessionState = isReallyLive
+    ? "HEALTHY"
+    : snap.phase === "connecting"
+      ? "CONNECTING"
+      : snap.phase === "qr" || snap.phase === "logged_out"
+        ? "AUTH_REQUIRED"
+        : snap.phase === "standby"
+          ? "DEGRADED"
+          : snap.error
+            ? "FAILED"
+            : "CONNECTING";
+
+  if (isReallyLive) {
+    return { ...snap, phase: "ready", canonicalState: "HEALTHY", connected: true, error: null };
   }
   if (isSocketLive() && Date.now() - lastFrameAt >= STALE_MS) {
     return {
       ...snap,
       phase: "connecting",
+      canonicalState: "DEGRADED",
       connected: false,
       error: "WhatsApp connection went silent. Reconnecting...",
     };
   }
-  if (snap.phase === "qr" && snap.qrDataUrl) return { ...snap, connected: false };
-  if (manager.starting) return { ...snap, phase: "connecting", connected: false };
+  if (snap.phase === "qr" && snap.qrDataUrl) return { ...snap, canonicalState: "AUTH_REQUIRED", connected: false };
+  if (manager.starting) return { ...snap, phase: "connecting", canonicalState: "CONNECTING", connected: false };
   return {
     ...snap,
+    canonicalState: canonical,
     connected: false,
     phase: snap.persisted ? "connecting" : snap.phase === "logged_out" ? "logged_out" : snap.phase,
   };
 }
-
-export const WORKER_INSTANCE_ID = `worker_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
 
 export async function syncWorkerHeartbeat() {
   try {
@@ -596,6 +642,14 @@ export async function ensureAlwaysOn() {
     }
   });
   await conversationEngine.outbox.initFromDatabase();
+  try {
+    const recovery = await conversationEngine.recoverStuckConversations();
+    if (recovery.recoveredClaims > 0 || recovery.recoveredOutbox > 0) {
+      console.log(`[whatsapp] Startup recovery: ${recovery.recoveredClaims} claims, ${recovery.recoveredOutbox} outbox items recovered.`);
+    }
+  } catch (recErr) {
+    console.warn("[whatsapp] Startup recovery warning:", recErr);
+  }
   await markPersistedFromDisk();
   await startWhatsApp();
   if (keepAliveStarted) return;
@@ -603,6 +657,32 @@ export async function ensureAlwaysOn() {
   setInterval(() => {
     void pulseWhatsApp();
   }, 20_000);
+  setInterval(() => {
+    void conversationEngine.recoverStuckConversations().catch(() => {});
+  }, 60_000);
+}
+
+export async function shutdownWhatsApp() {
+  console.log("[whatsapp] Shutting down WhatsApp worker cleanly...");
+  connectionGuardian.stop();
+  try {
+    await persistAuthDir();
+  } catch {
+    /* ignore */
+  }
+  try {
+    await releaseWorkerLease(WORKER_INSTANCE_ID);
+  } catch {
+    /* ignore */
+  }
+  if (manager.sock) {
+    try {
+      manager.sock.end(undefined);
+    } catch {
+      /* ignore */
+    }
+    manager.sock = null;
+  }
 }
 
 async function pulseWhatsApp() {
@@ -715,6 +795,18 @@ export async function startWhatsApp(pairingPhone?: string, opts?: { force?: bool
 }
 
 async function openSocket(pairingPhone?: string) {
+  // Atomic Lease Acquisition & Split-Brain Protection
+  const leaseAcquired = await acquireWorkerLease(WORKER_INSTANCE_ID, 30_000);
+  if (!leaseAcquired) {
+    console.warn(`[whatsapp] Cannot open socket: Worker lease held by another active instance. Standing by.`);
+    manager.snapshot = {
+      ...manager.snapshot,
+      phase: "standby",
+      error: "Worker lease held by another active instance. Standing by.",
+    };
+    return;
+  }
+
   const baileys = await import("@whiskeysockets/baileys");
   const {
     default: makeWASocket,
@@ -832,35 +924,6 @@ async function openSocket(pairingPhone?: string) {
               conversation: cleanText,
             } as never;
           }
-
-          if (key.fromMe) {
-            const { data: latestOut } = await db
-              .from("messages")
-              .select("text")
-              .eq("direction", "out")
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (latestOut?.text && latestOut.text.trim()) {
-              const cleanText = latestOut.text.trim();
-              const exp = key.remoteJid ? getEphemeralExpirationForChat(key.remoteJid) : 0;
-              if (exp > 0) {
-                return {
-                  ephemeralMessage: {
-                    message: {
-                      extendedTextMessage: {
-                        text: cleanText,
-                        contextInfo: { expiration: exp },
-                      },
-                    },
-                  },
-                } as never;
-              }
-              return {
-                conversation: cleanText,
-              } as never;
-            }
-          }
         }
       } catch {
         /* ignore */
@@ -961,6 +1024,9 @@ async function openSocket(pairingPhone?: string) {
       const err = lastDisconnect?.error as { message?: string; output?: { statusCode?: number } } | undefined;
       const statusCode = err?.output?.statusCode;
       const isQrTimeout = Boolean(err?.message && /QR refs attempts ended|QR code expired/i.test(err.message));
+      manager.snapshot.lastDisconnectedAt = new Date().toISOString();
+      manager.snapshot.disconnectReason = err?.message || (statusCode ? `Status ${statusCode}` : "Connection lost");
+      manager.snapshot.reconnectCount += 1;
       if (manager.sock === sock) manager.sock = null;
       const dead = shouldWipeAuth(statusCode);
       if (dead) {

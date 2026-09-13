@@ -20,12 +20,21 @@ export class DecisionEngine {
   public evaluate(context: CanonicalContext): DecisionResult {
     const { settings, status, understanding, turn } = context;
 
-    // Invariant 1: Master Bot Switch
-    if (settings.enabled === false) {
+    // Invariant 1: Master Bot Switch & Emergency Kill Switch
+    if (settings.enabled === false || settings.messageProcessingEnabled === false) {
       return {
         decision: "DO_NOT_REPLY",
-        reason: "Bot is disabled in settings",
+        reason: settings.enabled === false ? "Bot is disabled in settings" : "Message processing is disabled in emergency settings",
         finalizeReason: "BOT_DISABLED",
+      };
+    }
+
+    // Invariant 1b: Group message filtering
+    if (turn.isGroup && settings.replyToGroups === false) {
+      return {
+        decision: "DO_NOT_REPLY",
+        reason: "Group replies are disabled in settings",
+        finalizeReason: "NO_REPLY_RULE",
       };
     }
 

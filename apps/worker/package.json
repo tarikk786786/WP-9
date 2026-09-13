@@ -11,7 +11,7 @@
     "once": "tsx src/index.ts",
     "build": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/auth.test.ts src/session-policy.test.ts src/singleton.test.ts src/chat-address.test.ts"
+    "test": "tsx --test src/auth.test.ts src/session-policy.test.ts src/singleton.test.ts src/chat-address.test.ts src/session-ownership.test.ts"
   },
   "dependencies": {
     "@bot/control-plane": "*",
@@ -20,7 +20,7 @@
     "@bot/engine": "*",
     "@bot/media-intelligence": "*",
     "@bot/shared": "*",
-    "@whiskeysockets/baileys": "^6.7.21",
+    "@whiskeysockets/baileys": "6.7.24",
     "pino": "^10.3.1",
     "qrcode": "^1.5.4"
   },

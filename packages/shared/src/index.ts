@@ -102,6 +102,9 @@ export const BotSettings = z.object({
   }),
   replyToGroups: z.boolean(),
   replyToMedia: z.boolean(),
+  messageProcessingEnabled: z.boolean().default(true),
+  automationEnabled: z.boolean().default(true),
+  outboundSendEnabled: z.boolean().default(true),
 });
 export type BotSettings = z.infer<typeof BotSettings>;
 
@@ -124,7 +127,32 @@ export const defaultBotSettings = (): BotSettings => ({
   },
   replyToGroups: false,
   replyToMedia: true,
+  messageProcessingEnabled: true,
+  automationEnabled: true,
+  outboundSendEnabled: true,
 });
+
+export interface ReleaseManifest {
+  releaseId: string;
+  gitSha: string;
+  workerVersion: string;
+  webVersion: string;
+  baileysVersion: string;
+  databaseVersion: string;
+  engineVersion: string;
+  builtAt: string;
+}
+
+export const CURRENT_RELEASE_MANIFEST: ReleaseManifest = {
+  releaseId: "rel_wp9_prod_2026_09",
+  gitSha: "a135ece",
+  workerVersion: "1.0.0",
+  webVersion: "0.1.0",
+  baileysVersion: "6.7.24",
+  databaseVersion: "0006",
+  engineVersion: "1.0.0",
+  builtAt: new Date().toISOString(),
+};
 
 export const defaultAutomationRules = (): AutomationRule[] => [
   { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "Namaste! Boliye, main kaise madad kar sakta hoon?", priority: 10, enabled: true },

@@ -3,7 +3,7 @@ import {
   WorkerLiveness,
   WorkerReadiness,
   WorkerDetailedHealth,
-} from "./index";
+} from "./index.ts";
 
 export interface WorkerClientConfig {
   baseUrl?: string;
