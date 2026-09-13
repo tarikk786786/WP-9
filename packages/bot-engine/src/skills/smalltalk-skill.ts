@@ -10,19 +10,28 @@ export class SmalltalkSkill implements SpecialistSkill {
     const text = ctx.normalizedText.toLowerCase().trim();
     if (ctx.isDazy) return false; // DAZY profile handles romantic & intimate pings with custom warmth
     return (
-      /^(hi|hello|hey|suno|kya haal|kaise ho|kaisi ho|wassup|yo|good morning|good night|gn|gm|bye|alvida|shukriya|thanks|thank you)\b/i.test(
+      /^(hi|hello|hey|suno|kya haal|kaise ho|kaisi ho|wassup|yo|good morning|good night|gn|gm|bye|alvida|shukriya|thanks|thank you|salam|assalam|asalam|aoa|jazakallah|jazak allah)\b/i.test(
         text,
-      ) && text.split(" ").length <= 4
+      ) && text.split(" ").length <= 5
     );
   }
 
   public async execute(ctx: SkillContext): Promise<SkillResponse | null> {
     const text = ctx.normalizedText.toLowerCase().trim();
 
+    // Salam handling (adab: always reply with Walaikum Assalam)
+    if (/^(assalam|asalam|salam|slaam|slm|aoa)\b/i.test(text)) {
+      return {
+        skillId: this.id,
+        replyText: "Walaikum Assalam! Ji boliye, main kaise madad kar sakta hoon?",
+        confidence: 95,
+      };
+    }
+
     if (/^(hi|hello|hey|yo)\b/i.test(text)) {
       return {
         skillId: this.id,
-        replyText: "Haan ji, boliye! Main sun raha hoon.",
+        replyText: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?",
         confidence: 90,
       };
     }
@@ -30,15 +39,23 @@ export class SmalltalkSkill implements SpecialistSkill {
     if (/^(kaise ho|kya haal|kaisi ho)/i.test(text)) {
       return {
         skillId: this.id,
-        replyText: "Main badhiya hoon, aap bataiye sab kaisa chal raha hai?",
-        confidence: 90,
+        replyText: "Alhamdulillah main badhiya hoon, aap bataiye sab kaisa chal raha hai?",
+        confidence: 95,
+      };
+    }
+
+    if (/^(jazakallah|jazak allah)/i.test(text)) {
+      return {
+        skillId: this.id,
+        replyText: "Wa Iyyakum! Khushi hui madad karke.",
+        confidence: 95,
       };
     }
 
     if (/^(thanks|thank you|shukriya|dhanyawad)/i.test(text)) {
       return {
         skillId: this.id,
-        replyText: "Arey koi baat nahi! Kabhi bhi bataiye agar kuch lage toh.",
+        replyText: "Arey koi baat nahi, bahut shukriya! Kabhi bhi bataiye agar kuch lage toh.",
         confidence: 95,
       };
     }
@@ -53,7 +70,7 @@ export class SmalltalkSkill implements SpecialistSkill {
 
     return {
       skillId: this.id,
-      replyText: "Haanji, batayein kya madad kar sakta hoon?",
+      replyText: "Assalamu Alaikum! Ji batayein, main kya madad kar sakta hoon?",
       confidence: 80,
     };
   }

@@ -193,20 +193,22 @@ export function writeSpokenReply(
     reply = en ? "take care. write later, please" : "take care. baad mein likhiye";
   } else if (/^(gm|good morning)$/.test(n)) {
     reply = en ? "good morning. what's the plan" : "good morning. kya plan hai";
-  } else if (/\b(assalam|salaam|salam)\b/.test(n)) {
-    reply = "walaikum assalam. kya ho raha hai";
+  } else if (/\b(assalam|salaam|salam|aoa)\b/.test(n)) {
+    reply = "Walaikum Assalam! Boliye, kya haal hai?";
   } else if (/^(kaise ho|kya haal|how are you|whats?up)$/.test(n)) {
-    reply = en ? "i'm well, thank you. and you?" : "theek hoon, shukriya. aap bataiye";
+    reply = en ? "Alhamdulillah, I'm well, thank you. And you?" : "Alhamdulillah, theek hoon, shukriya. Aap bataiye, kya haal hai?";
+  } else if (/\b(jazakallah|jazak allah)\b/.test(n)) {
+    reply = "Wa Iyyakum! Bahut shukriya.";
   } else if (/^(kya kar rahe ho|kya chal raha|busy ho|free ho)$/.test(n)) {
     reply = "yahin hoon. aap boliye kya scene hai";
   } else if (/\b(baarish|weather|rain|mausam)\b/i.test(incoming)) {
     reply = en ? "looks like clear weather tomorrow. what's the plan" : "kal baarish ke kam chances hain, mausam saaf rahega. aap boliye kya plan hai";
   } else if (/\b(kal milte|kl mlt|kal milna|milte hain|kal milen)\b/i.test(incoming)) {
-    reply = en ? "yes, let's meet tomorrow. what time suits you?" : "haan kal milte hain. kitne baje?";
+    reply = en ? "InshaAllah yes, let's meet tomorrow. what time suits you?" : "InshaAllah kal milte hain. kitne baje?";
   } else if (parsed.intents[0] === "greeting" && parsed.complexity === "simple") {
-    reply = pickUnused(n, ["namaste, kya haal hai", "ji, boliye", "hey, theek ho? scene kya hai"], recent);
+    reply = pickUnused(n, ["Assalamu Alaikum! Ji boliye, kya haal hai?", "Ji boliye, main sun raha hoon.", "Assalamu Alaikum! Boliye, main kaise madad kar sakta hoon?"], recent);
   } else if (parsed.intents[0] === "thanks") {
-    reply = "shukriya, koi baat nahi";
+    reply = "JazakAllah Khair, bahut shukriya! Koi baat nahi";
   } else {
     reply = continueThread(incoming, recent, en);
   }

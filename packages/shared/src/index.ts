@@ -114,7 +114,7 @@ export const defaultBotSettings = (): BotSettings => ({
   faqEnabled: true,
   welcomeEnabled: true,
   defaultLanguage: "english",
-  welcomeMessage: "Namaste! Boliye, main kaise madad kar sakta hoon?",
+  welcomeMessage: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?",
   fallbackMessage: "Received your message. How can I help you?",
   humanHandoffMessage: "Sure, transferring you to a human agent. Please hold on.",
   timezone: "Asia/Kolkata",
@@ -145,7 +145,7 @@ export interface ReleaseManifest {
 
 export const CURRENT_RELEASE_MANIFEST: ReleaseManifest = {
   releaseId: "rel_wp9_prod_2026_09",
-  gitSha: "a135ece",
+  gitSha: "bc4f7a2",
   workerVersion: "1.0.0",
   webVersion: "0.1.0",
   baileysVersion: "6.7.24",
@@ -155,9 +155,10 @@ export const CURRENT_RELEASE_MANIFEST: ReleaseManifest = {
 };
 
 export const defaultAutomationRules = (): AutomationRule[] => [
-  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "Namaste! Boliye, main kaise madad kar sakta hoon?", priority: 10, enabled: true },
-  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "Namaste! Boliye, main kaise madad kar sakta hoon?", priority: 10, enabled: true },
-  { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "Pricing depends on project scope. Share your requirements and I'll send a quote.", priority: 20, enabled: true },
+  { id: "salam", name: "Greeting salam", triggerType: "keyword", triggerValue: "salam", response: "Walaikum Assalam! Ji boliye, main kaise madad kar sakta hoon?", priority: 10, enabled: true },
+  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?", priority: 10, enabled: true },
+  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?", priority: 10, enabled: true },
+  { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "InshaAllah pricing project ke scope aur requirements pe depend karti hai. Share kijiye kya build karna hai.", priority: 20, enabled: true },
   { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "Operating in IST hours (typically 9 AM - 6 PM), responding within 24 hours.", priority: 20, enabled: true },
   { id: "human", name: "Human", triggerType: "keyword", triggerValue: "talk to a human", response: "Sure, transferring you to a human agent. Please hold on.", priority: 5, enabled: true },
 ];

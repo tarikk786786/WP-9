@@ -4,7 +4,7 @@ export const defaultRules: BotRules = {
   enabled: true,
   botName: "Tarik",
   defaultReply: "Received your message. How can I help you?",
-  greetingReply: "Namaste! Boliye, main kaise madad kar sakta hoon?",
+  greetingReply: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?",
   includeName: false,
   useLocalLlm: true,
   preferredModel: "",
@@ -24,15 +24,21 @@ export const defaultRules: BotRules = {
   afterHoursReply: "I am currently offline outside business hours. I will review your message and reply as soon as possible.",
   keywordRules: [
     {
+      id: "salam",
+      keyword: "salam",
+      reply: "Walaikum Assalam! Ji boliye, main kaise madad kar sakta hoon?",
+      enabled: true,
+    },
+    {
       id: "hello",
       keyword: "hello",
-      reply: "Namaste! Boliye, main kaise madad kar sakta hoon?",
+      reply: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?",
       enabled: true,
     },
     {
       id: "hi",
       keyword: "hi",
-      reply: "Namaste! Boliye, main kaise madad kar sakta hoon?",
+      reply: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?",
       enabled: true,
     },
     {
@@ -44,7 +50,7 @@ export const defaultRules: BotRules = {
     {
       id: "price",
       keyword: "price",
-      reply: "Pricing depends on project scope and technical requirements. Please share your project details.",
+      reply: "InshaAllah pricing depends on project scope and technical requirements. Please share your project details.",
       enabled: true,
     },
   ],

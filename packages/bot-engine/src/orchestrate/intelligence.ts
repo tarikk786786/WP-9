@@ -141,7 +141,7 @@ export function planTurn(options: {
     complexity = 0.05;
   } else if (analysis.complexity === "simple" && analysis.intents[0] === "greeting" && !analysis.wantsAllAnswers) {
     action = "acknowledge";
-    draft = love ? "meri DAZy. miss kar raha tha. boliye na" : "namaste, kya haal hai";
+    draft = love ? "meri DAZy. miss kar raha tha. boliye na" : "Assalamu Alaikum, kya haal hai? boliye";
     confidence = 0.94;
     complexity = 0.08;
   } else if (incomplete) {

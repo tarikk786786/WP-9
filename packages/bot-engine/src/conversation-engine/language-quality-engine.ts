@@ -609,7 +609,7 @@ export class ContextChecker {
         clean = clean.includes("❤️") ? clean : `${clean} ❤️`;
       } else {
         const variations = [
-          "Namaste! Boliye, main kaise madad kar sakta hoon?",
+          "Assalamu Alaikum! Boliye, main kaise madad kar sakta hoon?",
           "Ji boliye, main sun raha hoon.",
           "Yahin hoon, boliye kya scene hai?",
           "Haan ji, bataiye kya baat hai?",
@@ -792,7 +792,7 @@ export class HumanLanguageQualityEngine {
     if (!finalSanitized) {
       finalSanitized = options?.isDazy
         ? "haan meri jaan ❤️ batao"
-        : "Namaste! Boliye, main kaise madad kar sakta hoon?";
+        : "Assalamu Alaikum! Boliye, main kaise madad kar sakta hoon?";
       allReasons.push("Sanitized text was empty; substituted natural conversational default");
     }
 
