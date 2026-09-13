@@ -20,7 +20,7 @@ export class BusinessSkill implements SpecialistSkill {
     if (/\b(portfolio|website|site|kahan dekhun|sample)\b/i.test(text)) {
       return {
         skillId: this.id,
-        replyText: "Aap mera portfolio aur live work dekh sakte hain: https://tarikislam.in",
+        replyText: "Ji zaroor, aap mera portfolio aur live work dekh sakte hain: https://tarikislam.in",
         confidence: 95,
       };
     }
@@ -29,7 +29,7 @@ export class BusinessSkill implements SpecialistSkill {
     if (/\b(charge|rate|cost|price|kitna lagega|kitne ka)\b/i.test(text)) {
       return {
         skillId: this.id,
-        replyText: "Project ke scope aur timeline pe depend karta hai. Ek baar requirements bata dijiye, main exact quote share kar doonga.",
+        replyText: "InshaAllah pricing project ke scope aur technical requirements pe depend karti hai. Ek baar details share kar dijiye, main samajh ke sahi quote share kar doonga.",
         confidence: 90,
       };
     }
@@ -38,7 +38,7 @@ export class BusinessSkill implements SpecialistSkill {
     if (/\b(available|kab tak|free ho|hire)\b/i.test(text)) {
       return {
         skillId: this.id,
-        replyText: "Haan, main new projects discuss karne ke liye open hoon. Aap bataiye kya build karna chahte hain?",
+        replyText: "Ji, main new projects discuss karne ke liye open hoon. Aap bataiye kya build karna chahte hain?",
         confidence: 90,
       };
     }
