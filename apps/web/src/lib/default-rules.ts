@@ -3,8 +3,8 @@ import type { BotRules } from "@/lib/types";
 export const defaultRules: BotRules = {
   enabled: true,
   botName: "Tarik",
-  defaultReply: "Received your message. How can I help you?",
-  greetingReply: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?",
+  defaultReply: "Assalamu Alaikum! Ji, aapka message mila. Thoda detail mein batayenge to behtar samajh paunga.",
+  greetingReply: "Assalamu Alaikum! Ji farmayiye, sab theek thaak? Boliye, main kaise help kar sakta hoon?",
   includeName: false,
   useLocalLlm: true,
   preferredModel: "",
@@ -26,19 +26,19 @@ export const defaultRules: BotRules = {
     {
       id: "salam",
       keyword: "salam",
-      reply: "Walaikum Assalam! Ji boliye, main kaise madad kar sakta hoon?",
+      reply: "Walaikum Assalam wa Rahmatullahi wa Barakatuh! Khairiyat? Boliye, main kis tarah madad kar sakta hoon?",
       enabled: true,
     },
     {
       id: "hello",
       keyword: "hello",
-      reply: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?",
+      reply: "Assalamu Alaikum! Ji boliye, sab khairiyat? Kis cheez mein madad chahiye?",
       enabled: true,
     },
     {
       id: "hi",
       keyword: "hi",
-      reply: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?",
+      reply: "Assalamu Alaikum! Ji farmayiye, sab theek thaak? Boliye, main kaise help kar sakta hoon?",
       enabled: true,
     },
     {

@@ -33,5 +33,38 @@ export async function analyzeImage(imageBuffer: Buffer, prompt = 'What is in thi
     }
   }
 
+  if (geminiKey) {
+    try {
+      const base64 = imageBuffer.toString('base64');
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: prompt },
+                  { inline_data: { mime_type: 'image/jpeg', data: base64 } },
+                ],
+              },
+            ],
+          }),
+          signal: AbortSignal.timeout(15_000),
+        }
+      );
+      if (res.ok) {
+        const json = (await res.json()) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('').trim();
+        if (text) return text;
+      }
+    } catch {
+      /* fallback */
+    }
+  }
+
   return 'Image document received and stored';
 }

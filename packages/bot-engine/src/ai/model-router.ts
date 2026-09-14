@@ -52,7 +52,7 @@ export function routeModel(input: {
     span.end({ tier: 'general', provider: hasGemini ? 'gemini' : 'groq' });
     return {
       tier: 'general',
-      model: hasGemini ? 'gemini-1.5-flash' : defaultGroqModel,
+      model: hasGemini ? 'gemini-2.0-flash' : defaultGroqModel,
       provider: hasGemini ? 'gemini' : 'groq',
       reason: 'Long multi-turn context handled by large-window model',
     };

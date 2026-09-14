@@ -52,7 +52,7 @@ function tokenBudget(analysis: MessageAnalysis, plan?: ResponsePlan) {
 const MODELS = {
   openai: () => process.env.OPENAI_MODEL || "gpt-4o",
   mini: () => process.env.OPENAI_MINI_MODEL || "gpt-4o-mini",
-  claude: () => process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+  claude: () => process.env.ANTHROPIC_MODEL || "claude-3-7-sonnet-latest",
   groq: () => process.env.GROQ_MODEL || "qwen/qwen3.8-27b",
   gemini: () => process.env.GEMINI_MODEL || "gemini-2.0-flash",
   router: () => process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",

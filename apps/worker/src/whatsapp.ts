@@ -267,7 +267,7 @@ conversationEngine.setAiGenerator(async (context, tier) => {
     timeoutMs
   );
 
-  return ai?.text ? { text: ai.text, modelId: tier === "fast" ? "gpt-4o-mini" : "gpt-4o" } : null;
+  return ai?.text ? { text: ai.text, modelId: ai.engine || (tier === "fast" ? "groq" : "reasoning") } : null;
 });
 
 conversationEngine.updateDependencies({

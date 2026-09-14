@@ -78,9 +78,9 @@ export const chooseModelTool: ToolDefinition<
       return { success: true, data: { model: "gpt-4o", provider: "openai", tier: "reasoning" } };
     }
     if (complexity === "moderate") {
-      return { success: true, data: { model: "gemini-1.5-flash", provider: "gemini", tier: "balanced" } };
+      return { success: true, data: { model: "gemini-2.0-flash", provider: "gemini", tier: "balanced" } };
     }
-    return { success: true, data: { model: "groq/llama-3.3-70b-versatile", provider: "groq", tier: "fast" } };
+    return { success: true, data: { model: "qwen/qwen3.8-27b", provider: "groq", tier: "fast" } };
   },
 };
 

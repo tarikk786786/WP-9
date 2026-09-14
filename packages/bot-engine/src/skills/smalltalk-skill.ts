@@ -23,7 +23,7 @@ export class SmalltalkSkill implements SpecialistSkill {
     if (/^(assalam|asalam|salam|slaam|slm|aoa)\b/i.test(text)) {
       return {
         skillId: this.id,
-        replyText: "Walaikum Assalam! Ji boliye, main kaise madad kar sakta hoon?",
+        replyText: "Walaikum Assalam wa Rahmatullahi wa Barakatuh! Ji khairiyat? Boliye, main kis tarah madad kar sakta hoon?",
         confidence: 95,
       };
     }
@@ -31,7 +31,7 @@ export class SmalltalkSkill implements SpecialistSkill {
     if (/^(hi|hello|hey|yo)\b/i.test(text)) {
       return {
         skillId: this.id,
-        replyText: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?",
+        replyText: "Assalamu Alaikum! Ji boliye, sab khairiyat? Kis cheez mein madad chahiye?",
         confidence: 90,
       };
     }
@@ -70,7 +70,7 @@ export class SmalltalkSkill implements SpecialistSkill {
 
     return {
       skillId: this.id,
-      replyText: "Assalamu Alaikum! Ji batayein, main kya madad kar sakta hoon?",
+      replyText: "Assalamu Alaikum! Ji boliye, sab theek thaak? Bataiye main kaise help kar sakta hoon?",
       confidence: 80,
     };
   }
