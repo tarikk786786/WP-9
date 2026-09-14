@@ -296,7 +296,7 @@ export class AuthoritativeConversationEngine {
         if (this.deps.setConversationStatus) {
           await this.deps.setConversationStatus(turn.chatId, "waiting_human");
         }
-        const escalateText = "Aapki request note kar li hai, jald hi humare executive aapse connect karenge.";
+        const escalateText = "Theek hai, main manually check karke aapse baat karta hoon. Thoda waqt dijiye.";
         return await this.commitAndEnqueue(turn, escalateText, "human_escalate", context);
       }
 

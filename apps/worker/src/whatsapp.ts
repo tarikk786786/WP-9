@@ -121,20 +121,33 @@ export async function getCachedChatEntities(
   if (cached && now - cached.cachedAt < 300_000) {
     return cached;
   }
-  const cleanNumber = chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, "");
-  const customer = await upsertCustomer({
-    number: cleanNumber,
-    name: name || chatId,
-  });
-  const convo = await upsertConversation(customer.id, chatId);
-  const entry = {
-    customerId: customer.id,
-    convoId: convo.id,
-    status: convo.status,
-    cachedAt: now,
-  };
-  chatCustomerCache.set(chatId, entry);
-  return entry;
+  const cleanNumber = chatId.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, "").replace(/@g\.us$/, "");
+  try {
+    const customer = await upsertCustomer({
+      number: cleanNumber,
+      name: name || chatId,
+    });
+    const customerId = customer?.id || `usr_${cleanNumber}`;
+    const convo = await upsertConversation(customerId, chatId);
+    const entry = {
+      customerId,
+      convoId: convo?.id || `con_${cleanNumber}`,
+      status: convo?.status || "bot",
+      cachedAt: now,
+    };
+    chatCustomerCache.set(chatId, entry);
+    return entry;
+  } catch (err) {
+    console.warn(`[whatsapp] getCachedChatEntities non-fatal fallback for ${chatId}:`, err instanceof Error ? err.message : err);
+    const fallbackEntry = {
+      customerId: `usr_${cleanNumber}`,
+      convoId: `con_${cleanNumber}`,
+      status: "bot",
+      cachedAt: now,
+    };
+    chatCustomerCache.set(chatId, fallbackEntry);
+    return fallbackEntry;
+  }
 }
 
 async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
@@ -697,28 +710,31 @@ export async function sendWhatsApp(chatId: string, text: string) {
   if (!isSocketLive() || !manager.sock) {
     throw new Error("WhatsApp is not linked.");
   }
+  const targetJid = resolveSendJid(chatId);
   const responseId = `out_admin_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   await conversationEngine.outbox.enqueue({
     responseId,
-    chatId,
+    chatId: targetJid,
     text: clean,
     metadata: { source: "admin" },
   });
-  const customer = await upsertCustomer({
-    number: chatId.replace(/@s\.whatsapp\.net$/, ""),
-    name: chatId,
-  });
-  const convo = await upsertConversation(customer.id, chatId);
-  await addMessage({
-    conversation_id: convo.id,
-    whatsapp_message_id: responseId,
-    direction: "out",
-    message_type: "text",
-    text,
-    media_reference: null,
-    ai_generated: false,
-    intent: "admin",
-  });
+  void (async () => {
+    try {
+      const { convoId } = await getCachedChatEntities(targetJid);
+      await addMessage({
+        conversation_id: convoId,
+        whatsapp_message_id: responseId,
+        direction: "out",
+        message_type: "text",
+        text: clean,
+        media_reference: null,
+        ai_generated: false,
+        intent: "admin",
+      });
+    } catch {
+      /* non-fatal DB audit insert */
+    }
+  })();
 }
 
 export async function startWhatsApp(pairingPhone?: string, opts?: { force?: boolean }) {

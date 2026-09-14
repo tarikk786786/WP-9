@@ -39,17 +39,40 @@ export function registerLidMapping(lid: string, phone: string) {
   }
 }
 
-export function resolveSendJid(jid: string): string {
-  if (!jid) return "";
-  if (jid.endsWith("@lid")) {
-    const mapped = lidToPhone.get(jid);
-    if (mapped) return mapped;
+export function normalizeJid(raw: string): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  if (trimmed.endsWith("@g.us") || trimmed.endsWith("@broadcast") || trimmed.endsWith("@newsletter") || trimmed.endsWith("@lid")) {
+    return trimmed;
   }
-  return jid;
+  if (trimmed.endsWith("@s.whatsapp.net")) {
+    const digits = trimmed.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
+    return digits ? `${digits}@s.whatsapp.net` : trimmed;
+  }
+  let digits = trimmed.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 10 && /^[6-9]/.test(digits)) {
+    digits = `91${digits}`;
+  } else if (digits.length === 11 && digits.startsWith("0")) {
+    digits = `91${digits.slice(1)}`;
+  }
+  return `${digits}@s.whatsapp.net`;
 }
 
-export function isSendableJid(jid: string) {
-  return Boolean(jid && jid.includes("@") && !jid.startsWith("@"));
+export function resolveSendJid(jid: string): string {
+  if (!jid) return "";
+  const normalized = normalizeJid(jid);
+  if (normalized.endsWith("@lid")) {
+    const mapped = lidToPhone.get(normalized);
+    if (mapped) return mapped;
+  }
+  return normalized;
+}
+
+export function isSendableJid(jid: string): boolean {
+  if (!jid) return false;
+  const normalized = normalizeJid(jid);
+  return Boolean(normalized && normalized.includes("@") && !normalized.startsWith("@"));
 }
 
 export function resolveChat(key: MessageKey): { chatJid: string; phoneHints: string } {

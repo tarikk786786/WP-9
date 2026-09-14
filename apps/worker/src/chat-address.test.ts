@@ -35,5 +35,15 @@ describe("chat addressing", () => {
     });
     assert.equal(chatJid, "123456789-987654@g.us");
   });
+
+  it("normalizes any raw phone number format into a valid sendable WhatsApp JID", () => {
+    assert.equal(resolveSendJid("8984473230"), "918984473230@s.whatsapp.net");
+    assert.equal(resolveSendJid("+91 89844 73230"), "918984473230@s.whatsapp.net");
+    assert.equal(resolveSendJid("08984473230"), "918984473230@s.whatsapp.net");
+    assert.equal(resolveSendJid("918984473230@s.whatsapp.net"), "918984473230@s.whatsapp.net");
+    assert.equal(isSendableJid("8984473230"), true);
+    assert.equal(isSendableJid("+91 89844 73230"), true);
+    assert.equal(isSendableJid("invalid"), false);
+  });
 });
 
