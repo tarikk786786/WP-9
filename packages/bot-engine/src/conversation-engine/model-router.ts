@@ -58,10 +58,22 @@ export class ModelRouter {
       }
     }
 
-    // 1. Check Automation Rules (only for non-DAZY or business queries)
+    // 1. Critical System Commands & High-Priority Overrides (only priority <= 5 or explicit human handoff)
+    const isAiEnabled = Boolean(this.aiGenerator && context.settings.aiEnabled !== false);
     if (!isDazy && rules && rules.length > 0) {
       for (const rule of rules) {
-        if (rule.triggerValue && cleanText.includes(rule.triggerValue.toLowerCase())) {
+        if (!rule.enabled) continue;
+        const trigger = (rule.triggerValue || "").toLowerCase().trim();
+        if (!trigger) continue;
+        const isCriticalOverride = rule.priority <= 5 || /agent|human|escalat|transfer|support_human/i.test(trigger);
+        // When smart AI is enabled, standard conversational keywords (priority > 5) are deferred to the smart AI model
+        if (isAiEnabled && !isCriticalOverride) continue;
+
+        const isMatch = rule.triggerType === "exact"
+          ? cleanText === trigger
+          : new RegExp(`(^|\\b|\\s)${trigger.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}(\\b|\\s|$)`, "i").test(cleanText);
+
+        if (isMatch) {
           const ruleText = (rule.response || "").trim();
           if (ruleText) {
             return {
@@ -169,6 +181,30 @@ export class ModelRouter {
         }
       } catch (localErr) {
         console.warn("[model-router] Local AI fallback failed:", localErr instanceof Error ? localErr.message : localErr);
+      }
+    }
+
+    // 4c. Automation Rules Fallback (if AI timed out, failed, or was not available)
+    if (!isDazy && rules && rules.length > 0) {
+      for (const rule of rules) {
+        if (!rule.enabled) continue;
+        const trigger = (rule.triggerValue || "").toLowerCase().trim();
+        if (!trigger) continue;
+        const isMatch = rule.triggerType === "exact"
+          ? cleanText === trigger
+          : new RegExp(`(^|\\b|\\s)${trigger.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}(\\b|\\s|$)`, "i").test(cleanText);
+
+        if (isMatch) {
+          const ruleText = (rule.response || "").trim();
+          if (ruleText) {
+            return {
+              source: "rule",
+              text: ruleText,
+              confidence: 0.85,
+              executionTimeMs: Date.now() - start,
+            };
+          }
+        }
       }
     }
 

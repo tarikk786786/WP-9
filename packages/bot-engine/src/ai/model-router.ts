@@ -20,13 +20,15 @@ export function routeModel(input: {
   const text = input.text.toLowerCase();
   const wordCount = text.split(/\s+/).length;
 
+  const defaultGroqModel = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
+
   // 1. Check for quick conversational pleasantries (Super Fast / Cheap)
   const isGreeting = /^(hi|hey|hello|namaste|hlo|helo|sup|yo|haan|ok|theek hai|sahi hai|thanks|dhanyawad)$/i.test(text.trim());
   if (isGreeting && wordCount <= 3) {
     span.end({ tier: 'fast', provider: 'groq' });
     return {
       tier: 'fast',
-      model: 'llama-3.3-70b-versatile',
+      model: defaultGroqModel,
       provider: 'groq',
       reason: 'Short conversational greeting/ack routed to fast Groq inference',
     };
@@ -38,7 +40,7 @@ export function routeModel(input: {
     span.end({ tier: 'reasoning', provider: hasOpenAI ? 'openai' : 'groq' });
     return {
       tier: 'reasoning',
-      model: hasOpenAI ? 'gpt-4o' : 'llama-3.3-70b-versatile',
+      model: hasOpenAI ? 'gpt-4o' : defaultGroqModel,
       provider: hasOpenAI ? 'openai' : 'groq',
       reason: 'Complex business query or tool invocation requires strong reasoning model',
     };
@@ -50,7 +52,7 @@ export function routeModel(input: {
     span.end({ tier: 'general', provider: hasGemini ? 'gemini' : 'groq' });
     return {
       tier: 'general',
-      model: hasGemini ? 'gemini-1.5-flash' : 'llama-3.3-70b-versatile',
+      model: hasGemini ? 'gemini-1.5-flash' : defaultGroqModel,
       provider: hasGemini ? 'gemini' : 'groq',
       reason: 'Long multi-turn context handled by large-window model',
     };
@@ -60,7 +62,7 @@ export function routeModel(input: {
   span.end({ tier: 'fast', provider: 'groq' });
   return {
     tier: 'fast',
-    model: 'llama-3.3-70b-versatile',
+    model: defaultGroqModel,
     provider: 'groq',
     reason: 'Standard Hinglish conversation turn with sub-second response requirement',
   };
