@@ -48,6 +48,8 @@ import {
   messageOutbox,
   conversationEngine,
   extractEphemeralExpiration,
+  transcribeAudio,
+  analyzeImage,
 } from "@bot/engine";
 import { shouldReplyTool } from "@bot/engine/tools";
 import { personForChat } from "./people-map.ts";
@@ -772,6 +774,7 @@ async function openSocket(pairingPhone?: string) {
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore,
     useMultiFileAuthState,
+    downloadMediaMessage,
   } = baileys;
 
   await hydrateAuthDir();
@@ -1097,6 +1100,51 @@ async function openSocket(pairingPhone?: string) {
     });
     if (!normalized) return;
     if (normalized.type === "reaction") return;
+
+    // Multimodal audio transcription & image intelligence
+    if (normalized.type === "audio" && downloadMediaMessage) {
+      try {
+        const audioBuffer = await downloadMediaMessage(
+          raw as never,
+          "buffer",
+          {},
+          { logger: pino({ level: "silent" }), reuploadRequest: sock.updateMediaMessage }
+        );
+        if (audioBuffer && audioBuffer.length > 0) {
+          const transcribed = await transcribeAudio(audioBuffer);
+          if (transcribed && transcribed !== "voice message") {
+            normalized.text = transcribed;
+            console.log(`[whatsapp] Transcribed voice message from ${jid}: "${transcribed}"`);
+          }
+        }
+      } catch (audioErr) {
+        console.warn("[whatsapp] Voice transcription skipped:", audioErr instanceof Error ? audioErr.message : audioErr);
+      }
+    } else if (normalized.type === "image" && downloadMediaMessage) {
+      try {
+        const imageBuffer = await downloadMediaMessage(
+          raw as never,
+          "buffer",
+          {},
+          { logger: pino({ level: "silent" }), reuploadRequest: sock.updateMediaMessage }
+        );
+        if (imageBuffer && imageBuffer.length > 0) {
+          const imageAnalysis = await analyzeImage(
+            imageBuffer,
+            "Describe what this image depicts, including any visible text, UI design, error message, or document content so I can understand the context and reply accurately."
+          );
+          if (imageAnalysis && imageAnalysis !== "Image document received and stored") {
+            const hasCaption = normalized.text && normalized.text !== "[image]";
+            normalized.text = hasCaption
+              ? `${normalized.text}\n[Attached Image Context: ${imageAnalysis}]`
+              : `[Attached Image Context: ${imageAnalysis}]`;
+            console.log(`[whatsapp] Analyzed image from ${jid}: "${imageAnalysis.slice(0, 80)}..."`);
+          }
+        }
+      } catch (imgErr) {
+        console.warn("[whatsapp] Image analysis skipped:", imgErr instanceof Error ? imgErr.message : imgErr);
+      }
+    }
     if (!normalized.text.trim()) {
       const person = personForChat(jid, raw.pushName || undefined, phoneHints);
       normalized.text =
