@@ -101,6 +101,7 @@ const inboundStore = new Map<string, Record<string, unknown>>();
 const sentMessageStore = new Map<string, Record<string, unknown>>();
 const chatCustomerCache = new Map<string, { customerId: string; convoId: string; status: string; cachedAt: number }>();
 const chatEphemeralExpiration = new Map<string, number>();
+const lastSessionSyncPerChat = new Map<string, number>();
 
 export function getEphemeralExpirationForChat(jid: string): number {
   if (!jid) return 0;
@@ -177,6 +178,21 @@ async function sendText(jid: string, text: string) {
   const targetJid = resolveSendJid(jid);
   console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid}): "${clean.slice(0, 40)}"`);
 
+  // Ensure E2EE Signal session is fresh and synchronized before sending
+  // This eliminates the "Waiting for this message. This may take a while" blank placeholder on recipient phones.
+  try {
+    const lastSessionSync = lastSessionSyncPerChat.get(targetJid) || 0;
+    if (Date.now() - lastSessionSync > 45_000) {
+      if (typeof (sock as unknown as { assertSessions?: (jids: string[], force: boolean) => Promise<unknown> }).assertSessions === "function") {
+        await (sock as unknown as { assertSessions: (jids: string[], force: boolean) => Promise<unknown> }).assertSessions([targetJid], true);
+        lastSessionSyncPerChat.set(targetJid, Date.now());
+        console.log(`[whatsapp] Synchronized fresh E2EE session for ${targetJid}`);
+      }
+    }
+  } catch (sessErr) {
+    console.warn(`[whatsapp] Session sync notice for ${targetJid}:`, sessErr instanceof Error ? sessErr.message : sessErr);
+  }
+
   const exp = getEphemeralExpirationForChat(targetJid) || getEphemeralExpirationForChat(jid);
 
   const options: Record<string, unknown> = {};
@@ -187,8 +203,9 @@ async function sendText(jid: string, text: string) {
   const sent = await sock.sendMessage(targetJid, { text: clean }, options as never);
   const messageId = sent?.key?.id;
 
-  if (messageId && sent?.message) {
-    sentMessageStore.set(messageId, sent.message as Record<string, unknown>);
+  if (messageId) {
+    const storedMsg = sent?.message || { extendedTextMessage: { text: clean } };
+    sentMessageStore.set(messageId, storedMsg as Record<string, unknown>);
     if (sentMessageStore.size > 2000) {
       const firstKey = sentMessageStore.keys().next().value;
       if (firstKey) sentMessageStore.delete(firstKey);
@@ -832,18 +849,23 @@ async function openSocket(pairingPhone?: string) {
     keepAliveIntervalMs: 15_000,
     connectTimeoutMs: 30_000,
     defaultQueryTimeoutMs: 60_000,
-    fireInitQueries: false,
+    fireInitQueries: true,
     markOnlineOnConnect: true,
     emitOwnEvents: false,
     syncFullHistory: false,
     shouldIgnoreJid: (jid: string) => Boolean(jid?.endsWith("@broadcast") || jid?.endsWith("@newsletter")),
     getMessage: async (key: { id?: string | null; remoteJid?: string | null; fromMe?: boolean | null }) => {
       if (!key?.id) return undefined;
-      const sent = sentMessageStore.get(key.id);
+      const keyId = key.id;
+      const sent =
+        sentMessageStore.get(keyId) ||
+        (keyId.startsWith("out_") ? sentMessageStore.get(keyId.replace(/^out_/, "")) : sentMessageStore.get(`out_${keyId}`));
       if (sent && !isInboundStub(sent)) {
         return sent as never;
       }
-      const stored = inboundStore.get(key.id);
+      const stored =
+        inboundStore.get(keyId) ||
+        (keyId.startsWith("out_") ? inboundStore.get(keyId.replace(/^out_/, "")) : inboundStore.get(`out_${keyId}`));
       if (stored && !isInboundStub(stored)) {
         return stored as never;
       }
@@ -853,7 +875,7 @@ async function openSocket(pairingPhone?: string) {
           const { data } = await db
             .from("messages")
             .select("text")
-            .eq("whatsapp_message_id", key.id)
+            .or(`whatsapp_message_id.eq.${keyId},whatsapp_message_id.eq.out_${keyId}`)
             .maybeSingle();
           if (data?.text && data.text.trim()) {
             const cleanText = data.text.trim();
@@ -867,7 +889,9 @@ async function openSocket(pairingPhone?: string) {
               } as never;
             }
             return {
-              conversation: cleanText,
+              extendedTextMessage: {
+                text: cleanText,
+              },
             } as never;
           }
         }

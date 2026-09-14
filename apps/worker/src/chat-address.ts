@@ -45,11 +45,13 @@ export function normalizeJid(raw: string): string {
   if (trimmed.endsWith("@g.us") || trimmed.endsWith("@broadcast") || trimmed.endsWith("@newsletter") || trimmed.endsWith("@lid")) {
     return trimmed;
   }
-  if (trimmed.endsWith("@s.whatsapp.net")) {
-    const digits = trimmed.replace(/@s\.whatsapp\.net$/, "").replace(/\D/g, "");
-    return digits ? `${digits}@s.whatsapp.net` : trimmed;
+  // Strip device suffix (e.g. :1, :2, .0:1) before extracting phone digits
+  const beforeDomain = trimmed.split("@")[0] || "";
+  const userPart = beforeDomain.split(":")[0]?.split(".")[0] || "";
+  let digits = userPart.replace(/\D/g, "");
+  if (!digits) {
+    digits = trimmed.replace(/\D/g, "");
   }
-  let digits = trimmed.replace(/\D/g, "");
   if (!digits) return "";
   if (digits.length === 10 && /^[6-9]/.test(digits)) {
     digits = `91${digits}`;

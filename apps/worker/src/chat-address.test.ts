@@ -41,6 +41,8 @@ describe("chat addressing", () => {
     assert.equal(resolveSendJid("+91 89844 73230"), "918984473230@s.whatsapp.net");
     assert.equal(resolveSendJid("08984473230"), "918984473230@s.whatsapp.net");
     assert.equal(resolveSendJid("918984473230@s.whatsapp.net"), "918984473230@s.whatsapp.net");
+    assert.equal(resolveSendJid("918984473230:1@s.whatsapp.net"), "918984473230@s.whatsapp.net");
+    assert.equal(resolveSendJid("918984473230.0:2@s.whatsapp.net"), "918984473230@s.whatsapp.net");
     assert.equal(isSendableJid("8984473230"), true);
     assert.equal(isSendableJid("+91 89844 73230"), true);
     assert.equal(isSendableJid("invalid"), false);
