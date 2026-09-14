@@ -133,6 +133,15 @@ export function extractEphemeralExpiration(message?: Record<string, unknown> | n
   if (typeof proto?.ephemeralExpiration === "number") {
     return proto.ephemeralExpiration;
   }
+  const inner = (message.ephemeralMessage as { message?: Record<string, unknown> } | undefined)?.message ?? message;
+  for (const val of Object.values(inner || {})) {
+    if (val && typeof val === "object" && "contextInfo" in val) {
+      const c = (val as { contextInfo?: { expiration?: number } }).contextInfo;
+      if (typeof c?.expiration === "number" && c.expiration > 0) {
+        return c.expiration;
+      }
+    }
+  }
   const ctx =
     (ephemeral?.extendedTextMessage as { contextInfo?: Record<string, unknown> } | undefined)?.contextInfo ??
     (ephemeral?.imageMessage as { contextInfo?: Record<string, unknown> } | undefined)?.contextInfo ??

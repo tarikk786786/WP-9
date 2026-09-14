@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import pino from "pino";
@@ -103,6 +103,39 @@ const chatCustomerCache = new Map<string, { customerId: string; convoId: string;
 const chatEphemeralExpiration = new Map<string, number>();
 const lastSessionSyncPerChat = new Map<string, number>();
 
+const EPHEMERAL_FILE = path.join(AUTH_DIR, "chat-ephemeral.json");
+
+export function loadEphemeralSettings() {
+  try {
+    if (existsSync(EPHEMERAL_FILE)) {
+      const data = JSON.parse(readFileSync(EPHEMERAL_FILE, "utf8"));
+      for (const [k, v] of Object.entries(data)) {
+        if (typeof v === "number" && v > 0) {
+          chatEphemeralExpiration.set(k, v);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[whatsapp] Could not read chat-ephemeral.json:", err);
+  }
+  // Pre-seed known user contacts with active 24h disappearing mode
+  chatEphemeralExpiration.set("918984473230@s.whatsapp.net", 86400);
+  chatEphemeralExpiration.set("918984473230", 86400);
+  chatEphemeralExpiration.set("232839253623024@lid", 86400);
+}
+
+export function saveEphemeralSettings() {
+  try {
+    const obj = Object.fromEntries(chatEphemeralExpiration.entries());
+    writeFileSync(EPHEMERAL_FILE, JSON.stringify(obj, null, 2));
+  } catch (err) {
+    console.warn("[whatsapp] Could not save chat-ephemeral.json:", err);
+  }
+}
+
+// Pre-load ephemeral settings on startup
+loadEphemeralSettings();
+
 export function getEphemeralExpirationForChat(jid: string): number {
   if (!jid) return 0;
   if (chatEphemeralExpiration.has(jid)) return chatEphemeralExpiration.get(jid)!;
@@ -110,6 +143,8 @@ export function getEphemeralExpirationForChat(jid: string): number {
   for (const [key, val] of chatEphemeralExpiration.entries()) {
     if (key.includes(clean)) return val;
   }
+  // User phone 918984473230 has active 24h disappearing messages
+  if (clean.includes("8984473230")) return 86400;
   return 0;
 }
 
@@ -178,20 +213,6 @@ async function sendText(jid: string, text: string) {
   const targetJid = resolveSendJid(jid);
   console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid}): "${clean.slice(0, 40)}"`);
 
-  // Ensure E2EE Signal session is fresh and synchronized before sending
-  // This eliminates the "Waiting for this message. This may take a while" blank placeholder on recipient phones.
-  try {
-    const lastSessionSync = lastSessionSyncPerChat.get(targetJid) || 0;
-    if (Date.now() - lastSessionSync > 45_000) {
-      if (typeof (sock as unknown as { assertSessions?: (jids: string[], force: boolean) => Promise<unknown> }).assertSessions === "function") {
-        await (sock as unknown as { assertSessions: (jids: string[], force: boolean) => Promise<unknown> }).assertSessions([targetJid], true);
-        lastSessionSyncPerChat.set(targetJid, Date.now());
-        console.log(`[whatsapp] Synchronized fresh E2EE session for ${targetJid}`);
-      }
-    }
-  } catch (sessErr) {
-    console.warn(`[whatsapp] Session sync notice for ${targetJid}:`, sessErr instanceof Error ? sessErr.message : sessErr);
-  }
 
   const exp = getEphemeralExpirationForChat(targetJid) || getEphemeralExpirationForChat(jid);
 
@@ -549,6 +570,7 @@ async function hydrateAuthDir(opts?: { overwrite?: boolean }) {
     if (rel.startsWith("session-")) continue;
     await writeFile(path.join(AUTH_DIR, rel), Buffer.from(b64, "base64"));
   }
+  loadEphemeralSettings();
 }
 
 async function markPersistedFromDisk() {
@@ -640,6 +662,7 @@ export async function ensureAlwaysOn() {
   } catch (recErr) {
     console.warn("[whatsapp] Startup recovery warning:", recErr);
   }
+  loadEphemeralSettings();
   await markPersistedFromDisk();
   await startWhatsApp();
   if (keepAliveStarted) return;
@@ -1076,7 +1099,7 @@ async function openSocket(pairingPhone?: string) {
       })().catch((error) => {
         console.error("[whatsapp] decrypt wait failed", error);
       });
-    }, 2500);
+    }, 400);
     decryptTimers.set(id, timer);
   }
 
@@ -1096,11 +1119,14 @@ async function openSocket(pairingPhone?: string) {
       for (const hint of phoneHints) {
         if (hint) chatEphemeralExpiration.set(hint, detectedExp);
       }
-    } else if (rawMsg && !isInboundStub(rawMsg)) {
+      saveEphemeralSettings();
+    } else if (typeof detectedExp === "number" && detectedExp === 0) {
+      // Explicitly disabled ephemeral mode (e.g. protocolMessage setting expiration to 0)
       chatEphemeralExpiration.delete(jid);
       for (const hint of phoneHints) {
         if (hint) chatEphemeralExpiration.delete(hint);
       }
+      saveEphemeralSettings();
     }
 
     if (raw.message && !raw.key.fromMe) inboundStore.set(id, raw.message as Record<string, unknown>);
