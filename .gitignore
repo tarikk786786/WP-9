@@ -21,4 +21,6 @@ apps/worker/cloudflared.bin
 !/tools/bin/.gitkeep
 tools/tunnel-url.txt
 .env*
+!.env.example
+!.env.production.example
 video platform/

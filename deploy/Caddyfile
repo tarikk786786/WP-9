@@ -1,0 +1,39 @@
+{
+  email {$ACME_EMAIL:admin@example.com}
+  admin off
+}
+
+# Web Dashboard & Public API
+{$DOMAIN:localhost} {
+  encode gzip zstd
+
+  # Route worker API requests
+  handle /api/worker/* {
+    uri strip_prefix /api/worker
+    reverse_proxy worker:8788 {
+      header_up Host {upstream_hostport}
+      header_up X-Forwarded-Host {host}
+    }
+  }
+
+  # Route all other web traffic to Next.js UI
+  handle {
+    reverse_proxy web:43217 {
+      header_up Host {upstream_hostport}
+    }
+  }
+}
+
+# Uptime Kuma Status & Monitoring Portal (optional subdomain)
+{$KUMA_DOMAIN:kuma.localhost} {
+  reverse_proxy uptime-kuma:3001
+}
+
+# n8n Automation Engine (optional subdomain)
+{$N8N_DOMAIN:n8n.localhost} {
+  reverse_proxy n8n:5678 {
+    header_up Host {upstream_hostport}
+    header_up Upgrade {>Upgrade}
+    header_up Connection {>Connection}
+  }
+}
