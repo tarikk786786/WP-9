@@ -41,3 +41,5 @@ export * from "./operational-intelligence/index.ts";
 export * from "./security/index.ts";
 export * from "./grounding/index.ts";
 export * from "./context-graph/index.ts";
+export * from "./gateways/index.ts";
+export * from "./agents/index.ts";

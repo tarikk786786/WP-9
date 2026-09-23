@@ -9,6 +9,7 @@ import { productivityTools } from './productivity/index.ts';
 import { businessTools } from './business/index.ts';
 import { agentTools } from './agent/index.ts';
 import { systemTools } from './system/index.ts';
+import { chatwootHandoffTool } from './handoff/chatwoot-tool.ts';
 
 export * from './types.ts';
 export * from './understanding/understand_message.ts';
@@ -21,6 +22,7 @@ export * from './productivity/index.ts';
 export * from './business/index.ts';
 export * from './agent/index.ts';
 export * from './system/index.ts';
+export * from './handoff/chatwoot-tool.ts';
 
 export class ToolRegistry {
   private tools: Map<string, ToolDefinition<any, any>> = new Map();
@@ -36,6 +38,7 @@ export class ToolRegistry {
     for (const t of businessTools) this.register(t);
     for (const t of agentTools) this.register(t);
     for (const t of systemTools) this.register(t);
+    this.register(chatwootHandoffTool);
   }
 
   public register(tool: ToolDefinition<any, any>) {
