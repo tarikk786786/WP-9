@@ -19,6 +19,21 @@ describe("DAZy love voice", () => {
     );
     assert.equal(findSpecialPerson({ fromName: "DAZy" })?.voice, "love");
     assert.equal(findSpecialPerson({ number: "9198" }), null);
+    // CRITICAL: Any other phone number MUST return null even if their name says DAZy
+    assert.equal(findSpecialPerson({ number: "+91 89844 73230", fromName: "Tarik" }), null);
+    assert.equal(findSpecialPerson({ number: "+91 89844 73230", fromName: "DAZy" }), null);
+    assert.equal(findSpecialPerson({ jid: "918984473230@s.whatsapp.net", fromName: "DAZy" }), null);
+    assert.equal(findSpecialPerson({ jid: "919625935293@s.whatsapp.net" }), null);
+    assert.equal(findSpecialPerson({ number: "917404476210", fromName: "dazy" }), null);
+  });
+
+  it("strictly prevents romantic replies to regular clients and contacts", () => {
+    const regularSpoken = writeSpokenReply("hi", analyzeMessage("hi"), [], undefined);
+    assert.doesNotMatch(regularSpoken, /jaan|meri dazy|meri love|dil ke paas|pyar karta/i);
+    assert.match(regularSpoken, /Assalamu Alaikum|Ji boliye/i);
+
+    const regularWhatHappened = writeSpokenReply("kya hua", analyzeMessage("kya hua"), [], undefined);
+    assert.doesNotMatch(regularWhatHappened, /meri jaan|theek hoon meri jaan/i);
   });
 
   it("greets her as love, not as bhai", () => {
