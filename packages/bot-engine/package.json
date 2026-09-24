@@ -15,6 +15,6 @@
   "dependencies": {
     "@bot/shared": "*",
     "@bot/database": "*",
-    "openai": "^6.25.0"
+    "openai": "^7.20.0"
   }
 }
