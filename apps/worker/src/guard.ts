@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadWorkerHeartbeat, saveWorkerHeartbeat } from "@bot/database";
 
 const workerDir = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const repoRoot = path.resolve(workerDir, "..", "..");
@@ -33,6 +34,7 @@ loadDotEnv();
 
 let worker: ChildProcess | null = null;
 let tunnel: ChildProcess | null = null;
+let tunnelStartedAt = 0;
 let lastTunnelUrl = existsSync(tunnelUrlFile) ? readFileSync(tunnelUrlFile, "utf8").trim() : "";
 let stopping = false;
 let tunnelFails = 0;
@@ -42,6 +44,7 @@ function cloudflaredBin() {
   const fromEnv = process.env.CLOUDFLARED_BIN?.trim();
   const candidates = [
     fromEnv,
+    path.join(repoRoot, "tools", "bin", process.platform === "win32" ? "cloudflared.exe" : "cloudflared"),
     path.join(repoRoot, "tools", "bin", "cloudflared.exe"),
     path.join(repoRoot, "tools", "bin", "cloudflared"),
     path.join(workerDir, "cloudflared.bin"),
@@ -116,6 +119,25 @@ function pidAlive(pid?: number) {
   }
 }
 
+async function syncTunnelToSupabase(url: string) {
+  try {
+    const existing = await loadWorkerHeartbeat();
+    await saveWorkerHeartbeat({
+      phase: existing?.phase || "connected",
+      connected: existing?.connected ?? true,
+      phone: existing?.phone ?? null,
+      pairingCode: existing?.pairingCode ?? null,
+      qrDataUrl: existing?.qrDataUrl ?? null,
+      tunnelUrl: url,
+      error: existing?.error ?? null,
+      updatedAt: new Date().toISOString(),
+    });
+    console.log("[live] synced tunnel URL to Supabase heartbeat:", url);
+  } catch (err) {
+    console.error("[live] failed to sync tunnel URL to Supabase heartbeat:", err);
+  }
+}
+
 function rememberTunnelUrl(text: string) {
   const match = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/i);
   if (!match) return;
@@ -129,6 +151,7 @@ function rememberTunnelUrl(text: string) {
     /* ignore */
   }
   console.log("[live] public worker URL", url);
+  void syncTunnelToSupabase(url);
   void syncPublicWorkerUrl(url);
 }
 
@@ -167,6 +190,8 @@ function killTunnel() {
 function startTunnel() {
   if (stopping || pidAlive(tunnel?.pid)) return;
   tunnel = null;
+  tunnelStartedAt = Date.now();
+  tunnelFails = 0;
   const token = process.env.CLOUDFLARE_TUNNEL_TOKEN?.trim();
   const bin = cloudflaredBin();
   const args = token
@@ -214,14 +239,20 @@ async function tick() {
   }
   const localOk = await workerHealthy();
   if (!localOk) return;
+
+  // Grace period after starting tunnel: give Cloudflare DNS 90 seconds to propagate worldwide
+  if (Date.now() - tunnelStartedAt < 90_000) {
+    return;
+  }
+
   const publicOk = await publicTunnelHealthy();
   if (publicOk) {
     tunnelFails = 0;
     return;
   }
   tunnelFails += 1;
-  if (tunnelFails < 2) return;
-  console.error("[live] public tunnel dead while worker is up — restarting cloudflared");
+  if (tunnelFails < 8) return;
+  console.error(`[live] public tunnel dead (${tunnelFails} consecutive failures) while worker is up — restarting cloudflared`);
   tunnelFails = 0;
   killTunnel();
   startTunnel();

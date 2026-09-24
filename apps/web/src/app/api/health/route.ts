@@ -17,7 +17,7 @@ export async function GET() {
 
   try {
     const hb = await loadWorkerHeartbeat();
-    if (hb && Date.now() - new Date(hb.updatedAt).getTime() < 60_000) {
+    if (hb && Date.now() - new Date(hb.updatedAt).getTime() < 300_000) {
       return NextResponse.json(
         {
           web: "ok",

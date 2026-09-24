@@ -586,7 +586,28 @@ export type WorkerHeartbeat = {
   updatedAt: string;
 };
 
+let lastKnownTunnelUrl: string | null = null;
+
 export async function saveWorkerHeartbeat(heartbeat: WorkerHeartbeat) {
+  if (heartbeat.tunnelUrl && typeof heartbeat.tunnelUrl === "string" && heartbeat.tunnelUrl.startsWith("http")) {
+    lastKnownTunnelUrl = heartbeat.tunnelUrl.trim();
+  } else if (lastKnownTunnelUrl) {
+    heartbeat.tunnelUrl = lastKnownTunnelUrl;
+  } else if (!heartbeat.tunnelUrl) {
+    try {
+      const existing = memory.authFiles["__worker_heartbeat.json"];
+      if (existing) {
+        const parsed = JSON.parse(existing) as WorkerHeartbeat;
+        if (parsed?.tunnelUrl && parsed.tunnelUrl.startsWith("http")) {
+          heartbeat.tunnelUrl = parsed.tunnelUrl;
+          lastKnownTunnelUrl = parsed.tunnelUrl;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   const jsonStr = JSON.stringify(heartbeat);
   memory.authFiles["__worker_heartbeat.json"] = jsonStr;
   const db = supabase();
@@ -611,7 +632,11 @@ export async function loadWorkerHeartbeat(): Promise<WorkerHeartbeat | null> {
         .eq("filename", "__worker_heartbeat.json")
         .maybeSingle();
       if (!error && data?.data) {
-        return JSON.parse(data.data) as WorkerHeartbeat;
+        const parsed = JSON.parse(data.data) as WorkerHeartbeat;
+        if (parsed?.tunnelUrl && parsed.tunnelUrl.startsWith("http")) {
+          lastKnownTunnelUrl = parsed.tunnelUrl;
+        }
+        return parsed;
       }
     } catch {
       /* fallback */
@@ -619,7 +644,11 @@ export async function loadWorkerHeartbeat(): Promise<WorkerHeartbeat | null> {
   }
   if (memory.authFiles["__worker_heartbeat.json"]) {
     try {
-      return JSON.parse(memory.authFiles["__worker_heartbeat.json"]) as WorkerHeartbeat;
+      const parsed = JSON.parse(memory.authFiles["__worker_heartbeat.json"]) as WorkerHeartbeat;
+      if (parsed?.tunnelUrl && parsed.tunnelUrl.startsWith("http")) {
+        lastKnownTunnelUrl = parsed.tunnelUrl;
+      }
+      return parsed;
     } catch {
       return null;
     }

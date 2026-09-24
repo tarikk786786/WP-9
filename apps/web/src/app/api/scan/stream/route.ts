@@ -35,7 +35,7 @@ async function proxyStream(request: Request) {
     if (!response.ok || !response.body) {
       try {
         const hb = await loadWorkerHeartbeat();
-        if (hb && Date.now() - new Date(hb.updatedAt).getTime() < 60_000) {
+        if (hb && Date.now() - new Date(hb.updatedAt).getTime() < 300_000) {
           return new Response(
             `data: ${JSON.stringify({
               snapshot: {
@@ -92,7 +92,7 @@ async function proxyStream(request: Request) {
   } catch {
     try {
       const hb = await loadWorkerHeartbeat();
-      if (hb && Date.now() - new Date(hb.updatedAt).getTime() < 60_000) {
+      if (hb && Date.now() - new Date(hb.updatedAt).getTime() < 300_000) {
         return new Response(
           `data: ${JSON.stringify({
             snapshot: {

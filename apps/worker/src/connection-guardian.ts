@@ -1,5 +1,28 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { connectionStateMachine } from '@bot/engine';
 import { acquireWorkerLease, saveWorkerHeartbeat } from '@bot/database';
+
+function getActiveTunnelUrl(): string | null {
+  const env = process.env.PUBLIC_WORKER_URL?.trim();
+  if (env && env.startsWith("http")) return env;
+  const candidates = [
+    path.resolve(process.cwd(), "tools", "tunnel-url.txt"),
+    path.resolve(process.cwd(), "..", "..", "tools", "tunnel-url.txt"),
+    path.resolve(process.cwd(), "..", "tools", "tunnel-url.txt"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      try {
+        const raw = readFileSync(candidate, "utf8").trim();
+        if (raw.startsWith("http")) return raw;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return null;
+}
 
 export interface GuardianConfig {
   heartbeatIntervalMs?: number;
@@ -83,6 +106,7 @@ export class ConnectionGuardian {
         phone: snap?.phone ?? null,
         pairingCode: snap?.pairingCode ?? null,
         qrDataUrl: snap?.qrDataUrl ?? null,
+        tunnelUrl: getActiveTunnelUrl() ?? undefined,
         error: snap?.error ?? null,
         updatedAt: new Date().toISOString(),
       });

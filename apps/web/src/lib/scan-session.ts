@@ -105,7 +105,7 @@ export async function hydrateScanSnapshot(): Promise<ScanSnapshot> {
       const hb = await loadWorkerHeartbeat();
       if (hb) {
         const ageMs = Date.now() - new Date(hb.updatedAt).getTime();
-        if (ageMs < 60_000) {
+        if (ageMs < 300_000) {
           return {
             phase: hb.connected ? "ready" : ((hb.phase as ScanSnapshot["phase"]) || "idle"),
             qrDataUrl: hb.qrDataUrl,
