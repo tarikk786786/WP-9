@@ -262,6 +262,39 @@ const server = createServer(async (req, res) => {
       });
       return;
     }
+
+    // 5. Public WhatsApp Connection Status Probe
+    if (url.pathname === "/whatsapp/status") {
+      const snap = getSnapshot();
+      json(res, 200, {
+        ok: true,
+        status: snap.connected ? "CONNECTED" : snap.phase,
+        connected: snap.connected,
+        phone: snap.phone ?? null,
+        phase: snap.phase,
+        canonicalState: snap.canonicalState,
+        lastConnectedAt: snap.lastConnectedAt,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // 6. Public Worker Heartbeat Probe
+    if (url.pathname === "/worker/heartbeat") {
+      const snap = getSnapshot();
+      const outboxSnap = messageOutbox.getSnapshot();
+      json(res, 200, {
+        ok: true,
+        worker_id: snap.socketOwner || "worker_default",
+        timestamp: new Date().toISOString(),
+        version: CURRENT_RELEASE_MANIFEST.workerVersion,
+        whatsapp_status: snap.connected ? "connected" : snap.phase,
+        queue_depth: outboxSnap.pending + outboxSnap.sending,
+        uptime_seconds: Math.floor(uptimeMs() / 1000),
+      });
+      return;
+    }
+
     if (!authorized(req)) {
       unauthorized(res);
       return;
