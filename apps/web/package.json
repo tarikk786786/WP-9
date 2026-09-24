@@ -17,7 +17,7 @@
     "@bot/engine": "*",
     "@bot/media-intelligence": "*",
     "@bot/shared": "*",
-    "@huggingface/transformers": "^3.8.1",
+    "@huggingface/transformers": "^4.3.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
     "class-variance-authority": "^0.7.1",
