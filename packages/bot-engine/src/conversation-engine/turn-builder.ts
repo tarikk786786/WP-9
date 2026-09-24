@@ -127,6 +127,7 @@ export class ConversationTurnBuilder {
     const now = Date.now();
     const existing = this.buffers.get(key);
     const isDazy = isDazyContact(fragment.chatId, fragment.sender, fragment.fromName);
+    const isUrgent = /(?:urgent|emergency|accident|help\s+me|madad|jaldi|urgent\s+hai)\b/i.test(fragment.text);
 
     if (existing) {
       clearTimeout(existing.timer);
@@ -143,6 +144,9 @@ export class ConversationTurnBuilder {
       if (isDazy) {
         targetDelay = Math.min(targetDelay, 300);
       }
+      if (isUrgent) {
+        targetDelay = 50;
+      }
       targetDelay = Math.min(targetDelay, remainingBeforeMax);
 
       existing.timer = setTimeout(() => {
@@ -153,6 +157,9 @@ export class ConversationTurnBuilder {
       let delay = complete ? this.defaultDebounceMs : this.incompleteDebounceMs;
       if (isDazy) {
         delay = Math.min(delay, 300);
+      }
+      if (isUrgent) {
+        delay = 50;
       }
 
       const timer = setTimeout(() => {

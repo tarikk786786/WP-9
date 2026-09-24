@@ -50,6 +50,8 @@ import {
   extractEphemeralExpiration,
   transcribeAudio,
   analyzeImage,
+  SupervisorAgent,
+  ToolRegistry,
 } from "@bot/engine";
 import { shouldReplyTool } from "@bot/engine/tools";
 import { personForChat } from "./people-map.ts";
@@ -201,7 +203,7 @@ async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
   });
 }
 
-async function sendText(jid: string, text: string) {
+async function sendText(jid: string, text: string, metadata?: Record<string, unknown>) {
   const clean = (text || "").trim();
   if (!clean) {
     console.warn(`[whatsapp] Discarding attempt to send empty/blank text to ${jid}`);
@@ -248,7 +250,7 @@ async function sendText(jid: string, text: string) {
         text: clean,
         media_reference: null,
         ai_generated: true,
-        intent: null,
+        intent: (metadata?.intent as string) || (metadata?.modelId as string) || null,
       });
     } catch {
       /* non-fatal background DB audit insert */
@@ -256,14 +258,17 @@ async function sendText(jid: string, text: string) {
   })();
 }
 
+const supervisor = new SupervisorAgent();
+const toolRegistry = new ToolRegistry();
+
 // Authoritative Single-Turn Conversation Engine Setup
-conversationEngine.setSender(async (chatId, text) => {
+conversationEngine.setSender(async (chatId, text, metadata) => {
   const clean = (text || "").trim();
   if (!clean) {
     console.warn(`[whatsapp] conversationEngine tried sending blank text to ${chatId}. Suppressed.`);
     return;
   }
-  await sendText(chatId, clean);
+  await sendText(chatId, clean, metadata);
 });
 
 // Legacy orchestrate outbox setup
@@ -277,9 +282,63 @@ messageOutbox.setSender(async (chatId, text) => {
 });
 
 conversationEngine.setAiGenerator(async (context, tier) => {
-  const { turn, history, knowledge, faqs, rules, understanding } = context;
+  const { turn, history, knowledge, faqs, rules, understanding, isDazy } = context;
   const settings = await getSettings();
   const person = personForChat(turn.chatId, turn.fromName, turn.sender);
+
+  let specialistRole = "general";
+  let specialistText: string | null = null;
+
+  if (!isDazy) {
+    try {
+      const decision = await supervisor.orchestrate({
+        message: {
+          id: turn.firstMessageId,
+          whatsappMessageId: turn.firstMessageId,
+          sender: turn.sender,
+          chatId: turn.chatId,
+          fromName: person?.name ?? turn.fromName ?? turn.sender,
+          type: "text",
+          text: turn.combinedText,
+          timestamp: new Date(turn.createdAt).toISOString(),
+          isGroup: turn.isGroup,
+          metadata: {},
+        },
+        history: history.map((h) => ({ role: h.role, text: h.text })),
+        intent: understanding.intents.join(","),
+        sentiment: understanding.emotion === "frustrated" || understanding.emotion === "anxious" || understanding.emotion === "worried" ? "frustrated" : "neutral",
+        urgency: turn.urgency === "high" ? "urgent" : "medium",
+        tools: toolRegistry,
+        knowledgeHits: knowledge,
+      });
+
+      if (decision.targetAgent) {
+        specialistRole = decision.targetAgent;
+      }
+
+      if (decision.action === "handoff") {
+        return {
+          text: decision.text || "Theek hai, main manually check karke aapse baat karta hoon. Thoda waqt dijiye.",
+          modelId: "supervisor_handoff",
+        };
+      }
+
+      if (decision.action === "reply" && decision.text && decision.confidence >= 0.95) {
+        specialistText = decision.text;
+      }
+    } catch (supervisorErr) {
+      console.warn("[whatsapp] Supervisor non-fatal error:", supervisorErr);
+    }
+  } else {
+    specialistRole = "dazy";
+  }
+
+  if (specialistText) {
+    return {
+      text: specialistText,
+      modelId: `agent_${specialistRole}`,
+    };
+  }
 
   const faqFacts = matchAllFaqs(turn.combinedText, faqs).map((f) => `${f.question}: ${f.answer}`);
   const ruleFacts = matchAllRules(turn.combinedText, rules)
@@ -299,7 +358,7 @@ conversationEngine.setAiGenerator(async (context, tier) => {
         timestamp: new Date(turn.createdAt).toISOString(),
         isGroup: turn.isGroup,
         type: "text",
-        metadata: {},
+        metadata: { specialistRole },
       },
       {
         settings,
@@ -307,7 +366,7 @@ conversationEngine.setAiGenerator(async (context, tier) => {
         recent: history,
         faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
         knowledge: [...knowledge, ...ruleFacts],
-        intent: understanding.intents.join(","),
+        intent: specialistRole !== "general" ? specialistRole : understanding.intents.join(","),
         analysis: analyzeMessage(turn.combinedText, {
           isFirstMessage: history.length === 0,
           inboundCount: history.filter((m) => m.role === "user").length,
@@ -320,7 +379,14 @@ conversationEngine.setAiGenerator(async (context, tier) => {
     timeoutMs
   );
 
-  return ai?.text ? { text: ai.text, modelId: ai.engine || (tier === "fast" ? "groq" : "reasoning") } : null;
+  return ai?.text
+    ? {
+        text: ai.text,
+        modelId: isDazy
+          ? (ai.engine || "dazy-core")
+          : `${ai.engine || (tier === "fast" ? "groq" : "reasoning")} [${specialistRole}]`,
+      }
+    : null;
 });
 
 conversationEngine.updateDependencies({
