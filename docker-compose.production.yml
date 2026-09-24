@@ -168,7 +168,7 @@ services:
   # 6. Vector Database for RAG & Knowledge Embeddings (Qdrant)
   # ----------------------------------------------------------------------------
   qdrant:
-    image: qdrant/qdrant:v1.9.0
+    image: qdrant/qdrant:v1.19.1
     container_name: wp9_qdrant
     restart: unless-stopped
     ports:
