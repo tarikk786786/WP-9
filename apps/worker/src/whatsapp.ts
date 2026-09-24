@@ -560,7 +560,10 @@ export function getSnapshot(): WorkerSnapshot {
 export async function syncWorkerHeartbeat() {
   try {
     const snap = getSnapshot();
-    let tunnelUrl = process.env.PUBLIC_WORKER_URL?.trim() || null;
+    let tunnelUrl =
+      process.env.PUBLIC_WORKER_URL?.trim() ||
+      process.env.RENDER_EXTERNAL_URL?.trim() ||
+      null;
     if (!tunnelUrl) {
       const candidates = [
         path.resolve(process.cwd(), "tools", "tunnel-url.txt"),

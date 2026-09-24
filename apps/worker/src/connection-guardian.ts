@@ -4,7 +4,7 @@ import { connectionStateMachine } from '@bot/engine';
 import { acquireWorkerLease, saveWorkerHeartbeat } from '@bot/database';
 
 function getActiveTunnelUrl(): string | null {
-  const env = process.env.PUBLIC_WORKER_URL?.trim();
+  const env = process.env.PUBLIC_WORKER_URL?.trim() || process.env.RENDER_EXTERNAL_URL?.trim();
   if (env && env.startsWith("http")) return env;
   const candidates = [
     path.resolve(process.cwd(), "tools", "tunnel-url.txt"),
