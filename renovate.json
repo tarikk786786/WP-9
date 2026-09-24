@@ -1,0 +1,46 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "WP-9 Production Automated Update & Dependency Management Policy",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":pinDigestsDisabled"
+  ],
+  "timezone": "Asia/Kolkata",
+  "schedule": ["before 6:00am on monday"],
+  "packageRules": [
+    {
+      "description": "Auto-merge safe patch and minor updates if CI passes",
+      "matchUpdateTypes": ["patch", "minor"],
+      "matchPackageNames": ["!@whiskeysockets/baileys", "!evolutionapi/*"],
+      "automerge": true,
+      "automergeType": "branch"
+    },
+    {
+      "description": "WhatsApp engines require manual staging review and canary tests",
+      "matchPackageNames": ["@whiskeysockets/baileys", "evolutionapi/*", "evolution-api"],
+      "automerge": false,
+      "labels": ["whatsapp-core", "needs-manual-qa"]
+    },
+    {
+      "description": "Security vulnerabilities are highest priority",
+      "matchUpdateTypes": ["security"],
+      "schedule": ["at any time"],
+      "automerge": false,
+      "labels": ["security", "high-priority"]
+    },
+    {
+      "description": "Pin Docker images to specific digests for reproducibility",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "pinDigests": true
+    }
+  ],
+  "docker-compose": {
+    "fileMatch": ["(^|/)docker-compose[^/]*\\.ya?ml$"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6:00am on the first day of the month"]
+  }
+}

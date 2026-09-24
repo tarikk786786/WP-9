@@ -281,6 +281,27 @@ services:
         max-size: "20m"
         max-file: "5"
 
+  # ----------------------------------------------------------------------------
+  # 9. Container Image Update Notifier (Diun)
+  # ----------------------------------------------------------------------------
+  diun:
+    image: crazymax/diun:latest
+    container_name: wp9_diun
+    restart: unless-stopped
+    profiles:
+      - updates
+    volumes:
+      - "./data/diun:/data"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    environment:
+      - "TZ=Asia/Kolkata"
+      - "LOG_LEVEL=info"
+      - "DIUN_WATCH_WORKERS=5"
+      - "DIUN_WATCH_SCHEDULE=0 0 * * *"
+      - "DIUN_PROVIDERS_DOCKER=true"
+    networks:
+      - wp9_network
+
 # ------------------------------------------------------------------------------
 # Persistent Docker Volumes
 # ------------------------------------------------------------------------------

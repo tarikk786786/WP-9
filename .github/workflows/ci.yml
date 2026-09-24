@@ -1,25 +1,99 @@
-name: CI
+name: Production CI/CD & AI Regression Pipeline
 
 on:
   push:
     branches: [main, develop]
   pull_request:
+    branches: [main]
 
 jobs:
-  ci:
+  test-and-verify:
+    name: Monorepo Quality & AI Regression Lab
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-      - run: npm install
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Lint Workspace
+        run: npm run lint
+
+      - name: Workspace Typecheck
+        run: npm run typecheck
+
+      - name: Run Master Unit & Multi-Agent Test Suite (210+ Tests)
+        run: npm test
+
+      - name: WhatsApp AI Prompt Safety & Security Suite
+        run: npm test -w @bot/engine -- src/evaluation/agentic-safety.test.ts src/security/security.test.ts src/evaluation/duplicates.test.ts
+
+      - name: Build Web & Worker Artifacts
+        run: npm run build
         env:
           WORKER_API_URL: http://127.0.0.1:8788
-          WORKER_API_SECRET: ci-secret
-          ADMIN_SECRET: ci-admin
+          WORKER_API_SECRET: ci-secret-test
+          ADMIN_SECRET: ci-admin-secret
+
+  security-scan:
+    name: Security Vulnerability Scan (Trivy & Syft)
+    runs-on: ubuntu-latest
+    needs: test-and-verify
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy Vulnerability Scanner (Filesystem & Dependencies)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          ignore-unfixed: true
+          format: "table"
+          severity: "CRITICAL,HIGH"
+
+      - name: Generate Software Bill of Materials (SBOM via Syft)
+        uses: anchore/sbom-action@v0
+        with:
+          format: "spdx-json"
+          output-file: "sbom.spdx.json"
+
+  docker-smoke-test:
+    name: Container Build & Healthcheck Smoke Test
+    runs-on: ubuntu-latest
+    needs: test-and-verify
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Worker Docker Image
+        run: |
+          docker build -t wp9-worker:ci .
+
+      - name: Run Container & Verify Health Probes
+        run: |
+          docker run -d --name wp9_test -p 8788:8788 \
+            -e NODE_ENV=production \
+            -e WORKER_PORT=8788 \
+            -e WORKER_API_SECRET=ci-secret \
+            wp9-worker:ci
+
+          # Wait for container startup
+          sleep 5
+
+          # Verify liveness endpoint
+          curl -f http://127.0.0.1:8788/health/live || exit 1
+
+          # Verify whatsapp probe responds gracefully
+          curl -f http://127.0.0.1:8788/whatsapp/status || exit 1
+
+          docker stop wp9_test
