@@ -76,7 +76,7 @@ services:
   # 3. Next.js CRM & Management Web Dashboard
   # ----------------------------------------------------------------------------
   web:
-    image: node:22-bookworm-slim
+    image: node:25-bookworm-slim
     container_name: wp9_web
     restart: unless-stopped
     working_dir: /app
