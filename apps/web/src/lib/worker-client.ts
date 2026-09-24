@@ -13,27 +13,35 @@ let cachedWorkerUrl = DEFAULT_WORKER;
 let lastWorkerUrlCheck = 0;
 
 export async function resolveWorkerBase(): Promise<string> {
+  const now = Date.now();
+  if (now - lastWorkerUrlCheck < 6000 && cachedWorkerUrl && cachedWorkerUrl !== "http://127.0.0.1:8788") {
+    return cachedWorkerUrl.replace(/\/$/, "");
+  }
+  lastWorkerUrlCheck = now;
+
+  // 1. Check for live dynamic tunnel heartbeat from Supabase
+  try {
+    const hb = await loadWorkerHeartbeat();
+    if (hb?.tunnelUrl && typeof hb.tunnelUrl === "string" && hb.tunnelUrl.startsWith("http")) {
+      const ageMs = hb.updatedAt ? now - new Date(hb.updatedAt).getTime() : Infinity;
+      // If heartbeat was updated within the last 5 minutes, prefer the active tunnel
+      if (ageMs < 300_000) {
+        cachedWorkerUrl = hb.tunnelUrl.trim();
+        return cachedWorkerUrl.replace(/\/$/, "");
+      }
+    }
+  } catch {
+    /* fallback to env */
+  }
+
+  // 2. Fall back to static environment variable
   const envUrl = process.env.WORKER_API_URL;
   if (envUrl && envUrl.trim().startsWith("http")) {
     cachedWorkerUrl = envUrl.trim();
     return cachedWorkerUrl.replace(/\/$/, "");
   }
 
-  const now = Date.now();
-  if (now - lastWorkerUrlCheck < 6000 && cachedWorkerUrl && cachedWorkerUrl !== "http://127.0.0.1:8788") {
-    return cachedWorkerUrl.replace(/\/$/, "");
-  }
-  lastWorkerUrlCheck = now;
-  try {
-    const hb = await loadWorkerHeartbeat();
-    if (hb?.tunnelUrl && typeof hb.tunnelUrl === "string" && hb.tunnelUrl.startsWith("http")) {
-      cachedWorkerUrl = hb.tunnelUrl.trim();
-      return cachedWorkerUrl.replace(/\/$/, "");
-    }
-  } catch {
-    /* fallback to env */
-  }
-  cachedWorkerUrl = process.env.WORKER_API_URL || DEFAULT_WORKER;
+  cachedWorkerUrl = DEFAULT_WORKER;
   return cachedWorkerUrl.replace(/\/$/, "");
 }
 
