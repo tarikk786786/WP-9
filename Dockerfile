@@ -1,5 +1,5 @@
 # Persistent Baileys worker. Production Web Service.
-FROM node:22-bookworm-slim
+FROM node:25-bookworm-slim
 ARG TARGETARCH
 WORKDIR /app
 
