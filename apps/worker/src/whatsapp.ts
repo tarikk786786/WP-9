@@ -112,7 +112,7 @@ export function loadEphemeralSettings() {
     if (existsSync(EPHEMERAL_FILE)) {
       const data = JSON.parse(readFileSync(EPHEMERAL_FILE, "utf8"));
       for (const [k, v] of Object.entries(data)) {
-        if (typeof v === "number" && v > 0) {
+        if (typeof v === "number" && v > 0 && k.includes("@") && k.length > 5) {
           chatEphemeralExpiration.set(k, v);
         }
       }
@@ -120,15 +120,14 @@ export function loadEphemeralSettings() {
   } catch (err) {
     console.warn("[whatsapp] Could not read chat-ephemeral.json:", err);
   }
-  // Pre-seed known user contacts with active 24h disappearing mode
-  chatEphemeralExpiration.set("918984473230@s.whatsapp.net", 86400);
-  chatEphemeralExpiration.set("918984473230", 86400);
-  chatEphemeralExpiration.set("232839253623024@lid", 86400);
 }
 
 export function saveEphemeralSettings() {
   try {
-    const obj = Object.fromEntries(chatEphemeralExpiration.entries());
+    const validEntries = Array.from(chatEphemeralExpiration.entries()).filter(
+      ([k, v]) => typeof v === "number" && v > 0 && k.includes("@") && k.length > 5
+    );
+    const obj = Object.fromEntries(validEntries);
     writeFileSync(EPHEMERAL_FILE, JSON.stringify(obj, null, 2));
   } catch (err) {
     console.warn("[whatsapp] Could not save chat-ephemeral.json:", err);
@@ -143,10 +142,11 @@ export function getEphemeralExpirationForChat(jid: string): number {
   if (chatEphemeralExpiration.has(jid)) return chatEphemeralExpiration.get(jid)!;
   const clean = jid.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, "");
   for (const [key, val] of chatEphemeralExpiration.entries()) {
-    if (key.includes(clean)) return val;
+    if (key.includes("@")) {
+      const cleanKey = key.replace(/@s\.whatsapp\.net$/, "").replace(/@lid$/, "");
+      if (cleanKey === clean) return val;
+    }
   }
-  // User phone 918984473230 has active 24h disappearing messages
-  if (clean.includes("8984473230")) return 86400;
   return 0;
 }
 
@@ -213,8 +213,19 @@ async function sendText(jid: string, text: string, metadata?: Record<string, unk
   if (!sock) throw new Error("WhatsApp socket down");
   if (!isSendableJid(jid)) throw new Error("WhatsApp chat id missing");
   const targetJid = resolveSendJid(jid);
-  console.log(`[whatsapp] Sending text to ${targetJid} (requested: ${jid}): "${clean.slice(0, 40)}"`);
-
+  // Pre-sync Signal E2EE sessions to prevent decryption errors / blank bubbles on recipient devices
+  try {
+    const lastSessionSync = lastSessionSyncPerChat.get(targetJid) || 0;
+    if (Date.now() - lastSessionSync > 30_000) {
+      const sockWithAssert = sock as unknown as { assertSessions?: (jids: string[], force: boolean) => Promise<unknown> };
+      if (typeof sockWithAssert.assertSessions === "function") {
+        await sockWithAssert.assertSessions([targetJid], false);
+        lastSessionSyncPerChat.set(targetJid, Date.now());
+      }
+    }
+  } catch (sessErr) {
+    /* non-fatal session pre-sync */
+  }
 
   const exp = getEphemeralExpirationForChat(targetJid) || getEphemeralExpirationForChat(jid);
 
@@ -227,7 +238,14 @@ async function sendText(jid: string, text: string, metadata?: Record<string, unk
   const messageId = sent?.key?.id;
 
   if (messageId) {
-    const storedMsg = sent?.message || { extendedTextMessage: { text: clean } };
+    const storedMsg = {
+      conversation: clean,
+      extendedTextMessage: {
+        text: clean,
+        ...(exp > 0 ? { contextInfo: { expiration: exp } } : {}),
+      },
+      ...(sent?.message || {}),
+    };
     sentMessageStore.set(messageId, storedMsg as Record<string, unknown>);
     if (sentMessageStore.size > 2000) {
       const firstKey = sentMessageStore.keys().next().value;
@@ -971,6 +989,7 @@ async function openSocket(pairingPhone?: string) {
             const exp = key.remoteJid ? getEphemeralExpirationForChat(key.remoteJid) : 0;
             if (exp > 0) {
               return {
+                conversation: cleanText,
                 extendedTextMessage: {
                   text: cleanText,
                   contextInfo: { expiration: exp },
@@ -978,6 +997,7 @@ async function openSocket(pairingPhone?: string) {
               } as never;
             }
             return {
+              conversation: cleanText,
               extendedTextMessage: {
                 text: cleanText,
               },
@@ -1182,15 +1202,21 @@ async function openSocket(pairingPhone?: string) {
     const detectedExp = extractEphemeralExpiration(rawMsg);
     if (typeof detectedExp === "number" && detectedExp > 0) {
       chatEphemeralExpiration.set(jid, detectedExp);
-      for (const hint of phoneHints) {
-        if (hint) chatEphemeralExpiration.set(hint, detectedExp);
+      if (phoneHints && typeof phoneHints === "string") {
+        for (const hint of phoneHints.split(/\s+/)) {
+          if (hint && hint.includes("@") && hint.length > 5) {
+            chatEphemeralExpiration.set(hint, detectedExp);
+          }
+        }
       }
       saveEphemeralSettings();
     } else if (typeof detectedExp === "number" && detectedExp === 0) {
       // Explicitly disabled ephemeral mode (e.g. protocolMessage setting expiration to 0)
       chatEphemeralExpiration.delete(jid);
-      for (const hint of phoneHints) {
-        if (hint) chatEphemeralExpiration.delete(hint);
+      if (phoneHints && typeof phoneHints === "string") {
+        for (const hint of phoneHints.split(/\s+/)) {
+          if (hint) chatEphemeralExpiration.delete(hint);
+        }
       }
       saveEphemeralSettings();
     }
