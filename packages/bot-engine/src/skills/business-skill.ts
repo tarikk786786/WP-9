@@ -29,7 +29,7 @@ export class BusinessSkill implements SpecialistSkill {
     if (/\b(charge|rate|cost|price|kitna lagega|kitne ka)\b/i.test(text)) {
       return {
         skillId: this.id,
-        replyText: "InshaAllah pricing project ke scope aur technical requirements pe depend karti hai. Ek baar details share kar dijiye, main samajh ke sahi quote share kar doonga.",
+        replyText: "Pricing project ke scope aur technical requirements pe depend karti hai. Ek baar details share kar dijiye, main samajh ke sahi quote share kar doonga.",
         confidence: 90,
       };
     }

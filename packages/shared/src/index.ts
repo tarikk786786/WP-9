@@ -114,7 +114,7 @@ export const defaultBotSettings = (): BotSettings => ({
   faqEnabled: true,
   welcomeEnabled: true,
   defaultLanguage: "english",
-  welcomeMessage: "Assalamu Alaikum! Ji boliye, main kaise madad kar sakta hoon?",
+  welcomeMessage: "Hello! Ji boliye, main kaise madad kar sakta hoon?",
   fallbackMessage: "Received your message. How can I help you?",
   humanHandoffMessage: "Sure, transferring you to a human agent. Please hold on.",
   timezone: "Asia/Kolkata",
@@ -155,10 +155,11 @@ export const CURRENT_RELEASE_MANIFEST: ReleaseManifest = {
 };
 
 export const defaultAutomationRules = (): AutomationRule[] => [
-  { id: "salam", name: "Greeting salam", triggerType: "keyword", triggerValue: "salam", response: "Walaikum Assalam wa Rahmatullahi wa Barakatuh! Khairiyat? Boliye, main kis tarah madad kar sakta hoon?", priority: 10, enabled: true },
-  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "Assalamu Alaikum! Ji farmayiye, sab theek thaak? Boliye, main kaise help kar sakta hoon?", priority: 10, enabled: true },
-  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "Assalamu Alaikum! Ji boliye, sab khairiyat? Kis cheez mein madad chahiye?", priority: 10, enabled: true },
-  { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "InshaAllah pricing project ke scope aur technical requirements pe depend karti hai. Thoda detail share kijiye.", priority: 20, enabled: true },
+  { id: "salam", name: "Greeting salam", triggerType: "keyword", triggerValue: "salam", response: "Walaikum Assalam! Khairiyat? Boliye, main kis tarah madad kar sakta hoon?", priority: 10, enabled: true },
+  { id: "namaste", name: "Greeting namaste", triggerType: "keyword", triggerValue: "namaste", response: "Namaste! Boliye, sab theek thaak? Main kis tarah madad kar sakta hoon?", priority: 10, enabled: true },
+  { id: "hi", name: "Greeting hi", triggerType: "keyword", triggerValue: "hi", response: "Hello! Ji farmayiye, sab theek thaak? Boliye, main kaise help kar sakta hoon?", priority: 10, enabled: true },
+  { id: "hello", name: "Greeting hello", triggerType: "keyword", triggerValue: "hello", response: "Hello! Ji boliye, sab theek thaak? Kis cheez mein madad chahiye?", priority: 10, enabled: true },
+  { id: "price", name: "Pricing", triggerType: "keyword", triggerValue: "price", response: "Pricing project ke scope aur technical requirements pe depend karti hai. Thoda detail share kijiye.", priority: 20, enabled: true },
   { id: "hours", name: "Hours", triggerType: "keyword", triggerValue: "hours", response: "Main IST timezone (India) mein operate karta hoon. Aam taur par jaldi ya 24 ghante ke andar reply mil jayega.", priority: 20, enabled: true },
   { id: "human", name: "Human", triggerType: "keyword", triggerValue: "talk to a human", response: "Theek hai, main manually check karke aapse baat karta hoon. Thoda waqt dijiye.", priority: 5, enabled: true },
 ];
@@ -167,7 +168,7 @@ export const defaultFaqs = (): Faq[] => [
   {
     id: "who",
     question: "Who are you?",
-    answer: "Assalamu Alaikum! Main Tarik Islam hoon — forensic scientist aur cybersecurity engineer, founder of Dezo.in. Boliye, main kis tarah madad kar sakta hoon?",
+    answer: "Hello! Main Tarik Islam hoon — forensic scientist aur cybersecurity engineer, founder of Dezo.in. Boliye, main kis tarah madad kar sakta hoon?",
     keywords: ["who are you", "your name", "who is this"],
     category: "identity",
     priority: 1,

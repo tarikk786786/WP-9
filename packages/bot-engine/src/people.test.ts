@@ -30,7 +30,7 @@ describe("DAZy love voice", () => {
   it("strictly prevents romantic replies to regular clients and contacts", () => {
     const regularSpoken = writeSpokenReply("hi", analyzeMessage("hi"), [], undefined);
     assert.doesNotMatch(regularSpoken, /jaan|meri dazy|meri love|dil ke paas|pyar karta/i);
-    assert.match(regularSpoken, /Assalamu Alaikum|Ji boliye/i);
+    assert.match(regularSpoken, /Hello|Ji boliye/i);
 
     const regularWhatHappened = writeSpokenReply("kya hua", analyzeMessage("kya hua"), [], undefined);
     assert.doesNotMatch(regularWhatHappened, /meri jaan|theek hoon meri jaan/i);

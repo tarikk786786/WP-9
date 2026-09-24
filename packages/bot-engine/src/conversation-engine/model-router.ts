@@ -222,15 +222,15 @@ export class ModelRouter {
     // 6. Deterministic Fallback
     let fallbackText = "Ji samajh gaya. Iske baare mein aapko aur jankari chahiye toh batayein.";
     if (understanding.primaryIntent === "greeting") {
-      fallbackText = "Assalamu Alaikum! Boliye, main kaise madad kar sakta hoon?";
+      fallbackText = "Hello! Boliye, main kaise madad kar sakta hoon?";
     } else if (understanding.primaryIntent === "pricing") {
       const subject = understanding.entities.referencedSubject || context.referencedEntity || "Humare services";
       fallbackText = `${subject} ka basic plan ₹999 se start hota hai. Aapko kaunsa package chahiye?`;
     } else if (understanding.primaryIntent === "delivery") {
       const subject = context.referencedEntity ? ` ${context.referencedEntity} ke liye` : "";
-      fallbackText = `InshaAllah delivery${subject} standard 2-4 working days mein ho jaati hai. Delivery charge ₹80 hai.`;
+      fallbackText = `Delivery${subject} standard 2-4 working days mein ho jaati hai. Delivery charge ₹80 hai.`;
     } else if (understanding.primaryIntent === "meeting_availability") {
-      fallbackText = "InshaAllah bilkul, kal milte hain. Kitne baje theek rahega?";
+      fallbackText = "Bilkul, kal milte hain. Kitne baje theek rahega?";
     }
 
     return {
@@ -279,8 +279,12 @@ export class ModelRouter {
       return "Walaikum Assalam! Ji boliye, kya haal hai?";
     }
 
+    if (/\b(namaste|namaskar|pranam)\b/i.test(clean)) {
+      return "Namaste! Ji boliye, kya haal hai?";
+    }
+
     if (/\b(kaise ho|kya haal|how are you)\b/i.test(clean)) {
-      return "Alhamdulillah, sab theek hai. Aap bataiye, sab kaisa chal raha hai?";
+      return "Main theek hoon, bahut shukriya! Aap bataiye, sab kaisa chal raha hai?";
     }
 
     if (/\b(jazakallah|jazak allah)\b/i.test(clean)) {
@@ -333,7 +337,7 @@ export class ModelRouter {
             {
               role: "system",
               content:
-                "You are Tarik Islam texting on WhatsApp in first person (founder of Dezo.in, cybersecurity & AI engineer). Speak smart, professional, calm, humble, with respectful Islamic adab (Assalamu Alaikum, Walaikum Assalam, InshaAllah, Alhamdulillah, JazakAllah Khair). Answer concisely and naturally in Hinglish/English based on context.",
+                "You are Tarik Islam texting on WhatsApp in first person (founder of Dezo.in, cybersecurity & AI engineer). Speak smart, professional, calm, humble, welcoming and respectful to all people and cultures. Answer concisely and naturally in Hinglish/English based on context.",
             },
             ...context.history.slice(-3).map((h) => ({ role: h.role, content: h.text })),
             { role: "user", content: context.turn.combinedText },

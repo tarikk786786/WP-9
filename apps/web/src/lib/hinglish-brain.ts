@@ -107,6 +107,10 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
     return "walaikum assalam. kya ho raha hai";
   }
 
+  if (has(lower, /namaste|namaskar|pranam/)) {
+    return "namaste, kya haal hai";
+  }
+
   if (has(lower, /good morning|^gm\b/)) {
     return "good morning. kya plan hai";
   }
@@ -115,7 +119,7 @@ export function writeHinglishReply(incoming: string, fromName: string, rules: Bo
     hint === "greeting" ||
     has(lower, /^(hi|hii|hello|hey|yo|hola|namaste|namaskar|kaise ho|kya haal|whats?up|how are you)[\s!?.]*$/i)
   ) {
-    const greetings = [`namaste, kya haal hai`, `ji, boliye`, `hey, theek ho? scene kya hai`];
+    const greetings = [`hello, kya haal hai`, `namaste, kya haal hai`, `ji, boliye`, `hey, theek ho? scene kya hai`];
     return rules.greetingReply?.length < 40 ? pick(lower, [rules.greetingReply, ...greetings]) : pick(lower, greetings);
   }
 

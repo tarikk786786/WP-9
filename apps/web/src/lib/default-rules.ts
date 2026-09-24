@@ -3,8 +3,8 @@ import type { BotRules } from "@/lib/types";
 export const defaultRules: BotRules = {
   enabled: true,
   botName: "Tarik",
-  defaultReply: "Assalamu Alaikum! Ji, aapka message mila. Thoda detail mein batayenge to behtar samajh paunga.",
-  greetingReply: "Assalamu Alaikum! Ji farmayiye, sab theek thaak? Boliye, main kaise help kar sakta hoon?",
+  defaultReply: "Hello! Ji, aapka message mila. Thoda detail mein batayenge to behtar samajh paunga.",
+  greetingReply: "Hello! Ji farmayiye, sab theek thaak? Boliye, main kaise help kar sakta hoon?",
   includeName: false,
   useLocalLlm: true,
   preferredModel: "",
@@ -26,19 +26,25 @@ export const defaultRules: BotRules = {
     {
       id: "salam",
       keyword: "salam",
-      reply: "Walaikum Assalam wa Rahmatullahi wa Barakatuh! Khairiyat? Boliye, main kis tarah madad kar sakta hoon?",
+      reply: "Walaikum Assalam! Khairiyat? Boliye, main kis tarah madad kar sakta hoon?",
+      enabled: true,
+    },
+    {
+      id: "namaste",
+      keyword: "namaste",
+      reply: "Namaste! Boliye, sab theek thaak? Kis cheez mein madad chahiye?",
       enabled: true,
     },
     {
       id: "hello",
       keyword: "hello",
-      reply: "Assalamu Alaikum! Ji boliye, sab khairiyat? Kis cheez mein madad chahiye?",
+      reply: "Hello! Ji boliye, sab theek thaak? Kis cheez mein madad chahiye?",
       enabled: true,
     },
     {
       id: "hi",
       keyword: "hi",
-      reply: "Assalamu Alaikum! Ji farmayiye, sab theek thaak? Boliye, main kaise help kar sakta hoon?",
+      reply: "Hello! Ji farmayiye, sab theek thaak? Boliye, main kaise help kar sakta hoon?",
       enabled: true,
     },
     {
@@ -50,7 +56,7 @@ export const defaultRules: BotRules = {
     {
       id: "price",
       keyword: "price",
-      reply: "InshaAllah pricing depends on project scope and technical requirements. Please share your project details.",
+      reply: "Pricing depends on project scope and technical requirements. Please share your project details.",
       enabled: true,
     },
   ],

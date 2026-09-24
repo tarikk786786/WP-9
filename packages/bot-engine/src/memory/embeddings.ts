@@ -24,6 +24,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
           input: clean,
           dimensions: 1536,
         }),
+        signal: AbortSignal.timeout(2000),
       });
       if (res.ok) {
         const json = await res.json() as { data: Array<{ embedding: number[] }> };

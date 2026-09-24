@@ -195,8 +195,10 @@ export function writeSpokenReply(
     reply = en ? "good morning. what's the plan" : "good morning. kya plan hai";
   } else if (/\b(assalam|salaam|salam|aoa)\b/.test(n)) {
     reply = "Walaikum Assalam! Boliye, kya haal hai?";
+  } else if (/\b(namaste|namaskar|pranam)\b/.test(n)) {
+    reply = "Namaste! Ji boliye, kya haal hai?";
   } else if (/^(kaise ho|kya haal|how are you|whats?up)$/.test(n)) {
-    reply = en ? "Alhamdulillah, I'm well, thank you. And you?" : "Alhamdulillah, theek hoon, shukriya. Aap bataiye, kya haal hai?";
+    reply = en ? "I'm well, thank you! And how are you?" : "Main theek hoon, shukriya. Aap bataiye, kya haal hai?";
   } else if (/\b(jazakallah|jazak allah)\b/.test(n)) {
     reply = "Wa Iyyakum! Bahut shukriya.";
   } else if (/^(kya kar rahe ho|kya chal raha|busy ho|free ho)$/.test(n)) {
@@ -204,11 +206,11 @@ export function writeSpokenReply(
   } else if (/\b(baarish|weather|rain|mausam)\b/i.test(incoming)) {
     reply = en ? "looks like clear weather tomorrow. what's the plan" : "kal baarish ke kam chances hain, mausam saaf rahega. aap boliye kya plan hai";
   } else if (/\b(kal milte|kl mlt|kal milna|milte hain|kal milen)\b/i.test(incoming)) {
-    reply = en ? "InshaAllah yes, let's meet tomorrow. what time suits you?" : "InshaAllah kal milte hain. kitne baje?";
+    reply = en ? "Yes, let's meet tomorrow. What time suits you?" : "Haan, kal milte hain. Kitne baje theek rahega?";
   } else if (parsed.intents[0] === "greeting" && parsed.complexity === "simple") {
-    reply = pickUnused(n, ["Assalamu Alaikum! Ji boliye, kya haal hai?", "Ji boliye, main sun raha hoon.", "Assalamu Alaikum! Boliye, main kaise madad kar sakta hoon?"], recent);
+    reply = pickUnused(n, ["Hello! Ji boliye, kya haal hai?", "Ji boliye, main sun raha hoon.", "Hello! Boliye, main kaise madad kar sakta hoon?"], recent);
   } else if (parsed.intents[0] === "thanks") {
-    reply = "JazakAllah Khair, bahut shukriya! Koi baat nahi";
+    reply = "Bahut shukriya! Koi baat nahi";
   } else {
     reply = continueThread(incoming, recent, en);
   }

@@ -211,7 +211,8 @@ export function AdminDashboard({ view }: { view: "dashboard" | "conversations" |
   }
 
   const quickTemplates = [
-    "Assalamu Alaikum! Khairiyat? Boliye, main kis tarah madad kar sakta hoon?",
+    "Hello! Boliye, main kis tarah madad kar sakta hoon?",
+    "Namaste! Boliye, main kaise help kar sakta hoon?",
     "Theek hai, main manually check karke aapse baat karta hoon. Thoda waqt dijiye.",
     "Pricing project ke scope aur technical requirements pe depend karti hai. Thoda detail share kijiye.",
     "Sure! Please share your requirements and timeline so we can get started.",
