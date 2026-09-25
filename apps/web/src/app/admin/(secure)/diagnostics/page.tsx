@@ -8,7 +8,6 @@ import {
   Activity,
   ShieldCheck,
   Cpu,
-  Database,
   RefreshCw,
   Server,
   Layers,
@@ -45,7 +44,6 @@ export default function DiagnosticsPage() {
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
   async function fetchDiagnostics() {
-    setLoading(true);
     try {
       const res = await fetch('/api/admin/diagnostics');
       if (res.ok) {
@@ -55,15 +53,45 @@ export default function DiagnosticsPage() {
       }
     } catch (err) {
       console.error('Failed to load diagnostics', err);
+    }
+  }
+
+  async function handleManualRefresh() {
+    setLoading(true);
+    try {
+      await fetchDiagnostics();
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    fetchDiagnostics();
-    const interval = setInterval(fetchDiagnostics, 15000);
-    return () => clearInterval(interval);
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/admin/diagnostics');
+        if (res.ok) {
+          const json = await res.json();
+          if (mounted) {
+            setData(json);
+            setLastRefreshed(new Date());
+            setLoading(false);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load diagnostics', err);
+        if (mounted) setLoading(false);
+      }
+    };
+
+    void poll();
+    const interval = setInterval(() => {
+      void poll();
+    }, 15000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const getStatusBadge = (status?: string) => {
@@ -106,7 +134,7 @@ export default function DiagnosticsPage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={fetchDiagnostics}
+            onClick={() => void handleManualRefresh()}
             disabled={loading}
             className="flex items-center gap-1.5"
           >

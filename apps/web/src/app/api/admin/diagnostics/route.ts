@@ -23,7 +23,7 @@ export async function GET() {
     try {
       const client = getSupabaseAdmin();
       if (client) {
-        const { data, error } = await client.from('conversations').select('id').limit(1);
+        const { error } = await client.from('conversations').select('id').limit(1);
         isDbConnected = !error;
 
         // Check for any stuck claims

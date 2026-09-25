@@ -3,10 +3,8 @@ import { z } from "zod";
 import {
   resolveContactIdentity,
   policyEngine,
-  permissionChecker,
   createChatResource,
   type PermissionCheckRequest,
-  type SubjectRole,
   normalizeDazySpelling,
   conversationStateManager,
   fatigueEngine,
@@ -54,19 +52,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const { message, senderId, from, senderName, name, role } = parseResult.data;
+    const { message, senderId, from, senderName, name } = parseResult.data;
     const resolvedSenderId = senderId || from || "sim:anonymous";
     const resolvedSenderName = senderName || name || "Guest";
 
     // 1. Contact Identity Resolution
     const contactIdentity = resolveContactIdentity(resolvedSenderId, resolvedSenderName);
-    const effectiveRole: SubjectRole =
-      role ||
-      (contactIdentity.relationship === "romantic_partner"
-        ? "special_contact"
-        : contactIdentity.relationship === "admin"
-          ? "admin"
-          : "customer");
 
     // 1b. Inbound Security Gate (Prompt Injection, PII, Secrets)
     const inputSecurity = inputGuard.evaluate(message, {

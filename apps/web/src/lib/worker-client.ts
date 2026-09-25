@@ -72,7 +72,7 @@ export function classifyWorkerError(err: unknown, status?: number): WorkerErrorC
   return "WORKER_UNREACHABLE";
 }
 
-import { WorkerClient, type WorkerClientConfig } from "@bot/shared";
+import { WorkerClient } from "@bot/shared";
 
 export async function workerFetch(path: string, init: RequestInit = {}) {
   const base = await resolveWorkerBase();

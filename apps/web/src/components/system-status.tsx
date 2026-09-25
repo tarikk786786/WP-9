@@ -97,7 +97,6 @@ export function SystemStatus() {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   async function fetchStatus() {
-    setLoading(true);
     try {
       const res = await fetch("/api/worker/status", { cache: "no-store" });
       const json = (await res.json()) as SystemHealthState;
@@ -109,17 +108,47 @@ export function SystemStatus() {
         error: "Cannot connect to worker status API.",
         code: "WORKER_UNREACHABLE",
       });
+    }
+  }
+
+  async function handleManualRefresh() {
+    setLoading(true);
+    try {
+      await fetchStatus();
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void fetchStatus();
+    let mounted = true;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/worker/status", { cache: "no-store" });
+        const json = (await res.json()) as SystemHealthState;
+        if (mounted) {
+          setData(json);
+          setLastRefreshed(new Date());
+        }
+      } catch {
+        if (mounted) {
+          setData({
+            status: "unreachable",
+            error: "Cannot connect to worker status API.",
+            code: "WORKER_UNREACHABLE",
+          });
+        }
+      }
+    };
+
+    void poll();
     const interval = setInterval(() => {
-      void fetchStatus();
+      void poll();
     }, 6000);
-    return () => clearInterval(interval);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   async function handleRetryOutbox() {
@@ -185,7 +214,7 @@ export function SystemStatus() {
               variant="outline"
               size="sm"
               className="h-7 text-xs"
-              onClick={() => void fetchStatus()}
+              onClick={() => void handleManualRefresh()}
               disabled={loading}
             >
               {loading ? "..." : "Refresh"}
