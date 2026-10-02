@@ -18,6 +18,7 @@ export interface InboundEventPayload {
   };
   isGroup?: boolean;
   mediaType?: string;
+  source?: string;
 }
 
 export interface InboundEventRecord {
@@ -51,8 +52,8 @@ export function isLiveInboundConversationEvent(event: InboundEventPayload & {
     return { isLive: false, reason: "MESSAGE_UPDATE_EVENT" };
   }
 
-  // 3. Not history replay / catchup sync
-  if (event.source && event.source !== "notify") {
+  // 3. Not history replay / catchup sync (reject historical backups, allow recent catchups)
+  if (event.source && event.source !== "notify" && event.source !== "append" && event.source !== "replay") {
     return { isLive: false, reason: "HISTORY_REPLAY_SYNC" };
   }
 
@@ -66,11 +67,11 @@ export function isLiveInboundConversationEvent(event: InboundEventPayload & {
     return { isLive: false, reason: "PROTOCOL_CONTROL_EVENT" };
   }
 
-  // 6. Recency check (live event within maxAgeMs, default 5 minutes)
+  // 6. Recency check (live event within maxAgeMs, default 15 minutes for offline catchup)
   const now = Date.now();
   const ageMs = now - event.timestamp;
-  const maxAgeMs = (event as { maxAgeMs?: number }).maxAgeMs ?? 300_000;
-  if (ageMs > maxAgeMs || ageMs < -60_000) {
+  const maxAgeMs = (event as { maxAgeMs?: number }).maxAgeMs ?? 900_000;
+  if (ageMs > maxAgeMs || ageMs < -120_000) {
     return { isLive: false, reason: "STALE_MESSAGE_TIMED_OUT" };
   }
 

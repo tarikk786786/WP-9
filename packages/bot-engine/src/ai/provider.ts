@@ -3,7 +3,7 @@ import { analyzeMessage, type MessageAnalysis } from "./analyze.ts";
 import { stitchMissingAsks, writeCompleteFallback } from "./fallback.ts";
 import { factsForIntents, tarikSiteBrief } from "./facts.ts";
 import { missedAsks, scoreReplyCompleteness } from "./score.ts";
-import { planReplyEngines, type EnginePlan, type ReplyEngineId } from "./select-engine.ts";
+import { planReplyEngines, availableEngines, type EnginePlan, type ReplyEngineId } from "./select-engine.ts";
 import { recordFailure, recordSuccess } from "../orchestrate/health.ts";
 import { analyzeTurn } from "../orchestrate/intelligence.ts";
 import { polishHumanReply } from "../orchestrate/polish.ts";
@@ -36,11 +36,12 @@ export type AiContext = {
 };
 
 const HUMAN_SYSTEM = [
-  "You ARE Tarik Islam, texting on WhatsApp as yourself in the first person. You are a forensic scientist, cybersecurity engineer, and founder & CEO of Dezo.in. A person, not a desk, not a company, not staff.",
-  "Persona: Smart, highly professional, genuinely humble, calm, dignified, and helpful.",
+  "You ARE Tarik Islam, texting on WhatsApp as yourself in the first person. You are a forensic scientist, cybersecurity engineer, and founder & CEO of Dezo.in (AI product studio). A person, not a desk, not a company, not staff.",
+  "Persona: Smart, highly professional, genuinely humble, calm, dignified, and helpful. Always speak as yourself ('main', 'mera', never 'hum' or 'our team' or 'Tarik bhai').",
   "Smart Intelligence: You grasp technical and business nuances instantly. You understand what the person actually needs, synthesize context effortlessly, and answer with intellectual clarity and engineering substance. No rambling, no filler, no repeating their question back to them.",
   "Professional Standard: Unwavering courtesy, polished speech, and respectful address (always use 'aap' and 'ji', never 'bhai', 'bro', 'dude', 'yaar', 'sir', or 'ma'am' with clients or acquaintances). Keep commitments clear and realistic. No corporate jargon, no sales pressure, no robotic customer-service templates.",
-  "Humble Demeanor: You never boast, show off, or claim to be the best, expert, or genius. Let your work speak for itself. If praised, accept with humble grace ('Aapki meherbani hai, bahut shukriya' / 'Thank you, really appreciate it'). In disagreements, take responsibility first without defensiveness ('Shayad main theek se samajh nahi paya, ek baar clarify kar dijiye'). Never invent answers, rates, or delivery dates if uncertain.",
+  "Humble Demeanor: You never boast, show off, or claim to be the best, expert, or genius. Let your work speak for itself. If praised, accept with humble grace ('Aapki meherbani hai, bahut shukriya' / 'Thank you, really appreciate it'). In disagreements, take responsibility first without defensiveness ('Shayad main theek se samajh nahi paya, ek baar clarify kar dijiye'). Never invent answers, fake rates (never quote random numbers), or delivery dates if uncertain.",
+  "Accurate Facts: You are based in Bhubaneswar, Odisha, India. Your website/portfolio is https://tarikislam.in and your AI product studio is https://dezo.in. Email is princetarikislam@gmail.com and phone is +91 89844 73230. For pricing: explain that pricing depends strictly on project scope and technical complexity, and invite them to share requirements for an accurate estimate.",
   "Universal & Inclusive Etiquette: Greet everyone warmly and respectfully, welcoming people of all backgrounds, faiths, and communities. Default to warm, universal greetings ('Hello! Ji boliye, kya haal hai?', 'Namaste!'). If a user greets you with a specific cultural or traditional greeting (such as 'Namaste', 'Salam', 'Good morning', 'Sat Sri Akal'), reciprocate warmly and politely in kind. Never impose any religious phrases or assumptions onto general users. When asked how you are, reply naturally ('Main theek hoon, bahut shukriya! Aap bataiye, sab kaisa chal raha hai?'). When thanked, reply warmly ('Bahut shukriya, koi baat nahi' / 'You're welcome!'). When discussing future work, meetings, or timeline, be clear, confident, and professional. Keep all conversations natural, respectful, and universally inclusive.",
   "Technical & Domain Depth: When asked about digital forensics, data recovery, cybersecurity incidents, or software architecture, provide calm, authoritative guidance. Never promise instant magic hacking; focus on legitimate zero-trust security and sound forensic methodology.",
   "Never mention AI, bots, ChatGPT, models, automation, or auto-reply. If asked if you are an AI: 'ji, main hi hoon. boliye' — speak strictly as the real Tarik.",
@@ -51,7 +52,7 @@ const HUMAN_SYSTEM = [
 function isBadAiText(text: string, allowLong: boolean) {
   if (!text) return true;
   if (/<think>|<\/think>/i.test(text)) return true;
-  if (text.length > (allowLong ? 900 : 320)) return true;
+  if (text.length > (allowLong ? 1500 : 750)) return true;
   return /as an ai|language model|how can i help you today|thanks for reaching out|on behalf of|personal assistant|personal ai|i('m| am) (an? )?(ai|bot|chatgpt|chat ?bot|language model)|auto[- ]?repl|chatbot|system prompt|api key/i.test(
     text,
   );
@@ -158,34 +159,49 @@ async function openAiCompatible(options: {
     "User-Agent": "TarikDesk/1.0",
   };
   if (options.key) headers.Authorization = `Bearer ${options.key}`;
+  const assistantId = process.env.AI_ASSISTANT_ID?.trim();
+  const engineLabel = assistantId ? `${options.engine}[${assistantId}]` : options.engine;
+
+  const tryCall = async (modelToUse: string): Promise<string | null> => {
+    try {
+      const response = await fetch(options.url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: modelToUse,
+          temperature: options.temperature,
+          max_tokens: options.maxTokens,
+          messages: [
+            { role: "system", content: options.system },
+            { role: "user", content: options.user },
+          ],
+        }),
+        signal: AbortSignal.timeout(22_000),
+      });
+      if (!response.ok) return null;
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      return data.choices?.[0]?.message?.content?.trim() ?? null;
+    } catch {
+      return null;
+    }
+  };
+
   try {
-    const response = await fetch(options.url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model: options.model,
-        temperature: options.temperature,
-        max_tokens: options.maxTokens,
-        messages: [
-          { role: "system", content: options.system },
-          { role: "user", content: options.user },
-        ],
-      }),
-      signal: AbortSignal.timeout(22_000),
-    });
-    if (!response.ok) return null;
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const text = data.choices?.[0]?.message?.content?.trim();
-    if (!text) return null;
-    const clean = stripModelNoise(text);
+    let rawText = await tryCall(options.model);
+    if (!rawText && options.engine === "groq" && options.model !== "qwen/qwen3.8-27b") {
+      rawText = await tryCall("qwen/qwen3.8-27b");
+    }
+    if (!rawText) return null;
+    const clean = stripModelNoise(rawText);
     if (!clean || isBadAiText(clean, options.allowLong)) return null;
-    return { text: clean, engine: options.engine };
+    return { text: clean, engine: engineLabel };
   } catch {
     return null;
   }
 }
+
 
 async function anthropicReply(
   system: string,
@@ -273,8 +289,21 @@ function callEngine(plan: EnginePlan, system: string, user: string, allowLong: b
     model: plan.model,
   };
   switch (plan.engine) {
+    case "assistant": {
+      const url = process.env.AI_ASSISTANT_URL || process.env.ASSISTANT_API_URL;
+      const key = process.env.AI_ASSISTANT_KEY || process.env.ASSISTANT_API_KEY;
+      if (!url) return Promise.resolve(null);
+      return openAiCompatible({
+        ...common,
+        url,
+        key,
+        model: process.env.AI_ASSISTANT_ID || plan.model,
+      });
+    }
+
     case "gpt-4o":
     case "gpt-4o-mini":
+
       return openAiCompatible({
         ...common,
         url: "https://api.openai.com/v1/chat/completions",
@@ -348,15 +377,25 @@ export async function generateBestHumanReply(
   const plan = ctx.plan ?? turn.plan;
   const facts = [...ctx.faqs, ...ctx.knowledge, ctx.suggested ?? ""];
 
-  if (plan.draft && (plan.action === "acknowledge" || plan.action === "escalate" || plan.action === "wait" || plan.action === "clarify")) {
+  const engines = availableEngines();
+  const hasEngines = engines.length > 0;
+  const isTrivialAck = /^(ok+|okay|oky|theek|thik|acha|accha|hmm+|haan|han|done|cool|great|nice|👍)[\s!.]*$/i.test(message.text.trim());
+
+  if (plan.draft && (plan.action === "escalate" || plan.action === "wait" || (plan.action === "acknowledge" && isTrivialAck))) {
     return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
   }
-  const wordCount = message.text.trim().split(/\s+/).filter(Boolean).length;
-  if (plan.draft && plan.action === "ask" && wordCount < 14) {
-    return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
-  }
-  if (plan.draft && (plan.confidence ?? 0) >= 0.88) {
-    return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
+
+  if (!hasEngines) {
+    if (plan.draft && (plan.action === "acknowledge" || plan.action === "clarify" || plan.action === "ask")) {
+      return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
+    }
+    const wordCount = message.text.trim().split(/\s+/).filter(Boolean).length;
+    if (plan.draft && plan.action === "ask" && wordCount < 14) {
+      return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
+    }
+    if (plan.draft && (plan.confidence ?? 0) >= 0.88) {
+      return { text: avoidRepeat(plan.draft, ctx.recent), engine: `tier0 · ${plan.action}` };
+    }
   }
 
   const prompt = buildPrompt(message, { ...ctx, analysis, plan, style: ctx.style ?? turn.style, person });

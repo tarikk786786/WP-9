@@ -19,7 +19,7 @@ export class SupportAgent implements SpecialistAgent {
       return {
         action: "handoff",
         handoffReason: "User requested human agent escalation",
-        text: "Ji bilkul, main conversation Tarik bhai / team ko transfer kar raha hoon. Thoda waqt dijiye, direct connect karte hain.",
+        text: "Ji bilkul, main conversation transfer kar raha hoon aur thodi der mein personally direct connect karta hoon. Thoda waqt dijiye.",
         confidence: 0.99,
         explanation: "Direct user request for human handoff",
       };
@@ -28,7 +28,7 @@ export class SupportAgent implements SpecialistAgent {
     // High frustration or severe failure
     if (context.sentiment === "frustrated" || context.urgency === "urgent") {
       // Create support ticket via tool
-      const ticketResult = await context.tools.executeTool("support_ticket", {
+      await context.tools.executeTool("support_ticket", {
         jid: context.message.sender,
         summary: text,
         priority: "urgent",
@@ -36,7 +36,7 @@ export class SupportAgent implements SpecialistAgent {
 
       return {
         action: "reply",
-        text: "Main samajh sakta hoon pareshani. Maine is issue ko high priority ticket mein mark kar diya hai. Tarik bhai personally review karke update karenge.",
+        text: "Main aapki pareshani samajh sakta hoon. Maine is issue ko high priority note kar liya hai, main personally check karke turant update deta hoon.",
         confidence: 0.95,
         explanation: "Logged urgent ticket for frustrated customer",
       };

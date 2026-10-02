@@ -20,7 +20,7 @@ export class ModelRouter {
   private aiGenerator: AiGenerator | null = null;
   public aiTimeoutMs: number;
 
-  constructor(aiTimeoutMs = 7000) {
+  constructor(aiTimeoutMs = 12000) {
     this.aiTimeoutMs = aiTimeoutMs;
   }
 

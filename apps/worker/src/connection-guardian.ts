@@ -61,6 +61,10 @@ export class ConnectionGuardian {
     this.getSnapshotFn = fn;
   }
 
+  public setInstanceId(id: string) {
+    this.instanceId = id;
+  }
+
   public registerReconnectHandler(fn: () => Promise<void>) {
     this.reconnectCallback = fn;
   }

@@ -36,7 +36,7 @@ export class SupervisorAgent {
       return {
         action: "handoff",
         handoffReason: "Explicit user request for human agent",
-        text: "Ji, main Tarik bhai / support team ko notify kar raha hoon. Thoda waqt dijiye, direct connect karte hain.",
+        text: "Ji bilkul, main conversation transfer kar raha hoon aur direct connect karke baat karta hoon. Thoda waqt dijiye.",
         confidence: 1.0,
         explanation: "Supervisor detected explicit human escalation",
       };

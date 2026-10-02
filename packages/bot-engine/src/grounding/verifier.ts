@@ -48,7 +48,7 @@ export class GroundingChecker {
           isSupported = true;
         }
       } else if (claim.claimType === 'location') {
-        if (evidenceCorpus.includes('muzaffarpur') || evidenceCorpus.includes('delhi') || evidenceCorpus.includes('bihar')) {
+        if (evidenceCorpus.includes('bhubaneswar') || evidenceCorpus.includes('odisha') || evidenceCorpus.includes('kendrapara') || evidenceCorpus.includes('muzaffarpur') || evidenceCorpus.includes('delhi') || evidenceCorpus.includes('bihar') || evidenceCorpus.includes('india')) {
           isSupported = true;
         }
       }

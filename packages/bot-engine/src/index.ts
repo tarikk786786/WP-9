@@ -11,6 +11,7 @@ export {
   writeCompleteFallback,
   scoreReplyCompleteness,
   missedAsks,
+  availableEngines,
 } from "./ai/provider.ts";
 export { TARIK_PUBLIC, TARIK_PUBLIC_FACTS, TARIK_SITE, tarikSiteBrief } from "./ai/facts.ts";
 export { analyzeTurn, planTurn, inferUserStyle } from "./orchestrate/intelligence.ts";

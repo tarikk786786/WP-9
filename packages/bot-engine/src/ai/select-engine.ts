@@ -3,6 +3,7 @@ import { isUnhealthy, providerScore } from "../orchestrate/health.ts";
 import type { ResponsePlan } from "../orchestrate/types.ts";
 
 export type ReplyEngineId =
+  | "assistant"
   | "gpt-4o"
   | "gpt-4o-mini"
   | "claude"
@@ -32,6 +33,7 @@ export function aiPolicy(): AiPolicy {
 
 export function availableEngines(): ReplyEngineId[] {
   const ids: ReplyEngineId[] = [];
+  if (process.env.AI_ASSISTANT_URL || process.env.ASSISTANT_API_URL) ids.push("assistant");
   if (process.env.GROQ_API_KEY) ids.push("groq");
   if (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY) ids.push("gemini");
   if (process.env.CEREBRAS_API_KEY) ids.push("cerebras");
@@ -50,10 +52,11 @@ function tokenBudget(analysis: MessageAnalysis, plan?: ResponsePlan) {
 }
 
 const MODELS = {
+  assistant: () => process.env.AI_ASSISTANT_ID || "c265b894-3638-4dc3-8bb7-8357a69b9503",
   openai: () => process.env.OPENAI_MODEL || "gpt-4o",
   mini: () => process.env.OPENAI_MINI_MODEL || "gpt-4o-mini",
   claude: () => process.env.ANTHROPIC_MODEL || "claude-3-7-sonnet-latest",
-  groq: () => process.env.GROQ_MODEL || "qwen/qwen3.8-27b",
+  groq: () => process.env.GROQ_MODEL || "openai/gpt-oss-120b",
   gemini: () => process.env.GEMINI_MODEL || "gemini-2.0-flash",
   router: () => process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
   together: () => process.env.TOGETHER_MODEL || "meta-llama/Llama-3.3-70B-Instruct-Turbo",
@@ -62,7 +65,8 @@ const MODELS = {
 };
 
 const PROFILE: Record<ReplyEngineId, { quality: number; speed: number; cost: number; reasoning: number; tier: 1 | 2 | 3 }> = {
-  groq: { quality: 0.78, speed: 0.96, cost: 0.08, reasoning: 0.7, tier: 1 },
+  assistant: { quality: 0.95, speed: 0.95, cost: 0.05, reasoning: 0.9, tier: 1 },
+  groq: { quality: 0.88, speed: 0.96, cost: 0.08, reasoning: 0.85, tier: 1 },
   gemini: { quality: 0.82, speed: 0.9, cost: 0.1, reasoning: 0.74, tier: 1 },
   cerebras: { quality: 0.76, speed: 0.97, cost: 0.08, reasoning: 0.68, tier: 1 },
   together: { quality: 0.8, speed: 0.88, cost: 0.12, reasoning: 0.72, tier: 1 },
@@ -72,6 +76,7 @@ const PROFILE: Record<ReplyEngineId, { quality: number; speed: number; cost: num
   claude: { quality: 0.93, speed: 0.72, cost: 0.45, reasoning: 0.92, tier: 3 },
   "gpt-4o": { quality: 0.95, speed: 0.7, cost: 0.55, reasoning: 0.94, tier: 3 },
 };
+
 
 function envOrder(): ReplyEngineId[] | null {
   const raw = process.env.AI_PROVIDER_ORDER?.trim();

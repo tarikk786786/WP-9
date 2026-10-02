@@ -45,8 +45,8 @@ export class ClaimExtractor {
       });
     }
 
-    // 3. Location claims (e.g. Delhi, Muzaffarpur, India, Remote)
-    const locationRegex = /\b(?:Delhi|Muzaffarpur|Bihar|India|Bengaluru|Bangalore|Mumbai)\b/gi;
+    // 3. Location claims (e.g. Bhubaneswar, Odisha, Kendrapara, Delhi, Muzaffarpur, India, Remote)
+    const locationRegex = /\b(?:Bhubaneswar|Odisha|Kendrapara|Delhi|Muzaffarpur|Bihar|India|Bengaluru|Bangalore|Mumbai)\b/gi;
     let locMatch: RegExpExecArray | null;
     while ((locMatch = locationRegex.exec(text)) !== null) {
       claims.push({

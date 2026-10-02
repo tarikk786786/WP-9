@@ -4,6 +4,7 @@ import {
   updateInboundClaimStatus,
   claimInboundEvent,
   getStuckConversationsDb,
+  getConversationTurn,
 } from "@bot/database";
 import { MultiLayerDeduplicator, deduplicator } from "./deduplicator.ts";
 import { EventGate, eventGate, type InboundEventPayload } from "./event-gate.ts";
@@ -493,6 +494,27 @@ export class AuthoritativeConversationEngine {
             this.metrics.stuck_turns_recovered += 1;
             this.metrics.missing_reply_recovery += 1;
             console.log(`[recovery] Recovered stuck message ${claim.messageId} in chat ${claim.chatId}`);
+
+            if (claim.turnId) {
+              const turnRecord = await getConversationTurn(claim.turnId);
+              if (turnRecord && turnRecord.status !== "sent") {
+                const turn: ConversationTurn = {
+                  turnId: turnRecord.turnId,
+                  tenantId: "default",
+                  chatId: turnRecord.chatId,
+                  sender: claim.senderId,
+                  messageIds: turnRecord.messageIds,
+                  firstMessageId: turnRecord.messageIds[0] || claim.messageId,
+                  lastMessageId: turnRecord.messageIds[turnRecord.messageIds.length - 1] || claim.messageId,
+                  combinedText: turnRecord.combinedText,
+                  rawMessages: [],
+                  fragments: [],
+                  isGroup: false,
+                  createdAt: turnRecord.createdAt ?? Date.now(),
+                };
+                void this.processTurn(turn);
+              }
+            }
           }
         }
       }

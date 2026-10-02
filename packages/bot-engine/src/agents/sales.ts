@@ -18,7 +18,7 @@ export class SalesAgent implements SpecialistAgent {
     if (/\b(forensic|evidence|cyber|investigation)\b/i.test(lower)) {
       return {
         action: "reply",
-        text: "Digital forensics aur cyber investigation ke cases hum formal process ke sath handle karte hain. Aap issue ka brief share kar dijiye, main scope review kar leta hoon.",
+        text: "Digital forensics aur cyber investigation ke cases main formal process ke sath personally handle karta hoon. Aap issue ka brief share kar dijiye, main scope review kar leta hoon.",
         confidence: 0.95,
         explanation: "Addressed digital forensics / cyber inquiry with authoritative, professional tone",
       };
@@ -28,15 +28,15 @@ export class SalesAgent implements SpecialistAgent {
       if (/\b(price|cost|rate|kitna)\b/i.test(lower)) {
         return {
           action: "reply",
-          text: "Website aur software development ka cost features aur timeline pe depend karta hai. Standard web projects usually ₹15k se start hote hain. Aapki specific requirement kya hai?",
+          text: "Website aur software development ka cost features, technical scope aur timeline pe depend karta hai. Requirement batayein, main clear estimate share kar dunga.",
           confidence: 0.92,
-          explanation: "Provided transparent ballpark pricing and invited requirement details",
+          explanation: "Provided honest scope-dependent pricing explanation and invited requirement details",
         };
       }
 
       return {
         action: "reply",
-        text: "Ji bilkul, software aur web development hum DEZO Studio mein actively build karte hain. Recent work tarikislam.in pe dekh sakte hain. Aapka project kis type ka hai?",
+        text: "Ji bilkul, software aur web development main DEZO Studio (dezo.in) mein actively build karta hoon. Recent work tarikislam.in pe dekh sakte hain. Aapka project kis type ka hai?",
         confidence: 0.90,
         explanation: "Shared portfolio anchor and asked about project scope",
       };

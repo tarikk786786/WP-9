@@ -52,6 +52,7 @@ import {
   analyzeImage,
   SupervisorAgent,
   ToolRegistry,
+  availableEngines,
 } from "@bot/engine";
 import { shouldReplyTool } from "@bot/engine/tools";
 import { personForChat } from "./people-map.ts";
@@ -204,7 +205,12 @@ async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T | null> {
 }
 
 async function sendText(jid: string, text: string, metadata?: Record<string, unknown>) {
-  const clean = (text || "").trim();
+  let clean = (text || "").replace(/\r/g, "").trim();
+  // Strip outer quotes if whole reply is enclosed
+  clean = clean.replace(/^["'“”]([\s\S]*)["'“”]$/, "$1").trim();
+  // Strip leading model/assistant prefixes
+  clean = clean.replace(/^(Tarik(\s+Islam)?|Assistant|AI|Bot|Response):\s*/i, "").trim();
+
   if (!clean) {
     console.warn(`[whatsapp] Discarding attempt to send empty/blank text to ${jid}`);
     return;
@@ -213,6 +219,16 @@ async function sendText(jid: string, text: string, metadata?: Record<string, unk
   if (!sock) throw new Error("WhatsApp socket down");
   if (!isSendableJid(jid)) throw new Error("WhatsApp chat id missing");
   const targetJid = resolveSendJid(jid);
+
+  // Send realistic typing indicator before delivering message
+  try {
+    await sock.sendPresenceUpdate("composing", targetJid);
+    const composingDelay = Math.min(Math.max(clean.length * 20, 600), 1800);
+    await new Promise((r) => setTimeout(r, composingDelay));
+  } catch {
+    /* non-fatal presence update */
+  }
+
   // Pre-sync Signal E2EE sessions to prevent decryption errors / blank bubbles on recipient devices
   try {
     const lastSessionSync = lastSessionSyncPerChat.get(targetJid) || 0;
@@ -235,6 +251,11 @@ async function sendText(jid: string, text: string, metadata?: Record<string, unk
   }
 
   const sent = await sock.sendMessage(targetJid, { text: clean }, options as never);
+  try {
+    await sock.sendPresenceUpdate("paused", targetJid);
+  } catch {
+    /* non-fatal */
+  }
   const messageId = sent?.key?.id;
 
   if (messageId) {
@@ -336,7 +357,7 @@ conversationEngine.setAiGenerator(async (context, tier) => {
 
       if (decision.action === "handoff") {
         return {
-          text: decision.text || "Theek hai, main manually check karke aapse baat karta hoon. Thoda waqt dijiye.",
+          text: decision.text || "Ji bilkul, main abhi thoda occupied hoon. Main thodi der mein aapse direct connect karta hoon. Thoda waqt dijiye.",
           modelId: "supervisor_handoff",
         };
       }
@@ -351,7 +372,8 @@ conversationEngine.setAiGenerator(async (context, tier) => {
     specialistRole = "dazy";
   }
 
-  if (specialistText) {
+  const hasEngines = availableEngines().length > 0;
+  if (!hasEngines && specialistText) {
     return {
       text: specialistText,
       modelId: `agent_${specialistRole}`,
@@ -363,7 +385,7 @@ conversationEngine.setAiGenerator(async (context, tier) => {
     .filter((r) => !/agent|human/.test(r.triggerValue))
     .map((r) => r.response);
 
-  const timeoutMs = tier === "fast" ? 6500 : 5000;
+  const timeoutMs = tier === "fast" ? 10_000 : 15_000;
   const ai = await withTimeout(
     generateBestHumanReply(
       {
@@ -385,6 +407,7 @@ conversationEngine.setAiGenerator(async (context, tier) => {
         faqs: [...faqFacts, ...faqs.map((f) => `${f.question}: ${f.answer}`)],
         knowledge: [...knowledge, ...ruleFacts],
         intent: specialistRole !== "general" ? specialistRole : understanding.intents.join(","),
+        suggested: specialistText ?? undefined,
         analysis: analyzeMessage(turn.combinedText, {
           isFirstMessage: history.length === 0,
           inboundCount: history.filter((m) => m.role === "user").length,
@@ -397,14 +420,23 @@ conversationEngine.setAiGenerator(async (context, tier) => {
     timeoutMs
   );
 
-  return ai?.text
-    ? {
-        text: ai.text,
-        modelId: isDazy
-          ? (ai.engine || "dazy-core")
-          : `${ai.engine || (tier === "fast" ? "groq" : "reasoning")} [${specialistRole}]`,
-      }
-    : null;
+  if (ai?.text) {
+    return {
+      text: ai.text,
+      modelId: isDazy
+        ? (ai.engine || "dazy-core")
+        : `${ai.engine || (tier === "fast" ? "groq" : "reasoning")} [${specialistRole}]`,
+    };
+  }
+
+  if (specialistText) {
+    return {
+      text: specialistText,
+      modelId: `agent_${specialistRole}`,
+    };
+  }
+
+  return null;
 });
 
 conversationEngine.updateDependencies({
@@ -716,7 +748,9 @@ let keepAliveStarted = false;
 let socketKeepAliveTimer: NodeJS.Timeout | null = null;
 let pulsing = false;
 let lastReconnectAt = 0;
+let connectingStartedAt = 0;
 
+connectionGuardian.setInstanceId(WORKER_INSTANCE_ID);
 connectionGuardian.setSnapshotGetter(getSnapshot);
 connectionGuardian.registerReconnectHandler(async () => {
   console.log("[guardian] Reconnect requested by ConnectionGuardian");
@@ -792,10 +826,14 @@ async function pulseWhatsApp() {
     if (manager.snapshot.phase === "logged_out") return;
     if (manager.starting) return;
     if (manager.snapshot.phase === "qr" && manager.sock) return;
+    if (manager.reconnectTimer) return;
+
     const sock = manager.sock as { user?: { id?: string }; ws?: { readyState?: number } } | null;
     const wsOpen = Boolean(sock?.user) && (typeof sock?.ws?.readyState !== "number" || sock.ws.readyState === 1);
     const stale = Date.now() - lastFrameAt >= STALE_MS;
+
     if (wsOpen) {
+      connectingStartedAt = 0;
       const ok = await withTimeout(
         Promise.resolve(manager.sock?.sendPresenceUpdate("available")).then(() => true),
         5000,
@@ -805,10 +843,22 @@ async function pulseWhatsApp() {
         return;
       }
       if (!stale) return;
-    }
-    if (wsOpen && stale) {
       console.warn("[whatsapp] socket inactive for over 10m — reconnecting safely");
+      await startWhatsApp(undefined, { force: true });
+      return;
     }
+
+    // Socket is not open or in connecting/standby phase
+    if (manager.snapshot.phase === "connecting" || manager.snapshot.phase === "standby") {
+      if (!connectingStartedAt) connectingStartedAt = Date.now();
+      const elapsed = Date.now() - connectingStartedAt;
+      if (elapsed < 90_000) {
+        return; // Allow connection handshake adequate time without thrashing
+      }
+      console.warn(`[whatsapp] Connection stuck in ${manager.snapshot.phase} for ${Math.round(elapsed / 1000)}s — attempting clean recovery`);
+      connectingStartedAt = Date.now();
+    }
+
     await startWhatsApp(undefined, { force: true });
   } finally {
     pulsing = false;
@@ -907,6 +957,7 @@ async function openSocket(pairingPhone?: string) {
       phase: "standby",
       error: "Worker lease held by another active instance. Standing by.",
     };
+    scheduleReconnect();
     return;
   }
 
@@ -1233,15 +1284,15 @@ async function openSocket(pairingPhone?: string) {
       return;
     }
 
-    // 2. Strict live-event gate: NEVER auto-reply on historical sync, appends, or updates
-    if (source !== "notify") return;
+    // 2. Strict live-event gate: accept notify and recent offline catchup appends
+    if (source !== "notify" && source !== "append") return;
 
     // 3. Ignore broadcast/status channels
     if (jid.endsWith("@broadcast") || jid.includes("status@broadcast")) return;
 
-    // 4. Recency gate: allow normal mobile clock skew (up to 2m future) and delivery latency (up to 5m old)
+    // 4. Recency gate: allow normal mobile clock skew (up to 2m future) and offline catchup latency (up to 15m old)
     const ageMs = Date.now() - waTimestampMs(raw);
-    if (ageMs > 300_000 || ageMs < -120_000) {
+    if (ageMs > 900_000 || ageMs < -120_000) {
       console.log(`[whatsapp] Discarding message outside live window (${Math.round(ageMs / 1000)}s old):`, id);
       return;
     }
@@ -1341,7 +1392,7 @@ async function openSocket(pairingPhone?: string) {
     const quotedSender = typeof contextInfo?.participant === "string" ? contextInfo.participant : undefined;
     const quotedId = typeof contextInfo?.stanzaId === "string" ? contextInfo.stanzaId : undefined;
 
-    conversationEngine.acceptInboundEvent({
+    void conversationEngine.acceptInboundEvent({
       tenantId: "default",
       chatId: jid,
       messageId: id,
@@ -1358,16 +1409,19 @@ async function openSocket(pairingPhone?: string) {
         : undefined,
       isGroup: Boolean(normalized.isGroup),
       mediaType: normalized.type,
+      source,
+    }).catch((err) => {
+      console.error("[whatsapp] acceptInboundEvent error:", err);
     });
   }
 
   sock.ev.on("messages.upsert", ({ messages, type }) => {
-    // Phase 23: ONLY type === 'notify' triggers automated conversation turns
-    if (type !== "notify") return;
+    // Process notify and catchup appends
+    if (type !== "notify" && type !== "append") return;
     void (async () => {
       for (const raw of messages) {
         try {
-          await ingestRaw(raw as WaRaw, "notify");
+          await ingestRaw(raw as WaRaw, type === "notify" ? "notify" : "append");
         } catch (error) {
           await addLog("error", "whatsapp", error instanceof Error ? error.message : "message failed");
         }

@@ -1,4 +1,7 @@
+import { loadDotEnv } from "./paths.ts";
+loadDotEnv();
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+
 import {
   analyticsSnapshot,
   getFaqs,

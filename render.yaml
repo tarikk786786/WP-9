@@ -31,3 +31,8 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: AI_ASSISTANT_ID
+        value: c265b894-3638-4dc3-8bb7-8357a69b9503
+

@@ -8,5 +8,7 @@ export function stripModelNoise(text: string): string {
   out = out.replace(/^#{1,6}\s+/gm, "");
   out = out.replace(/^\s*[-*•]\s+/gm, "");
   out = out.replace(/^\s*\d+[.)]\s+/gm, "");
+  out = out.replace(/^["'“”]([\s\S]*)["'“”]$/, "$1");
+  out = out.replace(/^(Tarik(\s+Islam)?|Assistant|AI|Bot|Response):\s*/i, "");
   return out.replace(/\n{3,}/g, "\n\n").trim();
 }

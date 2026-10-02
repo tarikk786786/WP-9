@@ -20,7 +20,7 @@ export function routeModel(input: {
   const text = input.text.toLowerCase();
   const wordCount = text.split(/\s+/).length;
 
-  const defaultGroqModel = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
+  const defaultGroqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
   // 1. Check for quick conversational pleasantries (Super Fast / Cheap)
   const isGreeting = /^(hi|hey|hello|namaste|hlo|helo|sup|yo|haan|ok|theek hai|sahi hai|thanks|dhanyawad)$/i.test(text.trim());

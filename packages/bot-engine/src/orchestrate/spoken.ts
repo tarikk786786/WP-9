@@ -12,24 +12,24 @@ const RECOVERY = [
 ];
 
 const TOPIC_LINES: Record<string, { hi: string; en: string }> = {
-  identity: { hi: TARIK_PUBLIC_FACTS.identity, en: "it's tarik" },
-  services: { hi: TARIK_PUBLIC_FACTS.services, en: "forensics, cyber, ai systems, products — public truth is on tarikislam.in" },
-  website: { hi: TARIK_PUBLIC_FACTS.website, en: "public details are on tarikislam.in" },
-  portfolio: { hi: TARIK_PUBLIC_FACTS.portfolio, en: "portfolio on tarikislam.in, studio on dezo.in — have a look" },
-  studio: { hi: TARIK_PUBLIC_FACTS.studio, en: "dezo is my studio, dezo.in. tell me what you're thinking" },
-  pricing: { hi: TARIK_PUBLIC_FACTS.pricing, en: "i don't invent a rate offhand, sorry" },
-  availability: { hi: TARIK_PUBLIC_FACTS.availability, en: "q3 2026 high-stakes work is open on the site. tell me what you're thinking" },
-  process: { hi: TARIK_PUBLIC_FACTS.process, en: "i listen first, then i only say what's actually clear — no drama" },
-  timeline: { hi: TARIK_PUBLIC_FACTS.timeline, en: "i don't invent a date. let's understand the work first" },
-  meeting: { hi: TARIK_PUBLIC_FACTS.meeting, en: "send a time, i'll check and confirm" },
-  hours: { hi: TARIK_PUBLIC_FACTS.hours, en: "ist. i'm usually around in the day, typically under 24 hours" },
-  location: { hi: TARIK_PUBLIC_FACTS.location, en: "i work from bhubaneswar, india" },
+  identity: { hi: TARIK_PUBLIC_FACTS.identity, en: "Hello! I'm Tarik Islam — forensic scientist, cybersecurity engineer, and founder of Dezo.in." },
+  services: { hi: TARIK_PUBLIC_FACTS.services, en: "I work on digital forensics, cybersecurity, and custom AI systems / software products — details on tarikislam.in" },
+  website: { hi: TARIK_PUBLIC_FACTS.website, en: "You can find my portfolio at tarikislam.in and studio at dezo.in" },
+  portfolio: { hi: TARIK_PUBLIC_FACTS.portfolio, en: "Portfolio on tarikislam.in, studio on dezo.in — please have a look" },
+  studio: { hi: TARIK_PUBLIC_FACTS.studio, en: "Dezo is my AI product studio (dezo.in). Tell me what you'd like to build" },
+  pricing: { hi: TARIK_PUBLIC_FACTS.pricing, en: "Pricing depends on the exact scope and technical requirements — I don't quote a rate offhand. Please share what you need and I'll give a clear estimate" },
+  availability: { hi: TARIK_PUBLIC_FACTS.availability, en: "Q3 2026 high-stakes engagements are open on the site. Tell me what you have in mind" },
+  process: { hi: TARIK_PUBLIC_FACTS.process, en: "I listen to requirements first, then propose a clear, realistic execution roadmap" },
+  timeline: { hi: TARIK_PUBLIC_FACTS.timeline, en: "Timeline depends on project scope and deliverables. Once we discuss requirements, I can give an accurate estimate" },
+  meeting: { hi: TARIK_PUBLIC_FACTS.meeting, en: "Please share a convenient time slot and I'll confirm my availability" },
+  hours: { hi: TARIK_PUBLIC_FACTS.hours, en: "I operate in IST (India). Usually active during the day, response typically under 24 hours" },
+  location: { hi: TARIK_PUBLIC_FACTS.location, en: "I work from Bhubaneswar, Odisha, India" },
   contact: { hi: TARIK_PUBLIC_FACTS.contact, en: TARIK_PUBLIC_FACTS.contact },
   credentials: { hi: TARIK_PUBLIC_FACTS.credentials, en: TARIK_PUBLIC_FACTS.credentials },
-  forensics: { hi: TARIK_PUBLIC_FACTS.forensics, en: "yeah, forensics and digital evidence is my work. what happened — short" },
-  security: { hi: TARIK_PUBLIC_FACTS.security, en: "i do cybersecurity engineering. what's the scene" },
-  "ai-work": { hi: TARIK_PUBLIC_FACTS["ai-work"], en: "i build ai systems. what's on your mind" },
-  project: { hi: TARIK_PUBLIC_FACTS.project, en: "ji, please tell me what you have in mind" },
+  forensics: { hi: TARIK_PUBLIC_FACTS.forensics, en: "Yes, digital forensics and cyber evidence is my primary domain. Please briefly share what happened" },
+  security: { hi: TARIK_PUBLIC_FACTS.security, en: "I do cybersecurity engineering and zero-trust systems. What's the requirement?" },
+  "ai-work": { hi: TARIK_PUBLIC_FACTS["ai-work"], en: "I build custom AI systems, agents, and LLM workflows. What's on your mind?" },
+  project: { hi: TARIK_PUBLIC_FACTS.project, en: "Ji, please tell me what you have in mind" },
   weather: { hi: "baarish ke kam chances hain, mausam saaf rahega. aap boliye kya plan hai", en: "looks like clear weather. what's the plan" },
 };
 
@@ -246,16 +246,16 @@ export function writeSpokenReply(
           : `pehle wali baat pe — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — kya dekhun`;
     } else if (/\?/.test(incoming) || /^(kya|kaun|kab|kahan|kaise|kitna|kyu|kyun|why|what|where|when|how|who)\b/i.test(incoming)) {
       reply = love
-        ? "andaz nahi lagaunga meri jaan. jo dil mein hai, seedha boliye"
+        ? "meri jaan, jo dil mein hai seedha boliye, main sun raha hoon"
         : en
-          ? "i won't guess that. please say the actual thing you need"
-          : "andaz nahi ghadta. jo poochna hai seedha likhiye — main dimaag laga ke dekhun";
+          ? "Please feel free to share what you need in detail, I'm happy to help."
+          : "Aap requirement thoda detail mein bataiye, main theek se samajh kar guide karta hoon.";
     } else {
       reply = love
         ? "sun raha hoon meri DAZy. ek line mein boliye, dil se"
         : en
-          ? "i hear you. please say what you need in one line"
-          : "sun raha hoon. ek line mein likhiye kya chahiye";
+          ? "I'm listening. Please let me know what you have in mind."
+          : "Ji, main sun raha hoon. Boliye, kya requirement hai aapki?";
     }
   }
 
