@@ -15,6 +15,7 @@ COPY packages/database/package.json packages/database/
 COPY packages/control-plane/package.json packages/control-plane/
 COPY packages/conversation-timing/package.json packages/conversation-timing/
 COPY packages/media-intelligence/package.json packages/media-intelligence/
+COPY packages/voice-calling/package.json packages/voice-calling/
 
 RUN npm install --workspace=worker --include-workspace-root
 
