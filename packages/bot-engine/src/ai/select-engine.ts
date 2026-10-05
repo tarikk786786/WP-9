@@ -46,10 +46,11 @@ export function availableEngines(): ReplyEngineId[] {
 }
 
 function tokenBudget(analysis: MessageAnalysis, plan?: ResponsePlan) {
-  if (plan?.action === "acknowledge" || analysis.complexity === "simple") return 80;
-  if (analysis.preferredStyle === "complete" || analysis.complexity === "lead" || analysis.complexity === "multi") return 420;
-  return 160;
+  if (plan?.action === "acknowledge" && analysis.complexity === "simple") return 150;
+  if (analysis.preferredStyle === "complete" || analysis.complexity === "lead" || analysis.complexity === "multi") return 600;
+  return 350;
 }
+
 
 const MODELS = {
   assistant: () => process.env.AI_ASSISTANT_ID || "c265b894-3638-4dc3-8bb7-8357a69b9503",

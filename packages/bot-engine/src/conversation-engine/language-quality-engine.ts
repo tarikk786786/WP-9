@@ -606,7 +606,20 @@ export class ContextChecker {
     if (this.checkRepetition(clean, history)) {
       repairs.push("Detected repetitive response against recent assistant history");
       if (options?.isDazy) {
-        clean = clean.includes("❤️") ? clean : `${clean} ❤️`;
+        const dazyVariations = [
+          "Haan Dazy, sun raha hoon ❤️ bolo kya baat hai?",
+          "Yahin hoon jaan ❤️ batao na, main sun raha hoon.",
+          "Haan bolo na ❤️ thoda occupied tha, ab batao.",
+          "Ji Dazy ❤️ bolo, kya keh rahi thi?",
+        ];
+        const recentAssistantTexts = (history || [])
+          .filter((h) => h.role === "assistant")
+          .map((h) => h.text.toLowerCase());
+        const fresh =
+          dazyVariations.find(
+            (v) => !recentAssistantTexts.some((r) => r.includes(v.toLowerCase().slice(0, 15)))
+          ) || dazyVariations[0];
+        clean = fresh;
       } else {
         const variations = [
           "Hello! Boliye, main kaise madad kar sakta hoon?",
@@ -623,6 +636,7 @@ export class ContextChecker {
           ) || variations[1];
         clean = fresh;
       }
+
     }
 
     return { text: clean.trim(), repairs, contextPassed: true };

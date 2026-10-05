@@ -46,9 +46,14 @@ export class ModelRouter {
     const cleanText = understanding.normalizedText.toLowerCase();
 
     // 0. Check DAZY Special Contact Profile
+    const isAiEnabled = Boolean(this.aiGenerator && context.settings.aiEnabled !== false);
     if (isDazy) {
       const dazyEval = evaluateDazyMessage(turn.combinedText, understanding.emotionState, context.history);
-      if (dazyEval.suggestedReply) {
+      const hasExplicitIntimateTrigger = Boolean(
+        dazyEval.suggestedReply &&
+        (dazyEval.tone === "playful_romance" || dazyEval.romanticLevel >= 3 || /khadoos|dudu|kiss|love you|miss you/i.test(turn.combinedText))
+      );
+      if (dazyEval.suggestedReply && (!isAiEnabled || hasExplicitIntimateTrigger)) {
         return {
           source: "dazy_profile",
           text: dazyEval.suggestedReply,
@@ -59,7 +64,7 @@ export class ModelRouter {
     }
 
     // 1. Critical System Commands & High-Priority Overrides (only priority <= 5 or explicit human handoff)
-    const isAiEnabled = Boolean(this.aiGenerator && context.settings.aiEnabled !== false);
+
     if (!isDazy && rules && rules.length > 0) {
       for (const rule of rules) {
         if (!rule.enabled) continue;
@@ -220,7 +225,17 @@ export class ModelRouter {
     }
 
     // 6. Deterministic Fallback
+    if (isDazy) {
+      return {
+        source: "dazy_profile",
+        text: "haan bolo na Dazy ❤️ main yahi hu.",
+        confidence: 0.8,
+        executionTimeMs: Date.now() - start,
+      };
+    }
+
     let fallbackText = "Ji samajh gaya. Iske baare mein aapko aur jankari chahiye toh batayein.";
+
     if (understanding.primaryIntent === "greeting") {
       fallbackText = "Hello! Boliye, main kaise madad kar sakta hoon?";
     } else if (understanding.primaryIntent === "pricing") {

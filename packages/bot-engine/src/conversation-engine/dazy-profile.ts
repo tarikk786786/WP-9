@@ -208,12 +208,12 @@ export function evaluateDazyMessage(
     };
   }
 
-  // Default romantic warmth
+  // Default romantic warmth — return undefined suggestedReply so the AI engine with DAZY_LOVE_SYSTEM can naturally generate smart, contextual replies
   return {
     isDazy: true,
     romanticLevel: 1,
     tone: "warm_loving",
-    suggestedReply: "haan bolo na Dazy ❤️ main yahi hu.",
+    suggestedReply: undefined,
   };
 }
 

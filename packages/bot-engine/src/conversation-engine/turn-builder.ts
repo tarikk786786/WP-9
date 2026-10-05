@@ -107,9 +107,9 @@ export class ConversationTurnBuilder {
     incompleteDebounceMs?: number;
     maxWaitMs?: number;
   }) {
-    this.defaultDebounceMs = opts?.defaultDebounceMs ?? 350;
-    this.incompleteDebounceMs = opts?.incompleteDebounceMs ?? 750;
-    this.maxWaitMs = opts?.maxWaitMs ?? 2000;
+    this.defaultDebounceMs = opts?.defaultDebounceMs ?? 800;
+    this.incompleteDebounceMs = opts?.incompleteDebounceMs ?? 1800;
+    this.maxWaitMs = opts?.maxWaitMs ?? 3500;
   }
 
   public onTurnReady(handler: TurnReadyHandler) {
@@ -141,8 +141,8 @@ export class ConversationTurnBuilder {
       const remainingBeforeMax = Math.max(100, this.maxWaitMs - elapsed);
 
       let targetDelay = complete ? this.defaultDebounceMs : this.incompleteDebounceMs;
-      if (isDazy) {
-        targetDelay = Math.min(targetDelay, 300);
+      if (isDazy && complete) {
+        targetDelay = Math.min(targetDelay, 600);
       }
       if (isUrgent) {
         targetDelay = 50;
@@ -155,12 +155,13 @@ export class ConversationTurnBuilder {
     } else {
       const complete = isSemanticallyComplete(fragment.text);
       let delay = complete ? this.defaultDebounceMs : this.incompleteDebounceMs;
-      if (isDazy) {
-        delay = Math.min(delay, 300);
+      if (isDazy && complete) {
+        delay = Math.min(delay, 600);
       }
       if (isUrgent) {
         delay = 50;
       }
+
 
       const timer = setTimeout(() => {
         void this.flush(key);
