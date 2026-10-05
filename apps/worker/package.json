@@ -20,6 +20,7 @@
     "@bot/engine": "*",
     "@bot/media-intelligence": "*",
     "@bot/shared": "*",
+    "@bot/voice-calling": "*",
     "@whiskeysockets/baileys": "6.7.24",
     "pino": "^10.3.1",
     "qrcode": "^1.5.4"

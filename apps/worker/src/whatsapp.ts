@@ -105,6 +105,7 @@ const sentMessageStore = new Map<string, Record<string, unknown>>();
 const chatCustomerCache = new Map<string, { customerId: string; convoId: string; status: string; cachedAt: number }>();
 const chatEphemeralExpiration = new Map<string, number>();
 const lastSessionSyncPerChat = new Map<string, number>();
+let activeCallManager: any = null;
 
 const EPHEMERAL_FILE = path.join(AUTH_DIR, "chat-ephemeral.json");
 
@@ -1150,6 +1151,10 @@ async function openSocket(pairingPhone?: string) {
       void conversationEngine.outbox.processQueue();
     }
     if (connection === "close") {
+      if (activeCallManager) {
+        void activeCallManager.destroy().catch(() => {});
+        activeCallManager = null;
+      }
       if (socketKeepAliveTimer) {
         clearInterval(socketKeepAliveTimer);
         socketKeepAliveTimer = null;
@@ -1475,4 +1480,37 @@ async function openSocket(pairingPhone?: string) {
       }
     }
   });
+
+  // Voice Calling Integration (Feature flagged: VOICE_CALLING_ENABLED)
+  if (process.env.VOICE_CALLING_ENABLED === "true") {
+    void (async () => {
+      try {
+        const { BaileysCallTransport, VoiceCallManager } = await import("@bot/voice-calling");
+        const transport = new BaileysCallTransport(sock);
+        await transport.initialize();
+        const callManager = new VoiceCallManager({ transport });
+        activeCallManager = callManager;
+        console.log("[whatsapp] Voice call manager initialized successfully (EXPERIMENTAL transport)");
+      } catch (err) {
+        console.error("[whatsapp] Failed to initialize voice calling manager:", err);
+      }
+    })();
+  } else {
+    // If voice calling is disabled, listen for call offers to log diagnostic info
+    sock.ev.on("call" as never, (calls: unknown) => {
+      const callList = Array.isArray(calls) ? calls : [calls];
+      for (const call of callList) {
+        if (call && typeof call === "object" && "id" in call && "status" in call) {
+          const c = call as { id: string; status: string; from: string };
+          if (c.status === "offer") {
+            console.log(`[whatsapp] Voice call received (${c.id} from ${c.from}), but VOICE_CALLING_ENABLED=false.`);
+          }
+        }
+      }
+    });
+  }
+}
+
+export function getActiveCallManager(): any {
+  return activeCallManager;
 }
