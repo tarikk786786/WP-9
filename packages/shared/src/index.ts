@@ -132,8 +132,91 @@ export const defaultBotSettings = (): BotSettings => ({
   outboundSendEnabled: true,
 });
 
+export const CANONICAL_ASSISTANT_ID = "c265b894-3638-4dc3-8bb7-8357a69b9503";
+
+export const AssistantContext = z.object({
+  assistantId: z.string().default(CANONICAL_ASSISTANT_ID),
+  conversationId: z.string(),
+  userId: z.string().optional(),
+  contactId: z.string(),
+  groupId: z.string().optional(),
+  sessionId: z.string().optional(),
+  turnId: z.string(),
+  requestId: z.string().optional(),
+  traceId: z.string().optional(),
+  memoryScope: z.enum(["private", "contact", "group"]).default("contact"),
+  policyScope: z.string().default("default"),
+  toolScope: z.array(z.string()).default([]),
+  releaseId: z.string().default("rel_wp9_prod_2026_09"),
+});
+export type AssistantContext = z.infer<typeof AssistantContext>;
+
+export const AssistantCapability = z.enum([
+  "whatsapp_messaging",
+  "voice_calling",
+  "multimodal_vision",
+  "multimodal_audio",
+  "tool_execution",
+  "web_intelligence",
+  "long_term_memory",
+  "human_handoff",
+  "proactive_automation",
+]);
+export type AssistantCapability = z.infer<typeof AssistantCapability>;
+
+export const AssistantDefinition = z.object({
+  assistantId: z.string(),
+  name: z.string(),
+  status: z.enum(["active", "degraded", "maintenance", "disabled"]),
+  version: z.string(),
+  description: z.string(),
+  capabilities: z.array(AssistantCapability),
+  defaultLanguage: z.string(),
+  releaseId: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type AssistantDefinition = z.infer<typeof AssistantDefinition>;
+
+export const ConversationType = z.enum([
+  "DIRECT",
+  "GROUP",
+  "CALL",
+  "AUTOMATION",
+  "TOOL_SESSION",
+  "HANDOFF",
+]);
+export type ConversationType = z.infer<typeof ConversationType>;
+
+export const ConversationRecord = z.object({
+  conversationId: z.string(),
+  assistantId: z.string(),
+  channel: z.enum(["whatsapp_chat", "whatsapp_call", "web_desk", "simulator"]),
+  type: ConversationType,
+  participantId: z.string(),
+  groupId: z.string().optional(),
+  status: z.enum(["active", "paused", "waiting_human", "closed"]),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ConversationRecord = z.infer<typeof ConversationRecord>;
+
+export const UnifiedEvent = z.object({
+  eventId: z.string(),
+  assistantId: z.string(),
+  conversationId: z.string().optional(),
+  turnId: z.string().optional(),
+  type: z.string(),
+  source: z.string(),
+  payload: z.record(z.string(), z.unknown()),
+  timestamp: z.string(),
+});
+export type UnifiedEvent = z.infer<typeof UnifiedEvent>;
+
 export interface ReleaseManifest {
   releaseId: string;
+  assistantId: string;
   gitSha: string;
   workerVersion: string;
   webVersion: string;
@@ -145,6 +228,7 @@ export interface ReleaseManifest {
 
 export const CURRENT_RELEASE_MANIFEST: ReleaseManifest = {
   releaseId: "rel_wp9_prod_2026_09",
+  assistantId: CANONICAL_ASSISTANT_ID,
   gitSha: (process.env.RENDER_GIT_COMMIT || process.env.GIT_SHA || "d8fb505").slice(0, 7),
   workerVersion: "1.0.0",
   webVersion: "0.1.0",

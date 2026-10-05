@@ -29,6 +29,11 @@ export const ACTION_PERMISSIONS: Record<string, ActionPermissionDef> = {
     requiredLevel: "read",
     allowedRoles: ["admin", "special_contact", "customer", "ai_agent", "system"],
   },
+  "execute_tool": {
+    actionName: "execute_tool",
+    requiredLevel: "execute",
+    allowedRoles: ["admin", "special_contact", "customer", "ai_agent", "system"],
+  },
 
   // WhatsApp Conversational Actions
   "send_message": {

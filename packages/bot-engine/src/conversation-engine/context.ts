@@ -1,9 +1,10 @@
-import type { AutomationRule, Faq } from "@bot/shared";
+import type { AutomationRule, Faq, AssistantContext } from "@bot/shared";
 import type { UnderstandingResult } from "./understanding.ts";
 import type { ConversationTurn } from "./turn-builder.ts";
 import type { ActiveConversationState } from "./state.ts";
 import { isDazyContact } from "./dazy-profile.ts";
 import { memoryManager } from "./memory.ts";
+import { conversationRegistry } from "../identity/conversation-registry.ts";
 
 export interface ConversationHistoryEntry {
   role: "user" | "assistant";
@@ -23,6 +24,7 @@ export interface CanonicalContext {
   lastTopic?: string;
   isDazy: boolean;
   activeState: ActiveConversationState;
+  assistantContext: AssistantContext;
 }
 
 export class CanonicalContextBuilder {
@@ -134,6 +136,13 @@ export class CanonicalContextBuilder {
     params.turn.goal = params.understanding.userGoal;
     params.turn.normalizedText = resolvedText;
 
+    const assistantContext = conversationRegistry.createAssistantContext({
+      chatId: params.turn.chatId,
+      participantId: params.turn.sender,
+      turnId: params.turn.turnId,
+      channel: "whatsapp_chat",
+    });
+
     return {
       turn: params.turn,
       understanding: params.understanding,
@@ -147,6 +156,7 @@ export class CanonicalContextBuilder {
       lastTopic: activeState.topic,
       isDazy,
       activeState,
+      assistantContext,
     };
   }
 }

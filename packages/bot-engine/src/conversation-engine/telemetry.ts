@@ -33,6 +33,8 @@ export interface TurnTrace {
   isDazy: boolean;
   userText: string;
   timestamp: number;
+  assistantId?: string;
+  conversationId?: string;
   intent?: string;
   emotion?: string;
   memoryRetrieved?: string[];
@@ -68,6 +70,8 @@ export class ConversationBrainTelemetry {
     sender: string;
     userText: string;
     isDazy: boolean;
+    assistantId?: string;
+    conversationId?: string;
   }): TurnTrace {
     const traceId = `tr_${params.turnId}_${Date.now()}`;
     const trace: TurnTrace = {
@@ -78,6 +82,8 @@ export class ConversationBrainTelemetry {
       isDazy: params.isDazy,
       userText: params.userText,
       timestamp: Date.now(),
+      assistantId: params.assistantId,
+      conversationId: params.conversationId,
       toolCalls: [],
       spans: [],
     };

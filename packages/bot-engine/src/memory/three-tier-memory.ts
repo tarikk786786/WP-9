@@ -50,7 +50,55 @@ export class ThreeTierMemoryEngine {
     }
   }
 
-  // --- 2. Long-Term Memory (Validated Customer Facts) ---
+  // --- 2. Long-Term Memory (Validated Customer Facts & Scoped Isolation) ---
+  public storeScopedFacts(
+    scope: "private" | "contact" | "group",
+    subjectId: string,
+    candidates: MemoryCandidate[],
+    assistantId?: string
+  ): void {
+    if (!candidates.length) return;
+    const cleanSubject = subjectId.replace(/[^0-9a-zA-Z_-]/g, "");
+    const scopedKey = `${assistantId || "default"}:${scope}:${cleanSubject}`;
+    if (!this.longTermFacts.has(scopedKey)) {
+      this.longTermFacts.set(scopedKey, new Map());
+    }
+    const storeMap = this.longTermFacts.get(scopedKey)!;
+    for (const cand of candidates) {
+      storeMap.set(cand.key, {
+        phone: cleanSubject,
+        category: cand.category,
+        key: cand.key,
+        value: cand.value,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    // Also mirror to contact phone if contact scope for backwards compatibility
+    if (scope === "contact") {
+      this.storeCandidateFacts(subjectId, candidates);
+    }
+  }
+
+  public getScopedFacts(
+    scope: "private" | "contact" | "group",
+    subjectId: string,
+    assistantId?: string
+  ): Record<string, string> {
+    const cleanSubject = subjectId.replace(/[^0-9a-zA-Z_-]/g, "");
+    const scopedKey = `${assistantId || "default"}:${scope}:${cleanSubject}`;
+    const storeMap = this.longTermFacts.get(scopedKey);
+    if (!storeMap) {
+      // Fallback to customer facts if contact scope
+      return scope === "contact" ? this.getCustomerFacts(subjectId) : {};
+    }
+    const result: Record<string, string> = {};
+    for (const [key, record] of storeMap.entries()) {
+      result[key] = record.value;
+    }
+    return result;
+  }
+
   public storeCandidateFacts(phone: string, candidates: MemoryCandidate[]): void {
     if (!candidates.length) return;
     const cleanPhone = phone.replace(/[^0-9]/g, "");

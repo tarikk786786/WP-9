@@ -220,6 +220,8 @@ export class AuthoritativeConversationEngine {
       sender: turn.sender,
       userText: turn.combinedText,
       isDazy: false,
+      assistantId: (turn as any).assistantContext?.assistantId,
+      conversationId: (turn as any).assistantContext?.conversationId,
     });
 
     // 1. Single-Flight Conversation Lock per Chat
@@ -427,6 +429,8 @@ export class AuthoritativeConversationEngine {
       metadata: {
         intent,
         modelId: response.modelId,
+        assistantId: context.assistantContext?.assistantId,
+        conversationId: context.assistantContext?.conversationId,
       },
     });
     console.log(`[trace] OUTBOX_ENQUEUED responseId=${response.responseId}`);

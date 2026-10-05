@@ -248,6 +248,8 @@ export class CallSession extends EventEmitter {
         callId: this.callId,
         callerPhone: this.callerPhone,
         callerName: this.callerName,
+        assistantId: process.env.ASSISTANT_ID || "c265b894-3638-4dc3-8bb7-8357a69b9503",
+        conversationId: `conv_${this.callId}`,
         turns: [callerTurn],
         currentUtterance: asrResult.transcript,
         detectedLanguage: asrResult.language,

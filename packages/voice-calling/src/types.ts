@@ -125,6 +125,8 @@ export interface SpokenResponseContext {
   callId: string;
   callerPhone: string;
   callerName?: string;
+  assistantId?: string;
+  conversationId?: string;
   turns: VoiceTurn[];
   currentUtterance: string;
   detectedLanguage: "hi" | "hi-en" | "en" | "unknown";

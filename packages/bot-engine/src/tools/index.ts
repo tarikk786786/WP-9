@@ -23,6 +23,7 @@ export * from './business/index.ts';
 export * from './agent/index.ts';
 export * from './system/index.ts';
 export * from './handoff/chatwoot-tool.ts';
+export * from './gateway.ts';
 
 export class ToolRegistry {
   private tools: Map<string, ToolDefinition<any, any>> = new Map();

@@ -229,6 +229,23 @@ export function AdminDashboard({ view }: { view: "dashboard" | "conversations" |
 
       {view === "dashboard" ? (
         <>
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl border border-primary/20 bg-primary/5">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-foreground">WP-9 AI Assistant</span>
+                <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                  Active
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Canonical ID: <code className="font-mono text-foreground/80">c265b894-3638-4dc3-8bb7-8357a69b9503</code> • Release: <span className="font-mono">rel_wp9_prod_2026_09</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Unified Multi-Channel Platform
+            </div>
+          </div>
           <SystemStatus />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
