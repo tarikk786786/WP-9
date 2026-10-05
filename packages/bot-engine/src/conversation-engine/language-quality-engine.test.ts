@@ -109,8 +109,8 @@ describe("WP-9 Human Language Quality Engine", () => {
     const res = toneChecker.checkAndRepair(dazyArrogant, { isDazy: true });
     assert.doesNotMatch(res.text, /obviously tum mujhe miss karogi/i);
     assert.doesNotMatch(res.text, /tumhe mere bina rehna mushkil hai/i);
-    assert.match(res.text, /shayad thoda sa miss kiya hoga 😌❤️/);
-    assert.match(res.text, /smile zaroor aa jaati hai ❤️/);
+    assert.match(res.text, /shayad thoda sa miss kiya hoga/);
+    assert.match(res.text, /smile zaroor aa jaati hai/);
   });
 
   // 9. Naturalness Checker & Canned Closing Stripping

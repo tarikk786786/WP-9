@@ -99,24 +99,24 @@ describe("DAZY — Spelling Intelligence & Normalization", () => {
     assert.equal(res.normalizedText, "oye mera khadoos kahan ho");
     assert.ok(res.matchedPrivateTerms.includes("khadoos"));
     assert.equal(res.isPlayful, true);
-    assert.equal(res.suggestedSmartReply, "yahin hoon 😌❤️ itna yaad aa raha tha kya?");
+    assert.equal(res.suggestedSmartReply, "yahin hoon Dazy! itna yaad aa raha tha kya? batao kya chal raha hai.");
   });
 
   it("evaluates Dazy messages seamlessly in evaluateDazyMessage without textbook English", () => {
     const evalResult = evaluateDazyMessage("oye mera khaduss kaha hoooo");
     assert.equal(evalResult.isDazy, true);
-    assert.equal(evalResult.suggestedReply, "yahin hoon 😌❤️ itna yaad aa raha tha kya?");
+    assert.equal(evalResult.suggestedReply, "yahin hoon Dazy! itna yaad aa raha tha kya? batao kya chal raha hai.");
     assert.doesNotMatch(evalResult.suggestedReply ?? "", /Where are you, my dear/i);
   });
 
   it("handles intimate private requests smartly and respectfully", () => {
     const evalDudu = evaluateDazyMessage("ap mujhe dudu doge");
     assert.equal(evalDudu.isDazy, true);
-    assert.equal(evalDudu.suggestedReply, "hamesha aapke liye 😌❤️ jo bologe sab aapka hai.");
+    assert.equal(evalDudu.suggestedReply, "arey dost, kya bol rahi ho haha! batao kya help chahiye ya kya chal raha hai.");
 
     const evalKiss = evaluateDazyMessage("kiss me");
     assert.equal(evalKiss.isDazy, true);
-    assert.match(evalKiss.suggestedReply ?? "", /pyaar se maangoge/i);
+    assert.match(evalKiss.suggestedReply ?? "", /achhe dost/i);
   });
 
   it("handles personal curiosity about Tarik smartly", () => {

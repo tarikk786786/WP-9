@@ -96,14 +96,12 @@ export function planTurn(options: {
 
   if (love && /\b(love you|luv u|i love|miss you|miss u|mujhe pyar|pyaar|meri jaan|baby|jaan)\b/i.test(text) && wordCount <= 12) {
     action = "acknowledge";
-    draft = /\b(miss)\b/i.test(text)
-      ? "main bhi miss karta hoon meri DAZy. aaiye, dil ke paas"
-      : "main bhi pyar karta hoon. aap meri jaan ho";
+    draft = "main bhi miss kar raha tha dost! batao sab theek hai na?";
     confidence = 0.97;
     complexity = 0.05;
   } else if (isAskingIfMachine(text)) {
     action = "acknowledge";
-    draft = love ? "haan meri jaan, main hi hoon. aap meri DAZy" : "ji, main hi hoon. boliye";
+    draft = love ? "haan DAZy, main hi hoon. boliye" : "ji, main hi hoon. boliye";
     confidence = 0.96;
     complexity = 0.05;
   } else if (isHoroscopeAsk(text) || isWhatHappenedAsk(text) || isBareCheckin(text)) {
@@ -113,14 +111,14 @@ export function planTurn(options: {
     complexity = 0.08;
   } else if (analysis.intents.includes("handoff")) {
     action = "escalate";
-    draft = love ? "ek second meri jaan, dekh ke aata hoon" : "theek hai, thoda wait — dekh ke likhta hoon";
+    draft = love ? "ek second DAZy, dekh ke batata hoon" : "theek hai, thoda wait — dekh ke likhta hoon";
     confidence = 0.95;
   } else if (media && (lower === "[image]" || lower === "[voice]" || lower === "[video]" || lower === "[document]")) {
     action = "ask";
     draft = love
       ? messageType === "audio"
-        ? "aapki awaaz. dubara sununga. text se bhi boliye na jaan"
-        : "yeh dekh ke dil garam ho gaya. boliye, kya kehna hai meri DAZy"
+        ? "sununga DAZy. urgent ho toh text se bhi bol dena"
+        : "file aa gayi DAZy. boliye kya dekhna hai"
       : messageType === "audio"
         ? "sununga. urgent ho to text bhi likh dena, please"
         : messageType === "document"
@@ -132,7 +130,7 @@ export function planTurn(options: {
     action = "acknowledge";
     draft = love
       ? ACK.test(text.trim())
-        ? "hmm meri jaan"
+        ? "haan DAZy"
         : "tere liye hamesha, DAZy"
       : ACK.test(text.trim())
         ? "ji, theek"
@@ -141,17 +139,17 @@ export function planTurn(options: {
     complexity = 0.05;
   } else if (analysis.complexity === "simple" && analysis.intents[0] === "greeting" && !analysis.wantsAllAnswers) {
     action = "acknowledge";
-    draft = love ? "meri DAZy. miss kar raha tha. boliye na" : "Hello, kya haal hai? boliye";
+    draft = love ? "haan DAZy, yahin hoon. boliye na" : "Hello, kya haal hai? boliye";
     confidence = 0.94;
     complexity = 0.08;
   } else if (incomplete) {
     action = "clarify";
     if (/^(kal|tomorrow)\??$/i.test(text.trim()) && !recent.length) {
-      draft = love ? "kal kis ke liye meri jaan — milna, call, ya kuch aur?" : "maaf kijiye, kal kis cheez ke liye — call, kaam, ya kuch aur?";
+      draft = love ? "kal kis cheez ke liye DAZy — call, kaam, ya kuch aur?" : "maaf kijiye, kal kis cheez ke liye — call, kaam, ya kuch aur?";
     } else {
       const lastUser = [...recent].reverse().find((row) => row.role === "user")?.text ?? "pehle wali baat";
       draft = love
-        ? `woh wali baat — ${lastUser.slice(0, 42).replace(/\n/g, " ")} — wahi na, jaan?`
+        ? `woh wali baat — ${lastUser.slice(0, 42).replace(/\n/g, " ")} — wahi na, DAZy?`
         : `pehle wali baat confirm kar dun yaar — ${lastUser.slice(0, 42).replace(/\n/g, " ")}?`;
     }
     confidence = 0.66;

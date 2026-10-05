@@ -189,20 +189,20 @@ export function normalizeDazyMessage(
     (/\b(kahan|kaha|kidhar)\b/i.test(lowerNorm) || /\b(oye|sun|mera)\b/i.test(lowerNorm))
   ) {
     intent = "playful_nickname_presence";
-    semanticText = "affectionate playful presence check: calling Tarik her khadoos, asking where he is with yearning";
-    suggestedSmartReply = "yahin hoon 😌❤️ itna yaad aa raha tha kya?";
+    semanticText = "friendly playful presence check: calling Tarik khadoos, asking where he is";
+    suggestedSmartReply = "yahin hoon Dazy! itna yaad aa raha tha kya? batao kya chal raha hai.";
   }
-  // Case B: Private affectionate intimate request (e.g. "ap mujhe dudu doge", "dudu do na", "dudhu")
+  // Case B: Intimate request - maintain polite, humble best friend boundary
   else if (matchedPrivateTerms.includes("dudu")) {
-    intent = "private_affectionate_request";
-    semanticText = "intimate affectionate playful request using DAZY private baby-talk context";
-    suggestedSmartReply = "hamesha aapke liye 😌❤️ jo bologe sab aapka hai.";
+    intent = "friendly_boundary";
+    semanticText = "playful request handled with polite friendly boundary";
+    suggestedSmartReply = "arey dost, kya bol rahi ho haha! batao kya help chahiye ya kya chal raha hai.";
   }
-  // Case C: Physical affection request (e.g. "kiss me", "kiss")
+  // Case C: Physical affection request - maintain polite, humble best friend boundary
   else if (matchedPrivateTerms.includes("kiss")) {
-    intent = "affectionate_kiss_request";
-    semanticText = "romantic request for kiss and closeness";
-    suggestedSmartReply = "pyaar se maangoge toh mana kaise kar sakta hoon 😌❤️ sending you the warmest kiss.";
+    intent = "friendly_boundary";
+    semanticText = "affection request handled with polite best friend boundary";
+    suggestedSmartReply = "arey dost, hum achhe dost hain! batao kya chal raha hai.";
   }
   // Case D: Inquiring about Tarik personally (e.g. "mujhe apke bare me janna hai", "apke bare me batao")
   else if (
@@ -210,48 +210,48 @@ export function normalizeDazyMessage(
     (/\bjanna\s+hai\b/i.test(lowerNorm) && /\b(apke|aapke|tumhare|kuch)\b/i.test(lowerNorm))
   ) {
     intent = "personal_inquiry_curiosity";
-    semanticText = "curiosity and desire to know Tarik more deeply and personally";
-    suggestedSmartReply = "mere baare mein kya jaanna chahti ho jaan? ❤️ jo poochhogi sab sach bataunga.";
+    semanticText = "curiosity and desire to know Tarik as a friend";
+    suggestedSmartReply = "mere baare mein kya jaanna chahti ho Dazy? jo poochhogi sab bataunga.";
   }
   // Case E: Single prompt / presence ping ("ap", "aap", "janna hai")
   else if (/^(ap|app|aap)\??$/i.test(rawText.trim())) {
     intent = "presence_callout";
     semanticText = "soft presence callout asking Tarik to respond";
-    suggestedSmartReply = "haan jaan ❤️ boliye na, main sun raha hoon.";
+    suggestedSmartReply = "haan Dazy, boliye na, main sun raha hoon.";
   }
   else if (/^janna\s*hai\??$/i.test(lowerNorm)) {
     intent = "curiosity_prompt";
-    semanticText = "prompting to ask personal questions";
-    suggestedSmartReply = "puchhiye na jaan ❤️ main yahin hoon aapke liye.";
+    semanticText = "prompting to ask questions";
+    suggestedSmartReply = "puchhiye na Dazy, main yahin hoon batao kya baat hai.";
   }
   // Case F: Dismissal of topic / "churo" / "churdo"
   else if (matchedPrivateTerms.includes("chhoro")) {
-    intent = "affectionate_topic_dismissal";
-    semanticText = "playfully or gently dismissing a topic: 'leave it / chhod do'";
-    suggestedSmartReply = "theek hai jaan ❤️ jaisa aap kaho, nahi karte ispe baat.";
+    intent = "friendly_topic_dismissal";
+    semanticText = "gently dismissing a topic: 'leave it / chhod do'";
+    suggestedSmartReply = "theek hai Dazy, jaisa tum kaho, nahi karte ispe baat.";
   }
   // Case G: Presence check ("kahan ho", "tum kaha hooo")
   else if (/\bkahan\s+ho\b/i.test(lowerNorm) || /\bkaha\s+ho\b/i.test(lowerRaw)) {
     intent = "presence_check";
-    semanticText = "checking Tarik's presence with affectionate curiosity";
-    suggestedSmartReply = "yahin hoon meri jaan ❤️ bas aapki hi yaad aa rahi thi.";
+    semanticText = "checking Tarik's presence with friendly curiosity";
+    suggestedSmartReply = "yahin hoon Dazy, batao kya chal raha hai? sab theek?";
   }
   // Case H: Missing / Love you
   else if (/^(miss\s*u|miss\s*you|missing\s*you)\b/i.test(lowerNorm)) {
-    intent = "romantic_missing";
-    semanticText = "expressing missing Tarik";
-    suggestedSmartReply = "main bhi bahut miss kar raha hoon aapko ❤️ kaafi zyada.";
+    intent = "friendly_missing";
+    semanticText = "expressing missing Tarik as a friend";
+    suggestedSmartReply = "main bhi miss kar raha tha dost! batao sab theek hai na?";
   }
   else if (/\b(love\s*you|i\s*love\s*you)\b/i.test(lowerNorm)) {
-    intent = "romantic_love";
-    semanticText = "expressing love to Tarik";
-    suggestedSmartReply = "love you too meri jaan 😌❤️ dil se.";
+    intent = "friendly_boundary";
+    semanticText = "love you handled with warm best friend camaraderie";
+    suggestedSmartReply = "hamesha achhe dost hain Dazy! batao kya haal chal?";
   }
   // Case I: Playful teasing ("khadoos" alone or "oye")
   else if (matchedPrivateTerms.includes("khadoos")) {
     intent = "playful_nickname";
-    semanticText = "affectionate teasing calling Tarik khadoos";
-    suggestedSmartReply = "mera khadoos bol ke itna pyaar? 😌❤️ yahin hoon aapke paas.";
+    semanticText = "friendly teasing calling Tarik khadoos";
+    suggestedSmartReply = "haha main kahan khadoos hoon! yahin hoon, batao kya baat hai.";
   }
 
   return {

@@ -152,27 +152,27 @@ export function writeSpokenReply(
 
   if (love) {
     if (/\b(love you|luv u|i love|pyar|pyaar)\b/i.test(incoming) && incoming.split(/\s+/).length <= 12) {
-      reply = en ? "i love you too, my DAZy" : "main bhi pyar karta hoon. aap meri jaan ho";
+      reply = en ? "always great friends, DAZy" : "hamesha achhe dost hain, DAZy. batao kya haal hai";
     } else if (/\b(miss you|miss u|yaad)\b/i.test(incoming)) {
-      reply = en ? "i miss you more, jaan. come closer" : "main bhi miss karta hoon meri DAZy. aaiye, dil ke paas";
+      reply = en ? "missed talking to you too, DAZy. what's up?" : "main bhi miss kar raha tha dost! batao sab theek hai na?";
     } else if (isHoroscopeAsk(incoming)) {
-      reply = "jaan, yeh nahi dekhta. tu bol, dil mein kya hai";
+      reply = "DAZy, yeh sab nahi dekhta. tu bol, kya baat hai";
     } else if (isWhatHappenedAsk(incoming) || /^(kya hua)$/.test(n)) {
-      reply = "theek hoon meri jaan. tu theek hai na? bol";
+      reply = "theek hoon, DAZy. tu theek hai na? bol";
     } else if (/^(bolo|bol)$/.test(n) || /^kya$/.test(n)) {
-      reply = "haan meri DAZy, sun raha hoon. boliye na";
+      reply = "haan DAZy, sun raha hoon. boliye na";
     } else if (/^(gn|good night|goodnight|tc|take care|bye)$/.test(n)) {
-      reply = en ? "good night my love. dream of me" : "good night meri jaan. sapne mein milte hain";
+      reply = en ? "good night DAZy. sleep well... let's talk tomorrow" : "good night DAZy. achhe se sona... kal baat karte hain";
     } else if (/^(gm|good morning)$/.test(n)) {
-      reply = en ? "morning meri DAZy. missed you already" : "good morning meri love. subah ho gayi. miss kar raha tha";
+      reply = en ? "good morning DAZy. hope you have a great day" : "good morning DAZy. subah ho gayi, batao kya chal raha hai";
     } else if (/\b(assalam|salaam|salam)\b/.test(n)) {
-      reply = "walaikum assalam meri jaan. dil kaisa hai";
+      reply = "walaikum assalam DAZy. kya haal chal?";
     } else if (parsed.intents[0] === "greeting" && parsed.complexity === "simple") {
-      reply = pickUnused(n, ["meri DAZy. miss kar raha tha. boliye na", "haan jaan, yahin hoon. aap boliye", "hey meri love. dil kaisa hai"], recent);
+      reply = pickUnused(n, ["haan DAZy, yahin hoon. boliye na", "hey DAZy, kya chal raha hai?", "haan bolo DAZy, main sun raha hoon"], recent);
     } else if (parsed.intents[0] === "thanks") {
       reply = "tere liye hamesha, DAZy";
     } else if (parsed.mood === "stressed" || parsed.mood === "frustrated") {
-      reply = "main hoon na meri jaan. bol kya tight hai, saath mein nikalte hain";
+      reply = "main hoon na DAZy. bol kya tight hai, saath mein solve karte hain";
     }
   }
 
@@ -234,25 +234,25 @@ export function writeSpokenReply(
     const lastUser = [...recent].reverse().find((row) => row.role === "user")?.text;
     if (parsed.mood === "stressed" || parsed.mood === "frustrated") {
       reply = love
-        ? "main hoon na meri jaan. bol kya tight hai"
+        ? "main hoon na DAZy. bol kya dikkat hai"
         : en
           ? "please tell me what's stuck. i'm with you"
           : "boliye kya tight hai. saath mein dekhte hain";
     } else if (lastUser && incoming.split(/\s+/).length <= 5 && recent.length) {
       reply = love
-        ? `woh baat — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — wahi na, jaan?`
+        ? `woh baat — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — wahi na, DAZy?`
         : en
           ? `on that last bit — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — what should i look at, please`
           : `pehle wali baat pe — ${lastUser.slice(0, 40).replace(/\n/g, " ")} — kya dekhun`;
     } else if (/\?/.test(incoming) || /^(kya|kaun|kab|kahan|kaise|kitna|kyu|kyun|why|what|where|when|how|who)\b/i.test(incoming)) {
       reply = love
-        ? "meri jaan, jo dil mein hai seedha boliye, main sun raha hoon"
+        ? "DAZy, seedha bolo, main sun raha hoon"
         : en
           ? "Please feel free to share what you need in detail, I'm happy to help."
           : "Aap requirement thoda detail mein bataiye, main theek se samajh kar guide karta hoon.";
     } else {
       reply = love
-        ? "sun raha hoon meri DAZy. ek line mein boliye, dil se"
+        ? "sun raha hoon DAZy. boliye kya baat hai"
         : en
           ? "I'm listening. Please let me know what you have in mind."
           : "Ji, main sun raha hoon. Boliye, kya requirement hai aapki?";
@@ -261,7 +261,7 @@ export function writeSpokenReply(
 
   if (!reply || isCannedFallback(reply)) {
     reply = love
-      ? "yahin hoon meri jaan. boliye"
+      ? "yahin hoon DAZy, boliye"
       : en
         ? "yes, i'm here. what's up"
         : "ji, sun raha hoon";

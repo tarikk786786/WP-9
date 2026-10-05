@@ -60,8 +60,8 @@ export function evaluateDazyMessage(
   if (norm.suggestedSmartReply) {
     return {
       isDazy: true,
-      romanticLevel: norm.hasYearning || norm.isAffectionate ? 3 : norm.isPlayful ? 2 : 1,
-      tone: norm.isPlayful ? "playful_romance" : norm.hasYearning ? "romantic_yearning" : "warm_affectionate",
+      romanticLevel: 0,
+      tone: norm.isPlayful ? "best_friend_playful" : norm.hasYearning ? "best_friend_caring" : "best_friend_warm",
       suggestedReply: norm.suggestedSmartReply,
       normalization: norm,
     };
@@ -69,13 +69,13 @@ export function evaluateDazyMessage(
 
   const clean = norm.normalizedText.toLowerCase();
 
-  // 1. Tiny text -> Tiny sweet reply
+  // 1. Tiny text -> Friendly light reply
   if (/^(hehe|heh|haha|huhu)\??$/i.test(clean)) {
     return {
       isDazy: true,
-      romanticLevel: 1,
+      romanticLevel: 0,
       tone: "playful",
-      suggestedReply: "hehe kya 😌❤️",
+      suggestedReply: "hehe kya chal raha hai?",
     };
   }
 
@@ -83,9 +83,9 @@ export function evaluateDazyMessage(
   if (/\bkahan\s*ho\b/i.test(clean)) {
     return {
       isDazy: true,
-      romanticLevel: 2,
+      romanticLevel: 0,
       tone: "warm_reassuring",
-      suggestedReply: "yahi hu Dazy ❤️ bas tumhari yaad aa rahi thi 😌",
+      suggestedReply: "yahi hu Dazy, batao kya chal raha hai? sab theek?",
     };
   }
 
@@ -97,74 +97,73 @@ export function evaluateDazyMessage(
         isDazy: true,
         romanticLevel: 0,
         tone: "gentle_practical",
-        suggestedReply: "Kal 7 baje theek rahega ❤️",
+        suggestedReply: "Kal 7 baje theek rahega!",
       };
     }
     return {
       isDazy: true,
       romanticLevel: 0,
       tone: "gentle_practical",
-      suggestedReply: "haan Dazy ❤️ tum batao kab aur kahan theek rahega?",
+      suggestedReply: "haan Dazy, tum batao kab aur kahan theek rahega?",
     };
   }
 
-  // 3. Simple daily affection -> LEVEL 1
+  // 4. Simple daily friendly check-in
   // "khana khaya?", "lunch kiya?", "dinner?"
   if (/\b(khana\s*khaya|lunch|dinner|breakfast|nashta)\b/i.test(clean)) {
     return {
       isDazy: true,
-      romanticLevel: 1,
-      tone: "caring_affectionate",
-      suggestedReply: "haan ❤️ tumne khaya?",
+      romanticLevel: 0,
+      tone: "caring_friendly",
+      suggestedReply: "haan, tumne khaya?",
     };
   }
 
-  // 4. Checking presence -> LEVEL 2
+  // 5. Checking presence & availability
   // "busy ho?", "kya kar rahe ho?", "free ho?"
   if (/^(busy\s*ho|busy\??)$/i.test(clean)) {
     return {
       isDazy: true,
-      romanticLevel: 2,
-      tone: "connected_affectionate",
-      suggestedReply: "thoda sa... but tumhare liye time nikal lunga ❤️",
+      romanticLevel: 0,
+      tone: "connected_friendly",
+      suggestedReply: "thoda sa busy tha, but batao kya baat hai, main sun raha hoon.",
     };
   }
 
   if (/^(kya\s*kar\s*rahe\s*ho|kya\s*kr\s*rhe\s*ho|kya\s*chal\s*raha\s*hai)\??$/i.test(clean)) {
     return {
       isDazy: true,
-      romanticLevel: 2,
-      tone: "affectionate",
-      suggestedReply: "bas tumse baat karne ka wait kar raha tha 😌❤️",
+      romanticLevel: 0,
+      tone: "friendly",
+      suggestedReply: "bas kaam dekh raha tha, tum batao kya chal raha hai?",
     };
   }
 
-  // 5. Romance & Missing -> LEVEL 3
-  // "miss u", "miss kiya mujhe?", "love you", "yaad aa rahi hai"
+  // 6. Friendly connection & Missing
   if (/\b(miss\s*kiya|miss\s*kr\s*rahe|yaad\s*aayi|yaad\s*aa\s*rahi|yaad|kahan\s*ho)\b/i.test(clean)) {
     return {
       isDazy: true,
-      romanticLevel: 3,
-      tone: "romantic",
-      suggestedReply: "yahi hu Dazy ❤️ bas tumhari yaad aa rahi thi 😌",
+      romanticLevel: 0,
+      tone: "friendly_reassuring",
+      suggestedReply: "yahi hu Dazy, batao kya chal raha hai? sab theek?",
     };
   }
 
   if (/^(miss\s*u|miss\s*you|missing\s*you)\b/i.test(clean)) {
     return {
       isDazy: true,
-      romanticLevel: 3,
-      tone: "romantic",
-      suggestedReply: "miss you too ❤️ kaafi zyada.",
+      romanticLevel: 0,
+      tone: "friendly_reassuring",
+      suggestedReply: "main bhi miss kar raha tha dost! batao sab theek hai na?",
     };
   }
 
   if (/\b(love\s*you|i\s*love\s*you|pyaar\s*karta|pyar\s*hai)\b/i.test(clean)) {
     return {
       isDazy: true,
-      romanticLevel: 3,
-      tone: "romantic",
-      suggestedReply: "love you too ❤️",
+      romanticLevel: 0,
+      tone: "friendly_boundary",
+      suggestedReply: "hamesha achhe dost hain Dazy! batao kya haal chal?",
     };
   }
 
@@ -172,29 +171,28 @@ export function evaluateDazyMessage(
   if (/\b(good\s*night|gn|shubh\s*ratri|so\s*jao)\b/i.test(clean)) {
     return {
       isDazy: true,
-      romanticLevel: 2,
-      tone: "warm_reassuring",
-      suggestedReply: "good night ❤️ achhe se sona... kal phir baat karenge.",
+      romanticLevel: 0,
+      tone: "warm_friendly",
+      suggestedReply: "good night Dazy, achhe se sona... kal phir baat karenge.",
     };
   }
 
-  // 6. Deep Emotional Hurt / Insecurity / Relationship moments -> LEVEL 4
-  // "tum badal gaye ho", "mujhe aaj bahut bura lag raha hai"
+  // 7. Emotional Support & Listening
   if (/\b(badal\s*gaye\s*ho|change\s*ho\s*gaye|ab\s*pehle\s*jaise\s*nahi)\b/i.test(clean)) {
     return {
       isDazy: true,
-      romanticLevel: 4,
+      romanticLevel: 0,
       tone: "deeply_reassuring",
-      suggestedReply: "aisa feel hua tumhe? ❤️ meri baat suno, main samajhna chahta hoon ki tumhe kya hurt hua.",
+      suggestedReply: "aisa feel hua tumhe? meri baat suno, main samajhna chahta hoon ki kya baat hui.",
     };
   }
 
   if (/\b(bahut\s*bura\s*lag\s*raha|mood\s*kharab\s*hai|dil\s*dukha|rona\s*aa\s*raha)\b/i.test(clean) || emotion?.primary === "sad") {
     return {
       isDazy: true,
-      romanticLevel: 4,
+      romanticLevel: 0,
       tone: "deeply_comforting",
-      suggestedReply: "aww... ❤️ batao kya hua? Pehle tum bol lo, main properly sun raha hoon.",
+      suggestedReply: "arey kya hua? batao, main sun raha hoon.",
     };
   }
 
@@ -202,17 +200,17 @@ export function evaluateDazyMessage(
   if (/\b(attitude|bhav|gussa)\b/i.test(clean) || emotion?.primary === "playful") {
     return {
       isDazy: true,
-      romanticLevel: 2,
-      tone: "playful_romance",
-      suggestedReply: "acha ji 😌❤️ itna attitude kyun?",
+      romanticLevel: 0,
+      tone: "playful_friendly",
+      suggestedReply: "acha ji, kahan attitude dikha raha hoon! boliye kya baat hai?",
     };
   }
 
-  // Default romantic warmth — return undefined suggestedReply so the AI engine with DAZY_LOVE_SYSTEM can naturally generate smart, contextual replies
+  // Default humble best-friend state — return undefined suggestedReply so the AI engine can naturally generate smart, contextual replies
   return {
     isDazy: true,
-    romanticLevel: 1,
-    tone: "warm_loving",
+    romanticLevel: 0,
+    tone: "humble_best_friend",
     suggestedReply: undefined,
   };
 }

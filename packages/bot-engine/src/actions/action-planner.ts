@@ -38,7 +38,7 @@ export class ActionPlanner {
         parameters: { rawRequest: text },
         requiresConfirmation: true,
         confirmationPrompt: context?.isDazy
-          ? "Kya main ye document share kar doon meri jaan? ❤️"
+          ? "Kya main ye document share kar doon Dazy? Ek baar confirm kar do."
           : "Kya aap chahte hain ki main ye document send karoon? Kripya confirm kijiye.",
         priority: 70,
       };
@@ -53,7 +53,7 @@ export class ActionPlanner {
         parameters: { rawRequest: text },
         requiresConfirmation: true,
         confirmationPrompt: context?.isDazy
-          ? "Kya aap sach mein chat delete karna chahti hain jaan? ❤️"
+          ? "Kya aap sach mein chat delete karna chahti ho Dazy? Ek baar confirm kar do."
           : "Kya aap sach mein conversation history delete karna chahte hain? Kripya confirm kijiye.",
         priority: 72,
       };

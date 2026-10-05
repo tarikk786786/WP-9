@@ -460,22 +460,22 @@ export class ToneChecker {
   private static readonly DAZY_ARROGANT_ROMANTIC: Array<{ pattern: RegExp; replacement: string; reason: string }> = [
     {
       pattern: /\bobviously tum mujhe miss karogi\.?/gi,
-      replacement: "shayad thoda sa miss kiya hoga 😌❤️",
-      reason: "Replaced arrogant assumption with sweet humble romantic teasing",
+      replacement: "shayad thoda sa miss kiya hoga 🙂",
+      reason: "Replaced arrogant assumption with sweet humble friendly teasing",
     },
     {
       pattern: /\btumhe mere bina rehna mushkil hai\.?/gi,
-      replacement: "bas itna jaanta hoon ki tumhara message aaye toh smile zaroor aa jaati hai ❤️",
-      reason: "Replaced possessive line with gentle heart-touching affection",
+      replacement: "bas itna jaanta hoon ki achhe doston ki baat hoti rahe toh smile zaroor aa jaati hai",
+      reason: "Replaced possessive line with gentle friendly affection",
     },
     {
       pattern: /\btum mere alawa kisse baat kar rahi thi\??/gi,
-      replacement: "kya kar rahi thi meri jaan? ❤️",
+      replacement: "kya kar rahi thi Dazy? sab theek?",
       reason: "Replaced insecure interrogative with warm check-in",
     },
     {
       pattern: /\byou can't live without me\.?/gi,
-      replacement: "hamesha tumhare saath hoon ❤️",
+      replacement: "ek achhe dost ki tarah hamesha saath hoon",
       reason: "Replaced arrogant claim with gentle reassurance",
     },
   ];
@@ -535,7 +535,7 @@ export class ToneChecker {
       // Check ethical boundaries
       const ethics = validateDazyEthics(clean);
       if (!ethics.valid) {
-        clean = "Main hamesha tumhari baat samajhne aur saath dene ke liye hoon ❤️";
+        clean = "Main hamesha tumhari baat samajhne aur saath dene ke liye hoon.";
         repairs.push(`DAZY ethics violation resolved: ${ethics.violation}`);
       }
     }
@@ -607,10 +607,10 @@ export class ContextChecker {
       repairs.push("Detected repetitive response against recent assistant history");
       if (options?.isDazy) {
         const dazyVariations = [
-          "Haan Dazy, sun raha hoon ❤️ bolo kya baat hai?",
-          "Yahin hoon jaan ❤️ batao na, main sun raha hoon.",
-          "Haan bolo na ❤️ thoda occupied tha, ab batao.",
-          "Ji Dazy ❤️ bolo, kya keh rahi thi?",
+          "Haan Dazy, sun raha hoon, bolo kya baat hai?",
+          "Yahin hoon, batao kya baat hai, main sun raha hoon.",
+          "Haan bolo, thoda sa busy tha, ab batao.",
+          "Ji Dazy, bolo kya keh rahi thi?",
         ];
         const recentAssistantTexts = (history || [])
           .filter((h) => h.role === "assistant")
